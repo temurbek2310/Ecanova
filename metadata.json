@@ -1,0 +1,6 @@
+{
+  "name": "ECONOVA",
+  "description": "Bilingual Uzbek and English PWA learning platform for Economics, Mathematics, and Business with server-verified progress, course-specific certificates, and human-reviewed content governance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
