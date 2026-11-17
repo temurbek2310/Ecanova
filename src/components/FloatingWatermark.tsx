@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { useGSAP } from '@gsap/react';
+import { useEconovaGSAP } from '../hooks/useEconovaGSAP';
 import { computeParticleMagneticGravity } from '../lib/artifact-physics';
 import {
   buildFloatingWatermarkParticles,
@@ -16,6 +16,7 @@ import {
   resolveWatermarkScrollTriggerConfig,
   shouldApplyRafParallaxFrame,
   shouldEnableWatermarkMotion,
+  shouldPauseWatermarkOnMobile,
   type FloatingWatermarkTheme,
   type ParallaxPointerPoint,
   type WatermarkGlyphKind,
@@ -23,7 +24,7 @@ import {
 } from '../lib/floating-watermark';
 import { SubjectArtifactSvg } from './SubjectArtifactSvg';
 
-gsap.registerPlugin(ScrollTrigger, useGSAP);
+gsap.registerPlugin(ScrollTrigger);
 
 export interface FloatingWatermarkProps {
   /** Context theme controlling SVG motif set and GSAP motion profile */
@@ -496,6 +497,15 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
     [theme]
   );
 
+  const [isMobilePaused, setIsMobilePaused] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return shouldPauseWatermarkOnMobile({
+      theme: resolveFloatingWatermarkTheme(theme),
+      viewportWidth: window.innerWidth,
+      isElementHidden: false,
+    });
+  });
+
   const parallaxConfig = useMemo(
     () =>
       resolveWatermarkParallaxConfig({
@@ -578,10 +588,10 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
     [canonicalTheme, seedIndex, count, containerWidth]
   );
 
-  useGSAP(
+  useEconovaGSAP(
+    containerRef,
     () => {
-      if (!containerRef.current) return;
-      const containerEl = containerRef.current;
+      const containerEl = containerRef.current!;
       const scopeEl = scopeRef?.current ?? containerEl.parentElement ?? containerEl;
       if (!scopeEl || particles.length === 0) {
         setMotionActive(false);
@@ -612,8 +622,25 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
       mm.add(
         {
           desktopAnimated: '(min-width: 769px) and (prefers-reduced-motion: no-preference)',
+          mobileHidden: '(max-width: 768px)',
         },
         (context) => {
+          if (context.conditions?.mobileHidden) {
+            setMotionActive(false);
+            if (canonicalTheme === 'sidebar') {
+              setIsMobilePaused(true);
+              containerEl.setAttribute('data-fw-motion', 'paused');
+            }
+            driftEls.forEach((el, idx) => {
+              const spec = particles[idx];
+              gsap.set(el, { x: 0, y: 0, scale: spec?.baseScale ?? 1 });
+            });
+            spinEls.forEach((el) => gsap.set(el, { rotation: 0 }));
+            return () => {
+              setIsMobilePaused(false);
+            };
+          }
+
           const hwConcurrency =
             typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : undefined;
           const viewportWidth =
@@ -626,6 +653,15 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
 
           if (!allowed) {
             setMotionActive(false);
+            const isSidebarMobile = shouldPauseWatermarkOnMobile({
+              theme: canonicalTheme,
+              viewportWidth,
+              isElementHidden: true,
+            });
+            if (isSidebarMobile) {
+              setIsMobilePaused(true);
+              containerEl.setAttribute('data-fw-motion', 'paused');
+            }
             driftEls.forEach((el, idx) => {
               const spec = particles[idx];
               gsap.set(el, { x: 0, y: 0, scale: spec?.baseScale ?? 1 });
@@ -867,7 +903,49 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
             }
           }
 
+          // Dynamic IntersectionObserver to pause GSAP loop when watermark/sidebar is hidden or offscreen
+          let isPausedByHidden = false;
+
+          const evaluateHiddenPauseState = (isHidden: boolean) => {
+            const curWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
+            const shouldPause = shouldPauseWatermarkOnMobile({
+              theme: canonicalTheme,
+              viewportWidth: curWidth,
+              isElementHidden: isHidden,
+            });
+            if (shouldPause && !isPausedByHidden) {
+              isPausedByHidden = true;
+              masterTimeline.pause();
+              driftTweens.forEach((t) => t.pause());
+              if (parallaxRafId !== 0) {
+                window.cancelAnimationFrame(parallaxRafId);
+                parallaxRafId = 0;
+              }
+              setMotionActive(false);
+              setIsMobilePaused(true);
+              containerEl.setAttribute('data-fw-motion', 'paused');
+            } else if (!shouldPause && isPausedByHidden) {
+              isPausedByHidden = false;
+              setIsMobilePaused(false);
+              setMotionActive(true);
+              containerEl.setAttribute('data-fw-motion', 'active');
+              masterTimeline.resume();
+              driftTweens.forEach((t) => t.resume());
+            }
+          };
+
+          let observer: IntersectionObserver | null = null;
+          if (typeof IntersectionObserver !== 'undefined') {
+            observer = new IntersectionObserver((entries) => {
+              const entry = entries[0];
+              const isHidden = !entry?.isIntersecting || entry?.intersectionRatio === 0;
+              evaluateHiddenPauseState(isHidden);
+            });
+            observer.observe(scopeEl);
+          }
+
           return () => {
+            observer?.disconnect();
             if (parallaxRafId !== 0) {
               window.cancelAnimationFrame(parallaxRafId);
               parallaxRafId = 0;
@@ -896,7 +974,6 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
       };
     },
     {
-      scope: containerRef,
       dependencies: [
         canonicalTheme,
         seedIndex,
@@ -923,7 +1000,13 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
       data-fw-container-width={containerWidth ?? undefined}
       data-fw-reduced-motion={prefersReducedMotion ? 'true' : 'false'}
       data-fw-motion={
-        prefersReducedMotion ? 'disabled' : motionActive ? 'active' : 'minimal'
+        prefersReducedMotion
+          ? 'disabled'
+          : isMobilePaused
+          ? 'paused'
+          : motionActive
+          ? 'active'
+          : 'minimal'
       }
       data-fw-parallax-mode={prefersReducedMotion ? 'disabled' : parallaxConfig.mode}
       data-fw-invalidate-refresh="true"

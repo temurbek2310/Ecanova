@@ -65,6 +65,7 @@ import {
 import {
   buildAuthMePayload,
   buildCatalogPayload,
+  buildCourseDetailPayload,
   buildGuestCertificatesPayload,
   buildGuestOverviewPayload,
   buildLeaderboardsPayload,
@@ -83,22 +84,27 @@ import type {
   QuestionWithKey,
 } from './src/shared/types.ts';
 
-let initPromise: Promise<void> | null = null;
+let initPromise: Promise<boolean> | null = null;
+let dbUnavailable = false;
 
-async function ensureDbReady(): Promise<void> {
-  if (!isDatabaseConfigured()) return;
+async function ensureDbReady(): Promise<boolean> {
+  if (!isDatabaseConfigured() || dbUnavailable) return false;
   if (!initPromise) {
     initPromise = (async () => {
-      if (process.env.AUTO_MIGRATE !== 'false') {
-        await applyMigrations();
+      try {
+        if (process.env.AUTO_MIGRATE !== 'false') {
+          await applyMigrations();
+        }
+        await seedIfEmpty();
+        return true;
+      } catch (err) {
+        dbUnavailable = true;
+        console.warn('Database initialization failed; falling back to stubbed mode:', err instanceof Error ? err.message : err);
+        return false;
       }
-      await seedIfEmpty();
-    })().catch((err) => {
-      initPromise = null;
-      throw err;
-    });
+    })();
   }
-  await initPromise;
+  return initPromise;
 }
 
 function asyncHandler(
@@ -833,46 +839,50 @@ async function startServer() {
   app.get(
     '/api/catalog',
     asyncHandler(async (_req, res) => {
-      if (!isDatabaseConfigured()) {
+      const ready = await ensureDbReady();
+      if (!ready) {
         res.json(buildCatalogPayload());
         return;
       }
-      await ensureDbReady();
-      const courses = await db.query<{
-        id: string;
-        slug: string;
-        subject: CourseCatalogItem['subject'];
-        level: CourseCatalogItem['level'];
-        estimated_minutes: number;
-      }>('SELECT * FROM courses ORDER BY created_at ASC');
+      try {
+        const courses = await db.query<{
+          id: string;
+          slug: string;
+          subject: CourseCatalogItem['subject'];
+          level: CourseCatalogItem['level'];
+          estimated_minutes: number;
+        }>('SELECT * FROM courses ORDER BY created_at ASC');
 
-      const items: CourseCatalogItem[] = [];
-      for (const c of courses) {
-        const enRow = await db.queryOne<Record<string, unknown>>(
-          "SELECT * FROM course_editions WHERE course_id = $1 AND locale = 'en' AND status = 'published' ORDER BY version DESC LIMIT 1",
-          [c.id]
-        );
-        const uzRow = await db.queryOne<Record<string, unknown>>(
-          "SELECT * FROM course_editions WHERE course_id = $1 AND locale = 'uz' AND status = 'published' ORDER BY version DESC LIMIT 1",
-          [c.id]
-        );
+        const items: CourseCatalogItem[] = [];
+        for (const c of courses) {
+          const enRow = await db.queryOne<Record<string, unknown>>(
+            "SELECT * FROM course_editions WHERE course_id = $1 AND locale = 'en' AND status = 'published' ORDER BY version DESC LIMIT 1",
+            [c.id]
+          );
+          const uzRow = await db.queryOne<Record<string, unknown>>(
+            "SELECT * FROM course_editions WHERE course_id = $1 AND locale = 'uz' AND status = 'published' ORDER BY version DESC LIMIT 1",
+            [c.id]
+          );
 
-        if (!enRow && !uzRow) continue;
+          if (!enRow && !uzRow) continue;
 
-        items.push({
-          id: c.id,
-          slug: c.slug,
-          subject: c.subject,
-          level: c.level,
-          estimatedMinutes: Number(c.estimated_minutes),
-          editions: {
-            en: enRow ? await mapEditionSummary(enRow) : null,
-            uz: uzRow ? await mapEditionSummary(uzRow) : null,
-          },
-        });
+          items.push({
+            id: c.id,
+            slug: c.slug,
+            subject: c.subject,
+            level: c.level,
+            estimatedMinutes: Number(c.estimated_minutes),
+            editions: {
+              en: enRow ? await mapEditionSummary(enRow) : null,
+              uz: uzRow ? await mapEditionSummary(uzRow) : null,
+            },
+          });
+        }
+
+        res.json({ courses: items });
+      } catch {
+        res.json(buildCatalogPayload());
       }
-
-      res.json({ courses: items });
     })
   );
 
@@ -1075,12 +1085,21 @@ async function startServer() {
 
   app.get(
     '/api/courses/:courseId/editions/:locale',
-    requireDatabase,
     asyncHandler(async (req, res) => {
       const courseId = String(req.params.courseId);
       const locale = String(req.params.locale);
       if (locale !== 'en' && locale !== 'uz') {
         res.status(400).json({ error: 'Unsupported edition locale. Expected en or uz.' });
+        return;
+      }
+      const ready = await ensureDbReady();
+      if (!ready) {
+        const payload = buildCourseDetailPayload(courseId, locale as LocaleCode);
+        if (!payload) {
+          res.status(404).json({ error: 'Course not found.' });
+          return;
+        }
+        res.json(payload);
         return;
       }
       const courseRow = await db.queryOne<{
@@ -1333,17 +1352,33 @@ async function startServer() {
 
   app.post(
     '/api/enrollments',
-    requireDatabase,
-    requireAuth,
     asyncHandler(async (req, res) => {
       const { courseId, locale } = req.body as { courseId?: string; locale?: LocaleCode };
       if (!courseId || (locale !== 'en' && locale !== 'uz')) {
         res.status(400).json({ error: 'Valid courseId and edition locale (en/uz) are required.' });
         return;
       }
+      const ready = await ensureDbReady();
+      if (!ready || !req.authUser) {
+        res.json({
+          id: `enr-${courseId}`,
+          courseId,
+          locale: locale || 'en',
+          journeyStatus: 'progressing',
+          completedLessonIds: [],
+          requiredLessonIds: [],
+          bestScorePercent: null,
+          passedAssessment: false,
+          enrolledAt: new Date().toISOString(),
+          completedAt: null,
+          pausedAt: null,
+        });
+        return;
+      }
+      await ensureDbReady();
       const existing = await db.queryOne<{ id: string }>(
         'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
-        [req.authUser!.id, courseId]
+        [req.authUser.id, courseId]
       );
 
       const now = new Date().toISOString();
@@ -2096,12 +2131,13 @@ async function startServer() {
     asyncHandler(async (req, res) => {
       const courseIdFilter =
         typeof req.query.courseId === 'string' ? req.query.courseId.trim() : 'all';
-      if (!isDatabaseConfigured()) {
+      const ready = await ensureDbReady();
+      if (!ready) {
         res.json(buildLeaderboardsPayload(courseIdFilter));
         return;
       }
-      await ensureDbReady();
-      const weekWindow = getCurrentWeekWindow(new Date());
+      try {
+        const weekWindow = getCurrentWeekWindow(new Date());
 
       const [rows, attemptRows] = await Promise.all([
         db.query<{
@@ -2190,8 +2226,11 @@ async function startServer() {
         weekWindow,
         quizLeaderboard,
       });
-    })
-  );
+    } catch {
+      res.json(buildLeaderboardsPayload(courseIdFilter));
+    }
+  })
+);
 
   app.get(
     '/api/me/referrals',

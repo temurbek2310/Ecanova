@@ -3,10 +3,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
+import { useEconovaGSAP } from '../hooks/useEconovaGSAP';
 import { buildGeometricShards } from '../lib/geometric-nova';
-
-gsap.registerPlugin(useGSAP);
 
 export interface GeometricNovaProps {
   /** Whether the crystalline shard burst should run. */
@@ -44,9 +42,9 @@ export const GeometricNova: React.FC<GeometricNovaProps> = ({
     }
   }, [portalTarget]);
 
-  useGSAP(
+  useEconovaGSAP(
+    containerRef,
     () => {
-      if (!containerRef.current) return;
       if (!active) return;
 
       const elements = shardRefs.current.filter((el): el is SVGSVGElement => Boolean(el));
@@ -131,7 +129,6 @@ export const GeometricNova: React.FC<GeometricNovaProps> = ({
       });
     },
     {
-      scope: containerRef,
       dependencies: [active, triggerKey, Boolean(portalTarget), shards.length],
       revertOnUpdate: true,
     }

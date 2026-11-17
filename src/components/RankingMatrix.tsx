@@ -2,7 +2,7 @@
 
 import React, { useMemo, useRef } from 'react';
 import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
+import { useEconovaGSAP } from '../hooks/useEconovaGSAP';
 import { Calendar, CheckCircle2, Filter, Terminal } from 'lucide-react';
 import type { CourseCatalogItem, LocaleCode, QuizLeaderboardEntry, Subject } from '../shared/types';
 import {
@@ -13,8 +13,6 @@ import {
   type WeekWindow,
 } from '../lib/quiz-leaderboard';
 import { buildRankingMatrixRows } from '../lib/ranking-matrix';
-
-gsap.registerPlugin(useGSAP);
 
 export interface RankingMatrixProps {
   locale: LocaleCode;
@@ -94,10 +92,10 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
   );
 
   // Tactile GSAP stagger entrance on tab mount & filter changes
-  useGSAP(
+  useEconovaGSAP(
+    containerRef,
     () => {
-      if (!containerRef.current) return;
-      const container = containerRef.current;
+      const container = containerRef.current!;
 
       const rowElements = gsap.utils.toArray<HTMLElement>('[data-matrix-row]', container);
       if (rowElements.length === 0) return;
@@ -126,7 +124,7 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
         }
       );
     },
-    { scope: containerRef, dependencies: [selectedCourseId, matrixRows.length], revertOnUpdate: true }
+    { dependencies: [selectedCourseId, matrixRows.length], revertOnUpdate: true }
   );
 
   return (

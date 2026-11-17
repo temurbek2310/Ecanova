@@ -439,6 +439,25 @@ export function shouldEnableWatermarkMotion(params: {
   return true;
 }
 
+/**
+ * Evaluates whether a watermark instance (specifically the Sidebar) should pause
+ * its internal animation loops when hidden on mobile viewports (< 768px) or when
+ * the container has display:none / is unrendered to conserve battery and memory.
+ */
+export function shouldPauseWatermarkOnMobile(params: {
+  theme: CanonicalWatermarkTheme;
+  viewportWidth: number;
+  isElementHidden?: boolean;
+}): boolean {
+  if (params.theme === 'sidebar' && params.viewportWidth < 768) {
+    return true;
+  }
+  if (params.isElementHidden) {
+    return true;
+  }
+  return false;
+}
+
 export interface WatermarkScrollTriggerConfig {
   start: 'top bottom';
   end: 'max' | 'bottom top';

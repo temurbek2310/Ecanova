@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   COMMAND_BAR_COMPACT_GEOMETRY,
+  COMMAND_BAR_MOBILE_COMPACT_GEOMETRY,
   buildCommandBarActions,
   filterCommandBarActions,
   getCommandBarGeometry,
@@ -46,8 +47,9 @@ function makeSampleCourse(id: string, subject: 'Economics' | 'Mathematics' | 'Bu
   };
 }
 
-test('getCommandBarGeometry returns compact pill and clamped 600x400 expanded bounds', () => {
+test('getCommandBarGeometry returns compact pill, mobile icon size, and clamped 600x400 expanded bounds', () => {
   assert.deepEqual(getCommandBarGeometry(false, 1440, 900), COMMAND_BAR_COMPACT_GEOMETRY);
+  assert.deepEqual(getCommandBarGeometry(false, 390, 844), COMMAND_BAR_MOBILE_COMPACT_GEOMETRY);
   assert.deepEqual(getCommandBarGeometry(true, 1440, 900), {
     width: 600,
     height: 400,

@@ -1,0 +1,178 @@
+@import "../src/index.css";
+
+/* ==========================================================================
+   INK-SAVER BRUTALISM: HIGH-FIDELITY PRINT & PDF STYLESHEET
+   Overrides Glass-Brutalism dark mode strictly for pristine A4 monochrome output.
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm 15mm 15mm;
+  }
+
+  /* 1. Global Reset & Monochrome Enforcement */
+  *,
+  *::before,
+  *::after {
+    background: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    transition: none !important;
+    animation: none !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  :root,
+  :root.dark,
+  :root.light,
+  [data-theme='dark'],
+  [data-theme='light'] {
+    --econova-canvas: #ffffff !important;
+    --econova-chrome: #ffffff !important;
+    --econova-surface: #ffffff !important;
+    --econova-elevated: #ffffff !important;
+    --econova-line: #000000 !important;
+    --econova-line-strong: #000000 !important;
+    --econova-ink: #000000 !important;
+    --econova-muted: #222222 !important;
+    --econova-accent: #000000 !important;
+    --econova-teal: #000000 !important;
+    --econova-success: #000000 !important;
+    --econova-warning: #000000 !important;
+    --econova-danger: #000000 !important;
+    --econova-shadow-color: transparent !important;
+    color-scheme: light !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    font-size: 10.5pt !important;
+    line-height: 1.4 !important;
+  }
+
+  /* 2. Hide Non-Essential UI */
+  .no-print,
+  [data-floating-watermark='true'],
+  [data-command-bar-wrapper='true'],
+  [data-testid='global-command-bar'],
+  [data-testid='command-bar-backdrop'],
+  aside[aria-label='Primary Sidebar Navigation'],
+  nav[aria-label='Primary Sidebar Navigation'],
+  nav[aria-label='Section Navigation'],
+  nav[aria-label='Mobile Bottom Navigation'],
+  header.sticky,
+  button,
+  [data-print-hide='course-nav'],
+  [data-print-hide='verify-lookup'],
+  [data-print-hide='cert-actions'],
+  [data-print-hide='lesson-controls'],
+  [data-print-hide='assessment-actions'] {
+    display: none !important;
+  }
+
+  /* 3. Main Container & Layout Unconstrain */
+  main {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 4. Crisp Neobrutalist Borders for Paper */
+  .border,
+  .border-2,
+  .border-theme-border,
+  .rounded-xl,
+  .rounded-lg,
+  [data-print-card],
+  [data-print-section] {
+    border: 2px solid #000000 !important;
+    border-radius: 4px !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  /* 5. A4 Page Break Optimization & Anti-Orphan Rules */
+  section,
+  article,
+  fieldset,
+  tr,
+  .print-break-inside-avoid,
+  [data-print-card='lesson'],
+  [data-print-card='assessment'],
+  [data-print-card='certificate'],
+  .print-certificate {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  thead {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  /* 6. Full-Width Tabular / Grid Syllabus & Notes Layout */
+  .print-syllabus-table {
+    display: table !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 10pt !important;
+    margin-bottom: 15pt !important;
+  }
+
+  .print-syllabus-table th,
+  .print-syllabus-table td {
+    border: 1.5px solid #000000 !important;
+    padding: 6pt 8pt !important;
+    text-align: left !important;
+    font-size: 9.5pt !important;
+  }
+
+  .print-syllabus-table th {
+    background-color: #f1f5f9 !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  /* 7. Clean Layout when printing Certificates */
+  body:has(.print-certificate-modal) [data-print-hide-when-modal='true'] {
+    display: none !important;
+  }
+
+  .print-certificate-modal {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+  }
+
+  .print-certificate-modal > div {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+  }
+
+  .print-certificate {
+    border: 2px solid #000000 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 2rem !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+  }
+}

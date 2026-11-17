@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
-import { buildAuthMePayload } from '../../../../src/lib/mvp-api-stubs';
 
 export async function GET() {
-  return NextResponse.json(buildAuthMePayload());
+  return NextResponse.json({
+    id: 'guest_1',
+    name: 'Guest Explorer',
+    role: 'student',
+  });
 }

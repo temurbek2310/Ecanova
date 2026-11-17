@@ -18,6 +18,7 @@ import {
   Moon,
   PauseCircle,
   PlayCircle,
+  Printer,
   RefreshCw,
   Search,
   Share2,
@@ -1335,25 +1336,6 @@ export default function App() {
         theme={theme}
       />
 
-      {/* Global Dynamic Island Command Bar (Cmd+K / Ctrl+K) */}
-      <CommandBar
-        locale={locale}
-        theme={theme}
-        courses={courses}
-        onNavigateTab={navigateToTab}
-        onOpenCourse={(courseId, editionLocale) => void openCourse(courseId, editionLocale)}
-        onJumpSection={(sectionId) => {
-          navigateToTab('overview');
-          window.setTimeout(() => {
-            const target = document.querySelector(`[data-testid="${sectionId}-section"]`);
-            target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }, 120);
-        }}
-        onSwitchLocale={handleLocaleSwitch}
-        onToggleTheme={handleSelectManualTheme}
-        onOpenShortcuts={() => setCheatSheetOpen(true)}
-      />
-
       {/* Desktop Sidebar */}
       <aside
         ref={sidebarRef}
@@ -1453,9 +1435,9 @@ export default function App() {
       <div className="relative z-10 flex flex-1 flex-col min-w-0 overflow-x-clip pb-20 md:pb-0">
         <OfflineBanner message={strings.offlineBanner} />
 
-        {/* Clean 3-Zone Top Bar (adds top clearance for Dynamic Island CommandBar on mobile) */}
-        <header className="no-print sticky top-0 z-30 flex items-center justify-between gap-2 sm:gap-4 border-b-2 border-slate-500 bg-white/40 px-3 pt-[68px] pb-2.5 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 sm:px-6 md:h-16 md:py-0">
-          <div className="flex items-center gap-2.5 min-w-0">
+        {/* Clean 3-Zone Top Bar (Navbar with Integrated Centered Dynamic Island CommandBar) */}
+        <header className="no-print sticky top-0 z-30 flex items-center justify-between w-full h-16 border-b-2 border-slate-500 bg-white/40 px-3 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 sm:px-6">
+          <div className="flex items-center gap-2.5 min-w-0 shrink-0">
             <button
               type="button"
               onClick={() => setMobileMenuOpen((v) => !v)}
@@ -1471,11 +1453,32 @@ export default function App() {
             >
               ECONOVA
             </button>
-            <span className="hidden text-xs font-semibold text-muted truncate md:inline">
+            <span className="hidden text-xs font-semibold text-muted truncate md:inline max-w-[140px] lg:max-w-[200px]">
               {activeTab === 'course' && courseDetail
                 ? `${strings.subjects[courseDetail.course.subject]} / ${courseDetail.edition.title}`
                 : navItems.find((n) => n.id === activeTab)?.label || 'ECONOVA'}
             </span>
+          </div>
+
+          {/* Centered CommandBar */}
+          <div className="flex-1 flex justify-center px-1 sm:px-2 min-w-0">
+            <CommandBar
+              locale={locale}
+              theme={theme}
+              courses={courses}
+              onNavigateTab={navigateToTab}
+              onOpenCourse={(courseId, editionLocale) => void openCourse(courseId, editionLocale)}
+              onJumpSection={(sectionId) => {
+                navigateToTab('overview');
+                window.setTimeout(() => {
+                  const target = document.querySelector(`[data-testid="${sectionId}-section"]`);
+                  target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 120);
+              }}
+              onSwitchLocale={handleLocaleSwitch}
+              onToggleTheme={handleSelectManualTheme}
+              onOpenShortcuts={() => setCheatSheetOpen(true)}
+            />
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -2442,6 +2445,103 @@ export default function App() {
                     />
                   </div>
 
+                  {/* Printable Full Syllabus & Lesson Notes & Assessment Record (active in @media print) */}
+                  <div className="hidden print:block w-full space-y-4 my-6">
+                    <div className="border-b-2 border-black pb-3">
+                      <h2 className="font-display text-lg font-black uppercase tracking-wider text-black">
+                        {locale === 'uz' ? 'Kurs dasturi va o‘quv rejasi' : 'Complete Course Syllabus & Progress Record'}
+                      </h2>
+                      <p className="text-xs text-black/70 mt-1">
+                        {courseDetail.edition.title} · {courseDetail.course.subject} ({courseDetail.course.level}) · {courseDetail.lessons.length} {locale === 'uz' ? 'dars' : 'lessons'}
+                      </p>
+                    </div>
+
+                    <table className="print-syllabus-table w-full border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 border-2 border-black text-left text-xs uppercase font-bold text-black">
+                          <th className="p-2 border-2 border-black w-12 text-center">#</th>
+                          <th className="p-2 border-2 border-black">
+                            {locale === 'uz' ? 'Dars mavzusi va o‘quv maqsadi' : 'Lesson Topic & Objectives'}
+                          </th>
+                          <th className="p-2 border-2 border-black w-28 text-center">
+                            {locale === 'uz' ? 'Holat' : 'Status'}
+                          </th>
+                          <th className="p-2 border-2 border-black w-56">
+                            {locale === 'uz' ? 'Talaba qaydlari' : 'Lesson Notes & Key Formulas'}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-xs">
+                        {courseDetail.lessons.map((les) => {
+                          const isDone = activeEnrollment?.completedLessonIds.includes(les.id) ?? false;
+                          const note = user?.lessonNotes?.[les.id];
+                          return (
+                            <tr key={les.id} className="border-2 border-black print-break-inside-avoid">
+                              <td className="p-2 border-2 border-black font-mono font-bold text-center align-top">
+                                {les.sequenceNum}
+                              </td>
+                              <td className="p-2 border-2 border-black align-top">
+                                <div className="font-bold text-black">{les.title}</div>
+                                <ul className="mt-1 list-disc list-inside text-[11px] text-black/80 space-y-0.5">
+                                  {les.objectives.map((obj, i) => (
+                                    <li key={i}>{obj}</li>
+                                  ))}
+                                </ul>
+                              </td>
+                              <td className="p-2 border-2 border-black text-center align-top font-mono font-bold">
+                                {isDone ? (
+                                  <span className="text-black font-bold">✓ COMPLETED</span>
+                                ) : (
+                                  <span className="text-black/60 font-medium">○ PENDING</span>
+                                )}
+                              </td>
+                              <td className="p-2 border-2 border-black align-top font-mono text-[10.5px]">
+                                {note ? (
+                                  <div className="whitespace-pre-wrap text-black">{note}</div>
+                                ) : (
+                                  <span className="italic text-black/50">
+                                    {locale === 'uz' ? 'Qaydlar kiritilmagan' : 'No personal notes recorded'}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+
+                    {/* Final Assessment Score Summary for Print */}
+                    {courseDetail.assessment && (
+                      <div className="border-2 border-black p-4 mt-4 print-break-inside-avoid bg-slate-50">
+                        <div className="flex items-center justify-between border-b border-black pb-2">
+                          <div className="font-black text-sm uppercase text-black">
+                            {locale === 'uz' ? 'Yakuniy baholash natijasi' : 'Final Assessment Mastery Record'}
+                          </div>
+                          <div className="font-mono text-xs font-bold text-black">
+                            {locale === 'uz' ? 'Talab: kamida 75%' : 'Passing Threshold: 75%'}
+                          </div>
+                        </div>
+                        <div className="mt-2.5 grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <span className="font-bold text-black">{courseDetail.assessment.title}</span>
+                            <div className="text-[11px] text-black/80 mt-0.5">
+                              {courseDetail.assessment.questions.length} {locale === 'uz' ? 'ta savol' : 'quantitative questions'}
+                            </div>
+                          </div>
+                          <div className="font-mono text-right">
+                            <div className="font-bold text-sm text-black">
+                              {activeEnrollment?.passedAssessment
+                                ? `PASSED · BEST SCORE: ${activeEnrollment.bestScorePercent ?? 100}%`
+                                : activeEnrollment?.bestScorePercent !== null && activeEnrollment?.bestScorePercent !== undefined
+                                ? `ATTEMPTED · ${activeEnrollment.bestScorePercent}% (75% REQUIRED)`
+                                : 'STATUS: NOT YET ATTEMPTED'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Syllabus + Active Lesson/Assessment Split */}
                   <div className="grid gap-6 lg:grid-cols-12">
                     <aside data-print-hide="course-syllabus" className="no-print min-w-0 space-y-2 lg:col-span-4">
@@ -2450,32 +2550,48 @@ export default function App() {
                           <h2 className="text-xs font-semibold text-muted">
                             {locale === 'uz' ? 'Kurs dasturi' : 'Course Syllabus'}
                           </h2>
-                          <button
-                            type="button"
-                            data-testid="syllabus-sync-now-btn"
-                            disabled={syncingSyllabus}
-                            onClick={() => void handleSyncCourseProgress()}
-                            title={
-                              locale === 'uz'
-                                ? 'Mahalliy (localStorage) va serverdagi tugallangan darslarni qo‘lda sinxronlash'
-                                : 'Reconcile completed lesson IDs between localStorage and server'
-                            }
-                            className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-bold text-ink shadow-brutal-sm transition-all hover:border-theme-accent hover:text-theme-accent active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-60"
-                          >
-                            <RefreshCw
-                              className={`h-3 w-3 text-theme-cyan ${syncingSyllabus ? 'animate-spin' : ''}`}
-                              aria-hidden="true"
-                            />
-                            <span>
-                              {syncingSyllabus
-                                ? locale === 'uz'
-                                  ? 'Sinxronlanmoqda...'
-                                  : 'Syncing...'
-                                : locale === 'uz'
-                                ? 'Hozir sinxronlash'
-                                : 'Sync Now'}
-                            </span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              data-testid="syllabus-download-pdf-btn"
+                              onClick={() => window.print()}
+                              title={
+                                locale === 'uz'
+                                  ? 'Kurs dasturini PDF formatida yuklab olish yoki chop etish'
+                                  : 'Download or print the Course Syllabus as a PDF'
+                              }
+                              className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-bold text-ink shadow-brutal-sm transition-all hover:border-theme-accent hover:text-theme-accent active:translate-x-[1px] active:translate-y-[1px]"
+                            >
+                              <Printer className="h-3 w-3 text-theme-cyan" aria-hidden="true" />
+                              <span>{locale === 'uz' ? 'PDF yuklab olish' : 'Download PDF'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              data-testid="syllabus-sync-now-btn"
+                              disabled={syncingSyllabus}
+                              onClick={() => void handleSyncCourseProgress()}
+                              title={
+                                locale === 'uz'
+                                  ? 'Mahalliy (localStorage) va serverdagi tugallangan darslarni qo‘lda sinxronlash'
+                                  : 'Reconcile completed lesson IDs between localStorage and server'
+                              }
+                              className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-bold text-ink shadow-brutal-sm transition-all hover:border-theme-accent hover:text-theme-accent active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-60"
+                            >
+                              <RefreshCw
+                                className={`h-3 w-3 text-theme-cyan ${syncingSyllabus ? 'animate-spin' : ''}`}
+                                aria-hidden="true"
+                              />
+                              <span>
+                                {syncingSyllabus
+                                  ? locale === 'uz'
+                                    ? 'Sinxronlanmoqda...'
+                                    : 'Syncing...'
+                                  : locale === 'uz'
+                                  ? 'Hozir sinxronlash'
+                                  : 'Sync Now'}
+                              </span>
+                            </button>
+                          </div>
                         </div>
 
                         {(() => {

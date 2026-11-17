@@ -9,6 +9,7 @@ import {
   resolveWatermarkScrollTriggerConfig,
   shouldApplyRafParallaxFrame,
   shouldEnableWatermarkMotion,
+  shouldPauseWatermarkOnMobile,
 } from './floating-watermark';
 
 test('resolveFloatingWatermarkTheme maps context themes and aliases cleanly', () => {
@@ -256,3 +257,52 @@ test('computeResponsiveParticleCount adjusts particle count cleanly based on con
     5
   );
 });
+
+test('shouldPauseWatermarkOnMobile pauses sidebar watermark on < 768px viewports or when hidden', () => {
+  assert.equal(
+    shouldPauseWatermarkOnMobile({
+      theme: 'sidebar',
+      viewportWidth: 390,
+    }),
+    true
+  );
+  assert.equal(
+    shouldPauseWatermarkOnMobile({
+      theme: 'sidebar',
+      viewportWidth: 767,
+    }),
+    true
+  );
+  assert.equal(
+    shouldPauseWatermarkOnMobile({
+      theme: 'sidebar',
+      viewportWidth: 768,
+      isElementHidden: true,
+    }),
+    true
+  );
+  assert.equal(
+    shouldPauseWatermarkOnMobile({
+      theme: 'sidebar',
+      viewportWidth: 1024,
+      isElementHidden: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldPauseWatermarkOnMobile({
+      theme: 'sidebar',
+      viewportWidth: 1440,
+    }),
+    false
+  );
+  assert.equal(
+    shouldPauseWatermarkOnMobile({
+      theme: 'analytics',
+      viewportWidth: 390,
+      isElementHidden: false,
+    }),
+    false
+  );
+});
+

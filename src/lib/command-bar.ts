@@ -27,7 +27,13 @@ export interface CommandBarGeometry {
 }
 
 export const COMMAND_BAR_COMPACT_GEOMETRY: CommandBarGeometry = {
-  width: 116,
+  width: 120,
+  height: 40,
+  borderRadius: 20,
+};
+
+export const COMMAND_BAR_MOBILE_COMPACT_GEOMETRY: CommandBarGeometry = {
+  width: 40,
   height: 40,
   borderRadius: 20,
 };
@@ -42,6 +48,9 @@ export function getCommandBarGeometry(
   viewportHeight: number
 ): CommandBarGeometry {
   if (!isExpanded) {
+    if (viewportWidth > 0 && viewportWidth < 768) {
+      return COMMAND_BAR_MOBILE_COMPACT_GEOMETRY;
+    }
     return COMMAND_BAR_COMPACT_GEOMETRY;
   }
 

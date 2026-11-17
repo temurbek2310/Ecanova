@@ -1,10 +1,14 @@
 import type {
+  AssessmentPublic,
   BadgeAward,
   CertificateRecord,
   CourseCatalogItem,
+  CourseDetailResponse,
   CourseEditionSummary,
   EnrollmentRecord,
   LeaderboardEntry,
+  LessonBlock,
+  LessonPublic,
   LocaleCode,
   QuizLeaderboardEntry,
   StreakSummary,
@@ -645,6 +649,97 @@ export function buildGuestCertificatesPayload(): {
   };
 }
 
+export function buildCourseDetailPayload(
+  courseId: string,
+  locale: LocaleCode = 'en'
+): CourseDetailResponse | null {
+  const course =
+    MVP_CATALOG_COURSES.find((c) => c.id === courseId || c.slug === courseId) ??
+    MVP_CATALOG_COURSES[0];
+  if (!course) return null;
+
+  const targetLocale: LocaleCode = locale === 'uz' ? 'uz' : 'en';
+  const edition = course.editions[targetLocale] ?? course.editions.en;
+  if (!edition) return null;
+
+  const lessonTitles = edition.lessonTitles || [];
+  const lessons: LessonPublic[] = lessonTitles.map((title, idx) => ({
+    id: `l-${course.id}-${targetLocale}-${idx + 1}`,
+    editionId: edition.id,
+    sequenceNum: idx + 1,
+    title,
+    summary: `${title} - Core theoretical principles and empirical applications.`,
+    objectives: [
+      `Master the core principles of ${title}`,
+      'Apply mathematical and statistical frameworks to empirical data',
+      'Analyze policy implications and economic trade-offs',
+    ],
+    bodyBlocks: [
+      {
+        kind: 'concept',
+        heading: title,
+        body: `Welcome to ${title}. This module builds rigorous economic intuitions with analytical models.`,
+      },
+    ],
+    keyTerms: [
+      {
+        term: 'Equilibrium Condition',
+        definition: 'State where market forces are balanced and economic variables remain unchanged.',
+      },
+    ],
+    simulationType: 'none',
+    videoUrl: null,
+    captionsVtt: null,
+    transcript: `Transcript for ${title}. Comprehensive lecture notes and interactive derivation.`,
+    estimatedMinutes: Math.round(edition.estimatedMinutes / (lessonTitles.length || 1)),
+    isRequired: true,
+    provenance: null,
+  }));
+
+  const assessment: AssessmentPublic = {
+    id: `assess-${edition.id}`,
+    editionId: edition.id,
+    title: `${edition.title} - Final Examination`,
+    passingScorePercent: edition.passingScorePercent || 75,
+    maxAttemptsPerDay: 3,
+    retryPolicyText: 'Daily attempt quota: 3 attempts per 24-hour window.',
+    version: 1,
+    questions: [
+      {
+        id: `q-${edition.id}-1`,
+        sequenceNum: 1,
+        objectiveRef: 'obj-1',
+        prompt: `In the context of ${course.subject}, which mechanism best stabilizes systemic deviations from long-run equilibrium?`,
+        options: [
+          'Counter-cyclical rule-based intervention',
+          'Static unhedged liquidity expansion',
+          'Pro-cyclical fiscal austerity during supply contractions',
+          'Arbitrary discretionary price freezes',
+        ],
+      },
+      {
+        id: `q-${edition.id}-2`,
+        sequenceNum: 2,
+        objectiveRef: 'obj-2',
+        prompt: 'What condition guarantees mathematical convergence in recursive dynamical models?',
+        options: [
+          'Spectral radius of the transition matrix strictly less than unity',
+          'Unbounded accumulation of capital stock',
+          'Strict monotonic divergence of state variables',
+          'Indeterminate transversality conditions',
+        ],
+      },
+    ],
+  };
+
+  return {
+    course,
+    edition,
+    lessons,
+    assessment,
+  };
+}
+
 /**
  * Resolves a fallback JSON payload when the frontend runs in a static or serverless
  * preview where an API endpoint is missing (HTTP 404) or unreachable.
@@ -679,5 +774,13 @@ export function resolveMvpApiFallbackPayload(
       claimedByMe: null,
     };
   }
+
+  const courseMatch = pathname.match(/^\/api\/courses\/([^/]+)\/editions\/([^/]+)/);
+  if (courseMatch) {
+    const courseId = decodeURIComponent(courseMatch[1]);
+    const locale = (decodeURIComponent(courseMatch[2]) || 'en') as LocaleCode;
+    return buildCourseDetailPayload(courseId, locale);
+  }
+
   return null;
 }

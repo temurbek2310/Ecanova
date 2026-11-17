@@ -2,9 +2,10 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
+import { useEconovaGSAP } from '../hooks/useEconovaGSAP';
 import {
   ArrowRight,
+  Clock,
   Compass,
   Globe,
   LayoutDashboard,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import {
   COMMAND_BAR_COMPACT_GEOMETRY,
+  COMMAND_BAR_MOBILE_COMPACT_GEOMETRY,
   buildCommandBarActions,
   filterCommandBarActions,
   getCommandBarGeometry,
@@ -27,7 +29,94 @@ import type { AppNavTab } from '../lib/auth-routing';
 import type { ThemeMode } from '../lib/theme';
 import type { CourseCatalogItem, LocaleCode } from '../shared/types';
 
-gsap.registerPlugin(useGSAP);
+export const RECENT_SEARCHES_STORAGE_KEY = 'econova_command_bar_recent_searches';
+
+export const DEFAULT_RECENT_SEARCHES: string[] = [
+  'Macroeconomics: Inflation',
+  'Linear Algebra',
+  'Unit Economics',
+];
+
+export interface SearchableCourseModule {
+  id: string;
+  title: string;
+  subject: 'Economics' | 'Mathematics' | 'Business';
+  courseId: string;
+  description?: string;
+}
+
+export const MOCK_SEARCHABLE_MODULES: SearchableCourseModule[] = [
+  {
+    id: 'mod-macro-inflation',
+    title: 'Macroeconomics: Inflation',
+    subject: 'Economics',
+    courseId: 'course-macro-stabilization',
+    description: 'Analyze CPI pass-through, Taylor rules, and central bank reactions.',
+  },
+  {
+    id: 'mod-linear-algebra',
+    title: 'Linear Algebra',
+    subject: 'Mathematics',
+    courseId: 'course-quant-calculus',
+    description: 'Master vector spaces, transformations, and matrix rank decomposition.',
+  },
+  {
+    id: 'mod-unit-economics',
+    title: 'Unit Economics',
+    subject: 'Business',
+    courseId: 'course-venture-finance',
+    description: 'Calculate customer acquisition costs, lifetime value, and cohort churn.',
+  },
+  {
+    id: 'mod-multivariable-calc',
+    title: 'Multivariable Calculus: Constrained Optimization',
+    subject: 'Mathematics',
+    courseId: 'course-quant-calculus',
+    description: 'Lagrangian multipliers, Hessian matrices, and Kuhn-Tucker conditions.',
+  },
+  {
+    id: 'mod-sovereign-curves',
+    title: 'Macroeconomics: Sovereign Yield Curves',
+    subject: 'Economics',
+    courseId: 'course-macro-stabilization',
+    description: 'Explore bond spread dynamics, fiscal dominance, and monetary policy.',
+  },
+  {
+    id: 'mod-venture-capital',
+    title: 'Venture Capital: Cap Table Modeling',
+    subject: 'Business',
+    courseId: 'course-venture-finance',
+    description: 'Model pre/post-money valuation, dilution, and option pool allocation.',
+  },
+];
+
+/**
+ * Utility function that highlights matched substrings in a high-contrast
+ * Neobrutalist span (#5DE1D2 bold) with robust regex escaping.
+ */
+export function highlightMatch(text: string, query: string): React.ReactNode {
+  const trimmed = query.trim();
+  if (!trimmed) return text;
+
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  try {
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    const parts = text.split(regex);
+    if (parts.length <= 1) return text;
+
+    return parts.map((part, index) =>
+      part.toLowerCase() === trimmed.toLowerCase() ? (
+        <span key={index} data-command-bar-highlight="true" className="text-[#5DE1D2] font-bold">
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
+  } catch {
+    return text;
+  }
+}
 
 export interface CommandBarProps {
   locale: LocaleCode;
@@ -41,28 +130,34 @@ export interface CommandBarProps {
   onOpenShortcuts?: () => void;
 }
 
-function renderActionIcon(action: CommandBarActionItem): React.ReactNode {
+function renderActionIcon(action: CommandBarActionItem, isActive: boolean = false): React.ReactNode {
+  const iconClass = `h-4 w-4 shrink-0 ${isActive ? 'text-white' : ''}`;
   switch (action.kind.type) {
     case 'toggle-locale':
-      return <Globe className="h-4 w-4 shrink-0 text-[#5DE1D2]" aria-hidden="true" />;
+      return <Globe className={`${iconClass} ${!isActive ? 'text-[#5DE1D2]' : ''}`} aria-hidden="true" />;
     case 'toggle-theme':
       return action.kind.nextTheme === 'light' ? (
-        <Sun className="h-4 w-4 shrink-0 text-[#FFC96B]" aria-hidden="true" />
+        <Sun className={`${iconClass} ${!isActive ? 'text-[#FFC96B]' : ''}`} aria-hidden="true" />
       ) : (
-        <Moon className="h-4 w-4 shrink-0 text-[#9274FF]" aria-hidden="true" />
+        <Moon className={`${iconClass} ${!isActive ? 'text-[#9274FF]' : ''}`} aria-hidden="true" />
       );
     case 'open-course':
     case 'jump-section':
-      return <Compass className="h-4 w-4 shrink-0 text-[#6FE0A1]" aria-hidden="true" />;
+      return <Compass className={`${iconClass} ${!isActive ? 'text-[#6FE0A1]' : ''}`} aria-hidden="true" />;
     case 'navigate':
       if (action.kind.tab === 'profile') {
-        return <User className="h-4 w-4 shrink-0 text-[#9274FF]" aria-hidden="true" />;
+        return <User className={`${iconClass} ${!isActive ? 'text-[#9274FF]' : ''}`} aria-hidden="true" />;
       }
-      return <LayoutDashboard className="h-4 w-4 shrink-0 text-[#9274FF]" aria-hidden="true" />;
+      return <LayoutDashboard className={`${iconClass} ${!isActive ? 'text-[#9274FF]' : ''}`} aria-hidden="true" />;
     case 'open-shortcuts':
-      return <Sparkles className="h-4 w-4 shrink-0 text-[#5DE1D2]" aria-hidden="true" />;
+      return <Sparkles className={`${iconClass} ${!isActive ? 'text-[#5DE1D2]' : ''}`} aria-hidden="true" />;
   }
 }
+
+type CommandBarNavigableItem =
+  | { kind: 'recent'; id: string; term: string }
+  | { kind: 'top-result'; id: string; module: SearchableCourseModule }
+  | { kind: 'action'; id: string; action: CommandBarActionItem };
 
 export const CommandBar: React.FC<CommandBarProps> = ({
   locale,
@@ -76,26 +171,114 @@ export const CommandBar: React.FC<CommandBarProps> = ({
   onOpenShortcuts,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [query, setQuery] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
 
+  // Persistent Recent Searches (max 3 items)
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return DEFAULT_RECENT_SEARCHES;
+    try {
+      const stored = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.slice(0, 3);
+        }
+      }
+    } catch {
+      // Ignore storage error
+    }
+    return DEFAULT_RECENT_SEARCHES;
+  });
+
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const islandRef = containerRef;
   const paletteBodyRef = useRef<HTMLDivElement | null>(null);
+  const actionsContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const hasInteractedRef = useRef(false);
 
-  const initialIslandStyle = useMemo<React.CSSProperties>(
-    () => ({
-      width: COMMAND_BAR_COMPACT_GEOMETRY.width,
-      height: COMMAND_BAR_COMPACT_GEOMETRY.height,
-      borderRadius: COMMAND_BAR_COMPACT_GEOMETRY.borderRadius,
-    }),
-    []
-  );
+  // Load from localStorage on mount
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRecentSearches(parsed.slice(0, 3));
+          }
+        }
+      }
+    } catch {
+      // Ignore storage access restrictions
+    }
+  }, []);
+
+  const saveRecentSearch = useCallback((term: string) => {
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    setRecentSearches((prev) => {
+      const updated = [
+        trimmed,
+        ...prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase()),
+      ].slice(0, 3);
+      try {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(updated));
+        }
+      } catch {
+        // Ignore storage access restrictions
+      }
+      return updated;
+    });
+  }, []);
+
+  const initialIslandStyle = useMemo<React.CSSProperties>(() => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const compact = isMobile ? COMMAND_BAR_MOBILE_COMPACT_GEOMETRY : COMMAND_BAR_COMPACT_GEOMETRY;
+    return {
+      width: compact.width,
+      height: compact.height,
+      borderRadius: compact.borderRadius,
+    };
+  }, []);
 
   const isUz = locale === 'uz';
 
+  // Merge mock modules with active course catalog items
+  const allSearchableModules = useMemo<SearchableCourseModule[]>(() => {
+    const list: SearchableCourseModule[] = [...MOCK_SEARCHABLE_MODULES];
+    courses.forEach((c) => {
+      const enTitle = c.editions.en?.title;
+      if (enTitle && !list.some((m) => m.title.toLowerCase() === enTitle.toLowerCase())) {
+        list.push({
+          id: `catalog-${c.id}`,
+          title: enTitle,
+          subject: c.subject,
+          courseId: c.id,
+          description: c.editions.en?.subtitle,
+        });
+      }
+    });
+    return list;
+  }, [courses]);
+
+  // Top 3 filtered modules matching current search query
+  const topResults = useMemo<SearchableCourseModule[]>(() => {
+    const trimmed = searchQuery.trim().toLowerCase();
+    if (!trimmed) return [];
+    return allSearchableModules
+      .filter(
+        (m) =>
+          m.title.toLowerCase().includes(trimmed) ||
+          m.subject.toLowerCase().includes(trimmed) ||
+          (m.description && m.description.toLowerCase().includes(trimmed))
+      )
+      .slice(0, 3);
+  }, [allSearchableModules, searchQuery]);
+
+  // Standard Quick Actions
   const allActions = useMemo(
     () =>
       buildCommandBarActions({
@@ -107,13 +290,52 @@ export const CommandBar: React.FC<CommandBarProps> = ({
   );
 
   const visibleActions = useMemo(
-    () => filterCommandBarActions(allActions, query),
-    [allActions, query]
+    () => filterCommandBarActions(allActions, searchQuery),
+    [allActions, searchQuery]
   );
 
+  // Unified list of navigable items adapting to idle (Recent Searches) vs active (Top Results) state
+  const visibleItems = useMemo<CommandBarNavigableItem[]>(() => {
+    if (!searchQuery.trim()) {
+      const recentItems: CommandBarNavigableItem[] = recentSearches.map((term, i) => ({
+        kind: 'recent',
+        id: `recent-${i}`,
+        term,
+      }));
+      const actionItems: CommandBarNavigableItem[] = visibleActions.map((action) => ({
+        kind: 'action',
+        id: action.id,
+        action,
+      }));
+      return [...recentItems, ...actionItems];
+    }
+
+    const resultItems: CommandBarNavigableItem[] = topResults.map((module) => ({
+      kind: 'top-result',
+      id: module.id,
+      module,
+    }));
+    const actionItems: CommandBarNavigableItem[] = visibleActions.map((action) => ({
+      kind: 'action',
+      id: action.id,
+      action,
+    }));
+    return [...resultItems, ...actionItems];
+  }, [searchQuery, recentSearches, topResults, visibleActions]);
+
+  // Reset active index when query or expanded state changes
   useEffect(() => {
-    setSelectedIndex(0);
-  }, [query, isExpanded]);
+    setActiveIndex(0);
+  }, [searchQuery, isExpanded]);
+
+  // Keep active keyboard selection visible within scrollable palette body
+  useEffect(() => {
+    if (!isExpanded || visibleItems.length === 0) return;
+    const targetEl = actionsContainerRef.current?.querySelector(
+      `[data-command-bar-action-index="${activeIndex}"]`
+    ) as HTMLElement | null;
+    targetEl?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex, isExpanded, visibleItems.length]);
 
   // Global Cmd+K / Ctrl+K toggle and Escape handler
   useEffect(() => {
@@ -144,7 +366,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [isExpanded]);
 
-  // Click-outside & focus-outside listener to collapse the island automatically
+  // Click-outside & focus-outside listener
   useEffect(() => {
     if (!isExpanded) return;
 
@@ -188,16 +410,16 @@ export const CommandBar: React.FC<CommandBarProps> = ({
       return () => window.clearTimeout(timer);
     }
 
-    setQuery('');
-    setSelectedIndex(0);
+    setSearchQuery('');
+    setActiveIndex(0);
     return undefined;
   }, [isExpanded]);
 
-  // Fluid GSAP morph between compact Dynamic Island pill (116x40) and expanded palette (600x400)
-  useGSAP(
+  // Fluid GSAP morph between compact Dynamic Island pill and expanded palette
+  useEconovaGSAP(
+    containerRef,
     () => {
-      if (!containerRef.current) return;
-      const islandEl = containerRef.current;
+      const islandEl = containerRef.current!;
 
       const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
       const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
@@ -236,20 +458,22 @@ export const CommandBar: React.FC<CommandBarProps> = ({
           );
         }
       } else {
+        const compactTarget = getCommandBarGeometry(false, viewportWidth, viewportHeight);
         tl.to(islandEl, {
-          width: COMMAND_BAR_COMPACT_GEOMETRY.width,
-          height: COMMAND_BAR_COMPACT_GEOMETRY.height,
-          borderRadius: COMMAND_BAR_COMPACT_GEOMETRY.borderRadius,
+          width: compactTarget.width,
+          height: compactTarget.height,
+          borderRadius: compactTarget.borderRadius,
           duration: 0.3,
           ease: 'power3.out',
         });
       }
     },
-    { scope: containerRef, dependencies: [isExpanded] }
+    { dependencies: [isExpanded] }
   );
 
   const executeAction = useCallback(
     (action: CommandBarActionItem) => {
+      saveRecentSearch(action.label);
       setIsExpanded(false);
       switch (action.kind.type) {
         case 'navigate':
@@ -280,170 +504,433 @@ export const CommandBar: React.FC<CommandBarProps> = ({
       onOpenShortcuts,
       onSwitchLocale,
       onToggleTheme,
+      saveRecentSearch,
     ]
   );
 
+  const handleSelectRecentSearch = useCallback((term: string) => {
+    setSearchQuery(term);
+    setActiveIndex(0);
+    inputRef.current?.focus();
+  }, []);
+
+  const handleSelectTopResult = useCallback(
+    (module: SearchableCourseModule) => {
+      saveRecentSearch(module.title);
+      console.log('Selected course module:', module.title);
+      onOpenCourse(module.courseId, locale);
+      setIsExpanded(false);
+    },
+    [locale, onOpenCourse, saveRecentSearch]
+  );
+
   const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (visibleActions.length === 0) return;
+    if (visibleItems.length === 0) return;
 
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % visibleActions.length);
+      setActiveIndex((prev) => (prev + 1) % visibleItems.length);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + visibleActions.length) % visibleActions.length);
+      setActiveIndex((prev) => (prev - 1 + visibleItems.length) % visibleItems.length);
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      const chosen = visibleActions[selectedIndex] ?? visibleActions[0];
-      if (chosen) {
-        executeAction(chosen);
+      const chosen = visibleItems[activeIndex] ?? visibleItems[0];
+      if (!chosen) return;
+
+      if (chosen.kind === 'recent') {
+        handleSelectRecentSearch(chosen.term);
+      } else if (chosen.kind === 'top-result') {
+        handleSelectTopResult(chosen.module);
+      } else if (chosen.kind === 'action') {
+        executeAction(chosen.action);
       }
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setIsExpanded(false);
     }
   };
 
   return (
     <div
-      ref={containerRef}
-      data-testid="global-command-bar"
-      data-expanded={isExpanded ? 'true' : 'false'}
-      role={isExpanded ? 'dialog' : 'region'}
-      aria-modal={isExpanded ? 'true' : undefined}
-      aria-label={isUz ? 'Tezkor buyruqlar paneli' : 'Global Command Bar'}
-      style={initialIslandStyle}
-      className="no-print fixed top-4 left-1/2 -translate-x-1/2 z-50 overflow-hidden border-2 border-gray-900 bg-white/85 text-gray-900 shadow-[8px_8px_0px_#111827] backdrop-blur-2xl will-change-[width,height,border-radius] dark:border-[#222B3D] dark:bg-[#101522]/40 dark:text-white dark:shadow-[8px_8px_0px_#000000]"
+      ref={wrapperRef}
+      data-command-bar-wrapper="true"
+      className="relative flex items-center justify-center h-10 w-10 md:w-[120px] shrink-0"
     >
-      {!isExpanded ? (
-        <button
-          type="button"
-          data-testid="command-bar-trigger"
-          onClick={() => {
-            hasInteractedRef.current = true;
-            setIsExpanded(true);
-          }}
-          aria-label={isUz ? 'Buyruqlar panelini ochish (⌘ K)' : 'Open Command Bar (⌘ K)'}
-          className="flex h-full w-full items-center justify-center gap-2 px-3 font-mono text-xs font-bold text-gray-900 hover:text-[#5B21B6] dark:text-gray-200 dark:hover:text-white"
-        >
-          <Search
-            className="h-3.5 w-3.5 shrink-0 text-[#5B21B6] dark:text-[#5DE1D2]"
-            aria-hidden="true"
-          />
-          <span className="tracking-wider text-gray-700 dark:text-gray-200/90">⌘ K</span>
-        </button>
-      ) : (
+      {/* Semi-transparent backdrop overlay when expanded */}
+      {isExpanded && (
         <div
-          ref={paletteBodyRef}
-          data-testid="command-bar-palette"
-          className="flex h-full w-full flex-col"
-        >
-          {/* Completely Borderless Transparent Search Input Row */}
-          <div className="flex h-14 shrink-0 items-center gap-3 border-b-2 border-gray-900 px-4 dark:border-[#222B3D]">
+          data-testid="command-bar-backdrop"
+          aria-hidden="true"
+          onClick={() => setIsExpanded(false)}
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs transition-opacity"
+        />
+      )}
+
+      {/* GSAP Dynamic Island Container */}
+      <div
+        ref={containerRef}
+        data-testid="global-command-bar"
+        data-expanded={isExpanded ? 'true' : 'false'}
+        role={isExpanded ? 'dialog' : 'region'}
+        aria-modal={isExpanded ? 'true' : undefined}
+        aria-label={isUz ? 'Tezkor buyruqlar paneli' : 'Global Command Bar'}
+        style={initialIslandStyle}
+        className={`no-print overflow-hidden border-2 border-gray-900 bg-white/85 text-gray-900 shadow-[8px_8px_0px_#111827] backdrop-blur-2xl will-change-[width,height,border-radius] dark:border-[#222B3D] dark:bg-[#101522]/40 dark:text-white dark:shadow-[8px_8px_0px_#000000] ${
+          isExpanded
+            ? 'absolute top-0 left-1/2 -translate-x-1/2 z-50 shadow-[12px_12px_0px_#000000]'
+            : 'relative z-10'
+        }`}
+      >
+        {!isExpanded ? (
+          <button
+            type="button"
+            data-testid="command-bar-trigger"
+            onClick={() => {
+              hasInteractedRef.current = true;
+              setIsExpanded(true);
+            }}
+            aria-label={isUz ? 'Buyruqlar panelini ochish (⌘ K)' : 'Open Command Bar (⌘ K)'}
+            className="flex h-full w-full items-center justify-center gap-2 px-2.5 sm:px-3 font-mono text-xs font-bold text-gray-900 hover:text-[#5B21B6] dark:text-gray-200 dark:hover:text-white"
+          >
             <Search
               className="h-4 w-4 shrink-0 text-[#5B21B6] dark:text-[#5DE1D2]"
               aria-hidden="true"
             />
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleInputKeyDown}
-              data-testid="command-bar-input"
-              aria-label={isUz ? 'Buyruq yoki kurs qidirish' : 'Search commands or courses'}
-              placeholder={
-                isUz
-                  ? 'Buyruq yoki kurs nomini yozing…'
-                  : 'Search courses, actions, or switch language…'
-              }
-              className="w-full min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold text-gray-900 placeholder:text-gray-500 outline-none focus:ring-0 dark:text-white dark:placeholder:text-gray-400"
-            />
-            <button
-              type="button"
-              data-testid="command-bar-close"
-              onClick={() => setIsExpanded(false)}
-              aria-label={isUz ? 'Yopish' : 'Close Command Bar'}
-              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border-2 border-gray-900 bg-gray-100 px-2 font-mono text-[10px] font-bold text-gray-900 shadow-[2px_2px_0px_#111827] hover:border-[#9274FF] dark:border-[#222B3D] dark:bg-[#080B14]/80 dark:text-gray-200 dark:shadow-[2px_2px_0px_#000000]"
-            >
-              <span>ESC</span>
-              <X className="h-3 w-3" aria-hidden="true" />
-            </button>
-          </div>
-
-          {/* Neobrutalist Quick Actions Grid */}
-          <div className="flex-1 overflow-y-auto p-3.5">
-            <div className="mb-2.5 flex items-center justify-between px-1 font-mono text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">
-              <span>{isUz ? 'Tezkor amallar' : 'Quick Actions'}</span>
-              <span>
-                {visibleActions.length} {isUz ? 'ta buyruq' : 'actions'}
-              </span>
+            <span className="hidden md:inline tracking-wider text-gray-700 dark:text-gray-200/90">
+              ⌘ K
+            </span>
+          </button>
+        ) : (
+          <div
+            ref={paletteBodyRef}
+            data-testid="command-bar-palette"
+            className="flex h-full w-full flex-col"
+          >
+            {/* Borderless Transparent Search Input Row */}
+            <div className="flex h-14 shrink-0 items-center gap-3 border-b-2 border-gray-900 px-4 dark:border-[#222B3D]">
+              <Search
+                className="h-4 w-4 shrink-0 text-[#5B21B6] dark:text-[#5DE1D2]"
+                aria-hidden="true"
+              />
+              <input
+                ref={inputRef}
+                type="text"
+                role="combobox"
+                aria-expanded={isExpanded}
+                aria-haspopup="listbox"
+                aria-autocomplete="list"
+                aria-controls="command-bar-actions-list"
+                aria-activedescendant={
+                  visibleItems[activeIndex]
+                    ? `command-bar-item-${visibleItems[activeIndex].id}`
+                    : undefined
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleInputKeyDown}
+                data-testid="command-bar-input"
+                aria-label={isUz ? 'Kurs, mavzu yoki buyruq qidirish' : 'Search courses, modules, or actions'}
+                placeholder={
+                  isUz
+                    ? 'Kurs, modul yoki buyruq nomini yozing…'
+                    : 'Search courses, modules, or actions (e.g. Inflation, Calculus)…'
+                }
+                className="w-full min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold text-gray-900 placeholder:text-gray-500 outline-none focus:ring-0 dark:text-white dark:placeholder:text-gray-400"
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setActiveIndex(0);
+                    inputRef.current?.focus();
+                  }}
+                  aria-label={isUz ? 'Tozalash' : 'Clear search'}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-gray-400 bg-gray-100 text-xs font-bold text-gray-700 hover:bg-gray-200 dark:border-white/20 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="command-bar-close"
+                  onClick={() => setIsExpanded(false)}
+                  aria-label={isUz ? 'Yopish' : 'Close Command Bar'}
+                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border-2 border-gray-900 bg-gray-100 px-2 font-mono text-[10px] font-bold text-gray-900 shadow-[2px_2px_0px_#111827] hover:border-[#9274FF] dark:border-[#222B3D] dark:bg-[#080B14]/80 dark:text-gray-200 dark:shadow-[2px_2px_0px_#000000]"
+                >
+                  <span>ESC</span>
+                  <X className="h-3 w-3" aria-hidden="true" />
+                </button>
+              )}
             </div>
 
-            {visibleActions.length === 0 ? (
-              <div
-                data-testid="command-bar-empty"
-                className="flex h-56 items-center justify-center rounded-lg border-2 border-dashed border-gray-400 font-mono text-xs text-gray-600 dark:border-[#222B3D] dark:text-gray-300"
-              >
-                {isUz
-                  ? `"${query}" bo‘yicha natija topilmadi.`
-                  : `No matching commands for "${query}".`}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                {visibleActions.map((action, idx) => {
-                  const isActive = idx === selectedIndex;
-                  return (
-                    <button
-                      key={action.id}
-                      type="button"
-                      data-testid={`command-bar-action-${action.id}`}
-                      onMouseEnter={() => setSelectedIndex(idx)}
-                      onClick={() => executeAction(action)}
-                      className={`group flex items-center justify-between gap-2.5 rounded-lg border-2 px-3 py-2.5 text-left ${
-                        isActive
-                          ? 'border-[#9274FF] bg-[#9274FF]/15 text-gray-900 shadow-[4px_4px_0px_#111827] dark:text-white dark:shadow-[4px_4px_0px_#000000]'
-                          : 'border-gray-900/25 bg-white/70 text-gray-900 hover:border-[#9274FF] dark:border-[#222B3D] dark:bg-[#080B14]/65 dark:text-gray-200'
-                      }`}
+            {/* Scrollable Palette Body */}
+            <div
+              ref={actionsContainerRef}
+              id="command-bar-actions-list"
+              role="listbox"
+              aria-label={isUz ? 'Buyruqlar va natijalar ro‘yxati' : 'Commands and results list'}
+              className="flex-1 overflow-y-auto p-3.5 space-y-4"
+            >
+              {/* SECTION: Idle Recent Searches vs Active Top Results */}
+              {!searchQuery.trim() ? (
+                /* 1. Recent Searches (Idle State) */
+                <div>
+                  <div className="mb-2 flex items-center justify-between px-1 font-mono text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-[#5DE1D2]" aria-hidden="true" />
+                      {isUz ? 'Oxirgi qidiruvlar' : 'Recent Searches'}
+                    </span>
+                    <span>{recentSearches.length} {isUz ? 'ta' : 'queries'}</span>
+                  </div>
+
+                  {recentSearches.length === 0 ? (
+                    <div className="py-2 px-3 text-xs italic text-gray-500 dark:text-gray-400">
+                      {isUz ? 'Oxirgi qidiruvlar mavjud emas' : 'No recent searches yet'}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {recentSearches.map((term, idx) => {
+                        const itemIndex = idx;
+                        const isActive = activeIndex === itemIndex;
+                        return (
+                          <button
+                            key={term}
+                            id={`command-bar-item-recent-${idx}`}
+                            data-command-bar-action-index={itemIndex}
+                            role="option"
+                            aria-selected={isActive}
+                            type="button"
+                            tabIndex={-1}
+                            onMouseEnter={() => setActiveIndex(itemIndex)}
+                            onClick={() => handleSelectRecentSearch(term)}
+                            className={`group flex w-full items-center justify-between gap-3 rounded-lg border-2 px-3.5 py-2 text-left transition-all ${
+                              isActive
+                                ? 'bg-[#9274FF] text-white border-2 border-black shadow-[4px_4px_0px_#000] -translate-y-0.5 dark:bg-[#9274FF] dark:text-white dark:border-black dark:shadow-[4px_4px_0px_#000]'
+                                : 'border-transparent bg-transparent text-gray-900 hover:border-gray-900/30 hover:bg-black/5 dark:text-gray-100 dark:hover:border-white/30 dark:hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <Clock
+                                className={`h-4 w-4 shrink-0 ${
+                                  isActive
+                                    ? 'text-white'
+                                    : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white'
+                                }`}
+                                aria-hidden="true"
+                              />
+                              <span
+                                className={`truncate text-xs font-bold ${
+                                  isActive ? 'text-white' : 'text-gray-900 dark:text-white'
+                                }`}
+                              >
+                                {term}
+                              </span>
+                            </div>
+
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <kbd
+                                className={`rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold ${
+                                  isActive
+                                    ? 'border-black bg-white text-black shadow-[1px_1px_0px_#000]'
+                                    : 'border-gray-900/30 bg-gray-100 text-gray-700 dark:border-white/20 dark:bg-black/40 dark:text-gray-300'
+                                }`}
+                              >
+                                ↵ {isUz ? 'qidirish' : 'search'}
+                              </kbd>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* 2. Top Results (Active Query State) with Keyword Highlighting */
+                <div>
+                  <div className="mb-2 flex items-center justify-between px-1 font-mono text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-[#5DE1D2]" aria-hidden="true" />
+                      {isUz ? 'Eng mos natijalar' : 'Top Results'}
+                    </span>
+                    <span>{topResults.length} {isUz ? 'ta natija' : 'matches'}</span>
+                  </div>
+
+                  {topResults.length === 0 ? (
+                    <div
+                      data-testid="command-bar-empty-results"
+                      className="flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-gray-400 font-mono text-xs text-gray-600 dark:border-[#222B3D] dark:text-gray-400"
                     >
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        {renderActionIcon(action)}
-                        <div className="min-w-0">
-                          <div className="truncate text-xs font-bold text-gray-900 dark:text-white">
-                            {action.label}
-                          </div>
-                          <div className="truncate text-[10px] text-gray-600 dark:text-gray-300">
-                            {action.subtitle}
-                          </div>
-                        </div>
-                      </div>
+                      {isUz
+                        ? `"${searchQuery}" bo‘yicha kurs yoki modul topilmadi.`
+                        : `No matching course modules for "${searchQuery}".`}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {topResults.map((module, idx) => {
+                        const itemIndex = idx;
+                        const isActive = activeIndex === itemIndex;
+                        return (
+                          <button
+                            key={module.id}
+                            id={`command-bar-item-${module.id}`}
+                            data-command-bar-action-index={itemIndex}
+                            role="option"
+                            aria-selected={isActive}
+                            type="button"
+                            tabIndex={-1}
+                            onMouseEnter={() => setActiveIndex(itemIndex)}
+                            onClick={() => handleSelectTopResult(module)}
+                            className={`group flex w-full items-center justify-between gap-3 rounded-lg border-2 px-3.5 py-2.5 text-left transition-all ${
+                              isActive
+                                ? 'bg-[#9274FF] text-white border-2 border-black shadow-[4px_4px_0px_#000] -translate-y-0.5 dark:bg-[#9274FF] dark:text-white dark:border-black dark:shadow-[4px_4px_0px_#000]'
+                                : 'border-transparent bg-transparent text-gray-900 hover:border-gray-900/30 hover:bg-black/5 dark:text-gray-100 dark:hover:border-white/30 dark:hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span
+                                className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase border ${
+                                  isActive
+                                    ? 'border-black bg-black text-[#5DE1D2]'
+                                    : 'border-gray-900/30 bg-gray-100 text-gray-700 dark:border-white/20 dark:bg-black/40 dark:text-gray-300'
+                                }`}
+                              >
+                                {module.subject}
+                              </span>
 
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {action.shortcutHint && (
-                          <kbd className="rounded border border-gray-900/40 bg-gray-100 px-1.5 py-0.5 font-mono text-[9px] font-bold text-gray-800 dark:border-[#222B3D] dark:bg-[#101522] dark:text-gray-200">
-                            {action.shortcutHint}
-                          </kbd>
-                        )}
-                        <ArrowRight
-                          className={`h-3.5 w-3.5 ${
+                              <div className="min-w-0">
+                                <div
+                                  className={`truncate text-xs font-bold ${
+                                    isActive ? 'text-white' : 'text-gray-900 dark:text-white'
+                                  }`}
+                                >
+                                  {highlightMatch(module.title, searchQuery)}
+                                </div>
+                                {module.description && (
+                                  <div
+                                    className={`truncate text-[10px] ${
+                                      isActive ? 'text-white/80' : 'text-gray-600 dark:text-gray-400'
+                                    }`}
+                                  >
+                                    {highlightMatch(module.description, searchQuery)}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <ArrowRight
+                                className={`h-4 w-4 transition-transform ${
+                                  isActive
+                                    ? 'translate-x-1 text-white'
+                                    : 'text-gray-400 group-hover:text-black dark:group-hover:text-white'
+                                }`}
+                                aria-hidden="true"
+                              />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SECTION: Quick Actions */}
+              {visibleActions.length > 0 && (
+                <div>
+                  <div className="mb-2 flex items-center justify-between px-1 font-mono text-[10px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                    <span>{isUz ? 'Tezkor amallar' : 'Quick Actions'}</span>
+                    <span>
+                      {visibleActions.length} {isUz ? 'ta buyruq' : 'actions'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {visibleActions.map((action, actionIdx) => {
+                      const itemIndex =
+                        (!searchQuery.trim() ? recentSearches.length : topResults.length) + actionIdx;
+                      const isActive = activeIndex === itemIndex;
+                      return (
+                        <button
+                          key={action.id}
+                          id={`command-bar-item-${action.id}`}
+                          data-command-bar-action-index={itemIndex}
+                          role="option"
+                          aria-selected={isActive}
+                          type="button"
+                          tabIndex={-1}
+                          data-testid={`command-bar-action-${action.id}`}
+                          onMouseEnter={() => setActiveIndex(itemIndex)}
+                          onClick={() => executeAction(action)}
+                          className={`group flex items-center justify-between gap-2.5 rounded-lg border-2 px-3 py-2 text-left transition-all ${
                             isActive
-                              ? 'translate-x-0.5 text-[#5B21B6] dark:text-[#5DE1D2]'
-                              : 'text-gray-400 group-hover:text-[#5DE1D2]'
+                              ? 'bg-[#9274FF] text-white border-2 border-black shadow-[4px_4px_0px_#000] -translate-y-0.5 dark:bg-[#9274FF] dark:text-white dark:border-black dark:shadow-[4px_4px_0px_#000]'
+                              : 'border-transparent bg-transparent text-gray-900 hover:border-gray-900/30 hover:bg-black/5 dark:text-gray-100 dark:hover:border-white/30 dark:hover:bg-white/5'
                           }`}
-                          aria-hidden="true"
-                        />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            {renderActionIcon(action, isActive)}
+                            <div className="min-w-0">
+                              <div
+                                className={`truncate text-xs font-bold ${
+                                  isActive ? 'text-white' : 'text-gray-900 dark:text-white'
+                                }`}
+                              >
+                                {searchQuery.trim()
+                                  ? highlightMatch(action.label, searchQuery)
+                                  : action.label}
+                              </div>
+                              <div
+                                className={`truncate text-[10px] ${
+                                  isActive
+                                    ? 'text-white/80 font-medium'
+                                    : 'text-gray-600 dark:text-gray-400'
+                                }`}
+                              >
+                                {action.subtitle}
+                              </div>
+                            </div>
+                          </div>
 
-          {/* Palette Keyboard Legend Footer */}
-          <div className="flex h-9 shrink-0 items-center justify-between border-t-2 border-gray-900 px-4 font-mono text-[10px] font-bold text-gray-600 dark:border-[#222B3D] dark:text-gray-400">
-            <span>ECONOVA // DYNAMIC ISLAND</span>
-            <span>↑↓ Navigate · ↵ Run · Esc Close</span>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {action.shortcutHint && (
+                              <kbd
+                                className={`rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold ${
+                                  isActive
+                                    ? 'border-black bg-white text-black shadow-[1px_1px_0px_#000]'
+                                    : 'border-gray-900/40 bg-gray-100 text-gray-800 dark:border-[#222B3D] dark:bg-[#101522] dark:text-gray-200'
+                                }`}
+                              >
+                                {action.shortcutHint}
+                              </kbd>
+                            )}
+                            <ArrowRight
+                              className={`h-3.5 w-3.5 transition-transform ${
+                                isActive
+                                  ? 'translate-x-1 text-white'
+                                  : 'text-gray-400 group-hover:text-black dark:group-hover:text-white'
+                              }`}
+                              aria-hidden="true"
+                            />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Palette Keyboard Legend Footer */}
+            <div className="flex h-9 shrink-0 items-center justify-between border-t-2 border-gray-900 px-4 font-mono text-[10px] font-bold text-gray-600 dark:border-[#222B3D] dark:text-gray-400">
+              <span>ECONOVA // SPOTLIGHT SEARCH</span>
+              <span>↑↓ Navigate · ↵ Select · Esc Close</span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
