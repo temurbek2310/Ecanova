@@ -1,122 +1,162 @@
+import enMessages from '../messages/en.json';
+import uzMessages from '../messages/uz.json';
 import type { CourseLevel, EditorialStatus, JourneyStatus, LocaleCode, Subject } from '../shared/types';
 
-export const UI_STRINGS = {
-  en: {
-    brand: 'ECONOVA',
-    nav: {
-      overview: 'Overview',
-      catalog: 'Courses',
-      achievements: 'XP & Streaks',
-      community: 'Leaderboard',
-      certificates: 'Certificates',
-      profile: 'Profile & Privacy',
-      admin: 'Editorial Studio',
-    },
-    heroTitle: 'Structured mastery in Economics, Mathematics, and Business',
-    heroSubtitle:
-      'Separately authored English and Uzbek editions. Server-verified progress, interactive models, and course-specific certificates.',
-    browseCatalog: 'Explore Courses',
-    continueLearning: 'Continue Learning',
-    signIn: 'Sign In',
-    signOut: 'Sign Out',
-    allSubjects: 'All Subjects',
-    allLevels: 'All Levels',
-    editionLabel: 'Course Edition',
-    editionEn: 'English Edition',
-    editionUz: 'O‘zbekcha nashr (Uzbek)',
-    editionMissingNote:
-      'This course edition is not published in the selected language yet. ECONOVA never substitutes unreviewed machine translations.',
-    subjects: {
-      Economics: 'Economics',
-      Mathematics: 'Mathematics',
-      Business: 'Business',
-    } as Record<Subject, string>,
-    levels: {
-      Beginner: 'Beginner',
-      Intermediate: 'Intermediate',
-      Advanced: 'Advanced',
-    } as Record<CourseLevel, string>,
-    journey: {
-      not_started: 'Not Started',
-      progressing: 'Progressing (Learner Status)',
-      completed: 'Completed',
-      paused: 'Paused',
-    } as Record<JourneyStatus, string>,
-    editorial: {
-      draft: 'Draft',
-      subject_review: 'Subject Review',
-      language_review: 'Language Review',
-      rights_accessibility_review: 'Rights & Accessibility',
-      approved: 'Approved',
-      published: 'Published',
-      retired: 'Retired',
-    } as Record<EditorialStatus, string>,
-    nonCashNotice:
-      'XP is strictly non-cash recognition for verified study milestones. It has no monetary value and cannot be withdrawn or exchanged.',
-    nonAccreditationNotice:
-      'ECONOVA certificates confirm completion of a specific course edition only. They are not academic credit or professional accreditation.',
-    installApp: 'Install App',
-    offlineBanner: 'Offline mode — Cached public catalog available. Syncs when reconnected.',
-  },
-  uz: {
-    brand: 'ECONOVA',
-    nav: {
-      overview: 'Bosh sahifa',
-      catalog: 'Kurslar',
-      achievements: 'XP va davomiylik',
-      community: 'Reyting',
-      certificates: 'Sertifikatlar',
-      profile: 'Profil va maxfiylik',
-      admin: 'Tahririyat',
-    },
-    heroTitle: 'Iqtisodiyot, Matematika va Biznes bo‘yicha tizimli bilim',
-    heroSubtitle:
-      'O‘zbek va ingliz tillarida alohida mualliflik va inson nazoratidan o‘tgan nashrlar. Serverda tasdiqlanadigan natijalar va har bir kurs uchun alohida sertifikat.',
-    browseCatalog: 'Kurslarni ko‘rish',
-    continueLearning: 'O‘qishni davom ettirish',
-    signIn: 'Kirish',
-    signOut: 'Chiqish',
-    allSubjects: 'Barcha fanlar',
-    allLevels: 'Barcha darajalar',
-    editionLabel: 'Kurs nashri',
-    editionEn: 'Inglizcha nashr (English)',
-    editionUz: 'O‘zbekcha nashr',
-    editionMissingNote:
-      'Tanlangan tildagi nashr hali chop etilmagan. ECONOVA tekshirilmagan mashina tarjimasini avtomatik almashtirib qo‘ymaydi.',
-    subjects: {
-      Economics: 'Iqtisodiyot',
-      Mathematics: 'Matematika',
-      Business: 'Biznes',
-    } as Record<Subject, string>,
-    levels: {
-      Beginner: 'Boshlang‘ich',
-      Intermediate: 'O‘rta',
-      Advanced: 'Yuqori',
-    } as Record<CourseLevel, string>,
-    journey: {
-      not_started: 'Boshlanmagan',
-      progressing: 'Jarayonda (O‘quvchi holati)',
-      completed: 'Yakunlangan',
-      paused: 'To‘xtatilgan',
-    } as Record<JourneyStatus, string>,
-    editorial: {
-      draft: 'Qoralama',
-      subject_review: 'Fan ekspertizasi',
-      language_review: 'Til tekshiruvi',
-      rights_accessibility_review: 'Huquq va qulaylik',
-      approved: 'Tasdiqlangan',
-      published: 'Chop etilgan',
-      retired: 'Arxivlangan',
-    } as Record<EditorialStatus, string>,
-    nonCashNotice:
-      'XP faqat tasdiqlangan o‘quv natijalari uchun beriladigan naqd pulsiz balldir. Uning pul qiymati yo‘q va yechib olinmaydi.',
-    nonAccreditationNotice:
-      'ECONOVA sertifikati faqat muayyan kurs nashri yakunlanganini tasdiqlaydi; u rasmiy akademik kredit yoki davlat diplomi emas.',
-    installApp: 'Ilovani o‘rnatish',
-    offlineBanner: 'Oflayn rejim — Saqlangan ommaviy katalog ko‘rsatilmoqda.',
-  },
-} as const;
+export type TranslationDictionary = typeof enMessages & {
+  subjects: Record<Subject, string>;
+  levels: Record<CourseLevel, string>;
+  journey: Record<JourneyStatus, string>;
+  editorial: Record<EditorialStatus, string>;
+};
 
-export function t(locale: LocaleCode) {
-  return UI_STRINGS[locale];
+export const LOCALE_STORAGE_KEY = 'econova_locale';
+export const LOCALE_COOKIE_KEY = 'NEXT_LOCALE';
+export const SUPPORTED_LOCALES: readonly LocaleCode[] = ['en', 'uz'] as const;
+
+export const UI_STRINGS: Record<LocaleCode, TranslationDictionary> = {
+  en: enMessages as TranslationDictionary,
+  uz: uzMessages as TranslationDictionary,
+};
+
+export function isValidLocale(value: unknown): value is LocaleCode {
+  return value === 'en' || value === 'uz';
+}
+
+export function t(locale: LocaleCode): TranslationDictionary {
+  return UI_STRINGS[isValidLocale(locale) ? locale : 'en'];
+}
+
+export function formatTemplate(
+  template: string,
+  vars: Record<string, string | number>
+): string {
+  return template.replace(/\{(\w+)\}/g, (_, key: string) =>
+    Object.prototype.hasOwnProperty.call(vars, key) ? String(vars[key]) : `{${key}}`
+  );
+}
+
+export function formatCourseMetaSummary(
+  lessonCount: number,
+  estimatedMinutes: number,
+  passingScorePercent: number,
+  locale: LocaleCode
+): string {
+  const dict = t(locale);
+  return formatTemplate(dict.economics.courseMetaFormat, {
+    lessons: lessonCount,
+    minutes: estimatedMinutes,
+    pass: passingScorePercent,
+  });
+}
+
+export function parseCookieLocale(cookieHeader: string | undefined | null): LocaleCode | null {
+  if (!cookieHeader) return null;
+  const parts = cookieHeader.split(';');
+  for (const rawPart of parts) {
+    const [rawKey, ...rawVal] = rawPart.trim().split('=');
+    if (rawKey === LOCALE_COOKIE_KEY || rawKey === LOCALE_STORAGE_KEY) {
+      const candidate = decodeURIComponent(rawVal.join('=')).trim().toLowerCase();
+      if (isValidLocale(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+export function parsePathnameOrSearchLocale(
+  pathname?: string | null,
+  search?: string | null
+): LocaleCode | null {
+  if (pathname) {
+    const seg = pathname.split('/').filter(Boolean)[0]?.toLowerCase();
+    if (isValidLocale(seg)) {
+      return seg;
+    }
+  }
+  if (search) {
+    const params = new URLSearchParams(search.startsWith('?') ? search : `?${search}`);
+    const queryLocale = (params.get('lang') || params.get('locale'))?.toLowerCase();
+    if (isValidLocale(queryLocale)) {
+      return queryLocale;
+    }
+  }
+  return null;
+}
+
+export function resolveInitialLocale(options?: {
+  pathname?: string | null;
+  search?: string | null;
+  cookieString?: string | null;
+  storageValue?: string | null;
+}): LocaleCode {
+  const fromUrl = parsePathnameOrSearchLocale(
+    options?.pathname ?? (typeof window !== 'undefined' ? window.location.pathname : null),
+    options?.search ?? (typeof window !== 'undefined' ? window.location.search : null)
+  );
+  if (fromUrl) return fromUrl;
+
+  const storageCandidate =
+    options?.storageValue !== undefined
+      ? options.storageValue
+      : typeof window !== 'undefined'
+      ? (() => {
+          try {
+            return window.localStorage.getItem(LOCALE_STORAGE_KEY);
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+
+  if (isValidLocale(storageCandidate)) {
+    return storageCandidate;
+  }
+
+  const cookieCandidate = parseCookieLocale(
+    options?.cookieString !== undefined
+      ? options.cookieString
+      : typeof document !== 'undefined'
+      ? document.cookie
+      : null
+  );
+  if (cookieCandidate) {
+    return cookieCandidate;
+  }
+
+  return 'en';
+}
+
+export function persistLocalePreference(locale: LocaleCode): void {
+  const safeLocale: LocaleCode = isValidLocale(locale) ? locale : 'en';
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, safeLocale);
+    } catch {
+      // Ignore storage quota / privacy mode errors
+    }
+  }
+
+  if (typeof document !== 'undefined') {
+    try {
+      document.cookie = `${LOCALE_COOKIE_KEY}=${safeLocale}; path=/; max-age=31536000; SameSite=Lax`;
+      document.cookie = `${LOCALE_STORAGE_KEY}=${safeLocale}; path=/; max-age=31536000; SameSite=Lax`;
+    } catch {
+      // Ignore cookie write errors
+    }
+  }
+
+  applyDocumentLocale(safeLocale);
+}
+
+export function applyDocumentLocale(locale: LocaleCode): void {
+  const safeLocale: LocaleCode = isValidLocale(locale) ? locale : 'en';
+  if (typeof document === 'undefined') return;
+  const dict = t(safeLocale);
+  document.documentElement.lang = safeLocale;
+  document.documentElement.setAttribute('data-locale', safeLocale);
+  if (dict.metaTitle) {
+    document.title = dict.metaTitle;
+  }
 }

@@ -1,34 +1,144 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowRight, X } from 'lucide-react';
 import type { AgeBand, LocaleCode, UserSummary } from '../shared/types';
+import { t } from '../lib/i18n';
+import { apiFetch, persistCachedUserSummary, persistSessionToken } from '../lib/auth-client';
+import { GoogleLogoSvg } from './AuthPageView';
 
 interface AuthModalProps {
   locale: LocaleCode;
   sandboxEnabled?: boolean;
+  redirectTo?: string | null;
   onClose: () => void;
-  onAuthenticated: (user: UserSummary) => Promise<void>;
+  onAuthenticated: (
+    user: UserSummary,
+    options?: { sessionToken?: string | null; redirectTo?: string | null }
+  ) => Promise<void>;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   locale,
   sandboxEnabled = false,
+  redirectTo = null,
   onClose,
   onAuthenticated,
 }) => {
+  const strings = t(locale);
+  const authStrings = strings.auth;
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [ageBand, setAgeBand] = useState<AgeBand>('university');
-  const [consentChecked, setConsentChecked] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googlePressed, setGooglePressed] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const origin = event.origin || '';
+      if (
+        origin &&
+        !origin.endsWith('.run.app') &&
+        !origin.includes('localhost') &&
+        origin !== window.location.origin
+      ) {
+        return;
+      }
+      const data = event.data as {
+        type?: string;
+        user?: UserSummary;
+        sessionToken?: string;
+        redirectTo?: string;
+      } | null;
+
+      if (data?.type === 'OAUTH_AUTH_SUCCESS' && data.user) {
+        if (data.sessionToken) {
+          persistSessionToken(data.sessionToken);
+        }
+        persistCachedUserSummary(data.user);
+        setGoogleLoading(false);
+        setGooglePressed(false);
+        void onAuthenticated(data.user, {
+          sessionToken: data.sessionToken ?? null,
+          redirectTo: data.redirectTo ?? redirectTo,
+        }).then(() => onClose());
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onAuthenticated, onClose, redirectTo]);
+
+  const handleGoogleSignIn = async () => {
+    setErrorMsg(null);
+    setGooglePressed(true);
+    setGoogleLoading(true);
+    window.setTimeout(() => setGooglePressed(false), 180);
+
+    try {
+      const params = new URLSearchParams({
+        redirectTo: redirectTo || '/overview',
+        locale,
+        origin: window.location.origin,
+      });
+      const urlRes = await apiFetch(`/api/auth/google/url?${params.toString()}`);
+      if (urlRes.ok) {
+        const urlData = (await urlRes.json()) as {
+          configured?: boolean;
+          url?: string | null;
+        };
+        if (urlData.configured && urlData.url) {
+          const popup = window.open(
+            urlData.url,
+            'econova_google_oauth',
+            'width=560,height=680'
+          );
+          if (popup) {
+            return;
+          }
+        }
+      }
+
+      const res = await apiFetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preferredLocale: locale,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tashkent',
+        }),
+      });
+      const data = (await res.json()) as {
+        user?: UserSummary;
+        sessionToken?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.user) {
+        throw new Error(data.error || authStrings.authFailed);
+      }
+      if (data.sessionToken) {
+        persistSessionToken(data.sessionToken);
+      }
+      persistCachedUserSummary(data.user);
+      await onAuthenticated(data.user, {
+        sessionToken: data.sessionToken ?? null,
+        redirectTo,
+      });
+      onClose();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     if (mode === 'register' && !consentChecked) {
-      setErrorMsg('Please confirm the Privacy Notice and non-cash / non-accreditation terms.');
+      setErrorMsg(authStrings.consentError);
       return;
     }
     setLoading(true);
@@ -45,17 +155,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               ageBand,
               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tashkent',
             };
-      const res = await fetch(endpoint, {
+      const res = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = (await res.json()) as { user?: UserSummary; error?: string };
-      if (!res.ok || !data.user) throw new Error(data.error || 'Authentication failed.');
-      await onAuthenticated(data.user);
+      const data = (await res.json()) as {
+        user?: UserSummary;
+        sessionToken?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.user) throw new Error(data.error || authStrings.authFailed);
+      if (data.sessionToken) {
+        persistSessionToken(data.sessionToken);
+      }
+      persistCachedUserSummary(data.user);
+      await onAuthenticated(data.user, {
+        sessionToken: data.sessionToken ?? null,
+        redirectTo,
+      });
       onClose();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Request failed.');
+      setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
     } finally {
       setLoading(false);
     }
@@ -65,17 +186,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMsg(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/sandbox', {
+      const res = await apiFetch('/api/auth/sandbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account }),
       });
-      const data = (await res.json()) as { user?: UserSummary; error?: string };
-      if (!res.ok || !data.user) throw new Error(data.error || 'Sandbox sign-in failed.');
-      await onAuthenticated(data.user);
+      const data = (await res.json()) as {
+        user?: UserSummary;
+        sessionToken?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.user) throw new Error(data.error || authStrings.authFailed);
+      if (data.sessionToken) {
+        persistSessionToken(data.sessionToken);
+      }
+      persistCachedUserSummary(data.user);
+      await onAuthenticated(data.user, {
+        sessionToken: data.sessionToken ?? null,
+        redirectTo,
+      });
       onClose();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Request failed.');
+      setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
     } finally {
       setLoading(false);
     }
@@ -86,73 +218,98 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="auth-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
     >
-      <div className="w-full max-w-md rounded-xl border border-[#222B3D] bg-[#101522] p-6">
+      <div className="w-full max-w-md rounded-2xl border-2 border-slate-500 bg-white/40 p-6 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 id="auth-modal-title" className="text-lg font-semibold text-[#F3F6FF]">
-              {mode === 'login' ? 'Sign In to ECONOVA' : 'Create Learner Account'}
+            <h2 id="auth-modal-title" className="text-lg font-extrabold text-ink">
+              {mode === 'login' ? authStrings.signInTitle : authStrings.registerTitle}
             </h2>
-            <p className="mt-1 text-xs text-[#8994AA]">
-              Save progress across devices, earn course-specific certificates, and manage privacy settings.
+            <p className="mt-1 text-xs text-muted">
+              {authStrings.subtitle}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close sign-in dialog"
-            className="rounded-lg p-1.5 text-[#8994AA] hover:bg-[#141B2B] hover:text-[#F3F6FF]"
+            aria-label={authStrings.closeAria}
+            className="rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/55 dark:bg-[#080B14]/60 p-1.5 text-muted shadow-brutal-sm hover:border-theme-accent hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
+        {/* Primary Google OAuth Button with Physical Push-Down Translation */}
+        <div className="mt-4">
+          <button
+            type="button"
+            disabled={loading || googleLoading}
+            onClick={() => void handleGoogleSignIn()}
+            data-testid="modal-google-oauth-btn"
+            className={`flex min-h-[46px] w-full items-center justify-center gap-3 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/55 dark:bg-[#080B14]/65 px-4 py-2.5 text-xs font-extrabold text-ink backdrop-blur-md transition-transform duration-75 select-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none disabled:opacity-60 ${
+              googlePressed
+                ? 'translate-x-[3px] translate-y-[3px] shadow-none'
+                : 'shadow-brutal-sm hover:border-theme-accent'
+            }`}
+          >
+            <GoogleLogoSvg className="h-4 w-4 shrink-0" />
+            <span>
+              {googleLoading ? authStrings.connectingGoogle : authStrings.signInWithGoogle}
+            </span>
+            <ArrowRight className="h-3.5 w-3.5 text-theme-accent" aria-hidden="true" />
+          </button>
+        </div>
+
         {/* Sandbox Evaluation Quick Access (only when ENABLE_DEMO_SANDBOX=true) */}
         {sandboxEnabled && (
-          <div className="mt-4 rounded-lg border border-[#222B3D] bg-[#0B0F19] p-3">
-            <div className="text-[11px] font-medium text-[#8994AA]">
-              Sandbox Preview Accounts (Local Testing Only)
+          <div className="mt-4 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/55 dark:bg-[#080B14]/60 p-3 backdrop-blur-md">
+            <div className="text-[11px] font-bold text-muted">
+              {authStrings.sandboxHeader}
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled={loading}
-                onClick={() => handleSandbox('learner')}
-                className="min-h-[38px] rounded-lg border border-[#222B3D] bg-[#141B2B] px-3 py-1.5 text-xs font-medium text-[#5DE1D2] hover:border-[#5DE1D2]/50"
+                disabled={loading || googleLoading}
+                onClick={() => void handleSandbox('learner')}
+                className="min-h-[38px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#101522]/70 px-3 py-1.5 text-xs font-bold text-theme-cyan shadow-brutal-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-cyan"
               >
-                Demo Learner (Dilnoza)
+                {authStrings.sandboxLearner} (Dilnoza)
               </button>
               <button
                 type="button"
-                disabled={loading}
-                onClick={() => handleSandbox('staff')}
-                className="min-h-[38px] rounded-lg border border-[#222B3D] bg-[#141B2B] px-3 py-1.5 text-xs font-medium text-[#9274FF] hover:border-[#9274FF]/50"
+                disabled={loading || googleLoading}
+                onClick={() => void handleSandbox('staff')}
+                className="min-h-[38px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#101522]/70 px-3 py-1.5 text-xs font-bold text-theme-accent shadow-brutal-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-accent"
               >
-                Demo Staff Editor
+                {authStrings.sandboxStaff}
               </button>
             </div>
           </div>
         )}
 
-        <div className="mt-4 flex gap-1 rounded-lg border border-[#222B3D] bg-[#0B0F19] p-1 text-xs">
+        <div className="mt-4 flex gap-1.5 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/50 dark:bg-[#080B14]/60 p-1 text-xs shadow-brutal-sm backdrop-blur-md">
           <button
             type="button"
             onClick={() => setMode('login')}
-            className={`flex-1 rounded-md py-1.5 font-medium ${
-              mode === 'login' ? 'bg-[#141B2B] text-[#F3F6FF]' : 'text-[#8994AA]'
+            className={`flex-1 rounded-lg border-2 py-1.5 font-extrabold transition-all ${
+              mode === 'login'
+                ? 'border-theme-border bg-theme-accent text-theme-accent-ink shadow-brutal-sm'
+                : 'border-transparent text-muted hover:text-ink'
             }`}
           >
-            Sign In
+            {authStrings.tabSignIn}
           </button>
           <button
             type="button"
             onClick={() => setMode('register')}
-            className={`flex-1 rounded-md py-1.5 font-medium ${
-              mode === 'register' ? 'bg-[#141B2B] text-[#F3F6FF]' : 'text-[#8994AA]'
+            className={`flex-1 rounded-lg border-2 py-1.5 font-extrabold transition-all ${
+              mode === 'register'
+                ? 'border-theme-border bg-theme-accent text-theme-accent-ink shadow-brutal-sm'
+                : 'border-transparent text-muted hover:text-ink'
             }`}
           >
-            Create Account
+            {authStrings.tabRegister}
           </button>
         </div>
 
@@ -160,8 +317,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {mode === 'register' && (
             <>
               <div>
-                <label htmlFor="auth-name" className="block text-xs text-[#8994AA]">
-                  Display Name (Shown on certificates you choose to share)
+                <label htmlFor="auth-name" className="block text-xs font-bold text-ink">
+                  {authStrings.displayNameLabel}
                 </label>
                 <input
                   id="auth-name"
@@ -170,31 +327,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   minLength={2}
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="mt-1 min-h-[42px] w-full rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 text-sm text-[#F3F6FF]"
+                  className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-theme-border bg-theme-base px-3 text-sm text-ink shadow-brutal-sm focus:border-theme-accent focus:outline-none"
                 />
               </div>
 
               <div>
-                <label htmlFor="auth-age" className="block text-xs text-[#8994AA]">
-                  Learner Group (Privacy defaults to private)
+                <label htmlFor="auth-age" className="block text-xs font-bold text-ink">
+                  {authStrings.learnerGroupLabel}
                 </label>
                 <select
                   id="auth-age"
                   value={ageBand}
                   onChange={(e) => setAgeBand(e.target.value as AgeBand)}
-                  className="mt-1 min-h-[42px] w-full rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 text-sm text-[#F3F6FF]"
+                  className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-theme-border bg-theme-base px-3 text-sm text-ink shadow-brutal-sm focus:border-theme-accent focus:outline-none"
                 >
-                  <option value="school">School Learner</option>
-                  <option value="university">University Student</option>
-                  <option value="independent">Independent Learner</option>
+                  <option value="school">{authStrings.ageBracketSchool}</option>
+                  <option value="university">{authStrings.ageBracketUniversity}</option>
+                  <option value="independent">{authStrings.ageBracketAdult}</option>
                 </select>
               </div>
             </>
           )}
 
           <div>
-            <label htmlFor="auth-email" className="block text-xs text-[#8994AA]">
-              Email Address
+            <label htmlFor="auth-email" className="block text-xs font-bold text-ink">
+              {authStrings.emailLabel}
             </label>
             <input
               id="auth-email"
@@ -202,13 +359,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 min-h-[42px] w-full rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 text-sm text-[#F3F6FF]"
+              className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-theme-border bg-theme-base px-3 text-sm text-ink shadow-brutal-sm focus:border-theme-accent focus:outline-none"
             />
           </div>
 
           <div>
-            <label htmlFor="auth-password" className="block text-xs text-[#8994AA]">
-              Password (minimum 8 characters)
+            <label htmlFor="auth-password" className="block text-xs font-bold text-ink">
+              {authStrings.passwordLabel}
             </label>
             <input
               id="auth-password"
@@ -217,36 +374,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 min-h-[42px] w-full rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 text-sm text-[#F3F6FF]"
+              className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-theme-border bg-theme-base px-3 text-sm text-ink shadow-brutal-sm focus:border-theme-accent focus:outline-none"
             />
           </div>
 
           {mode === 'register' && (
-            <label className="flex items-start gap-2 text-xs text-[#8994AA]">
+            <label className="flex items-start gap-2 text-xs text-muted">
               <input
                 type="checkbox"
                 checked={consentChecked}
                 onChange={(e) => setConsentChecked(e.target.checked)}
-                className="mt-0.5 accent-[#9274FF]"
+                className="mt-0.5 accent-accent"
               />
-              <span>
-                I acknowledge ECONOVA&apos;s Privacy Notice, non-cash XP rules, and that certificates represent course completion only.
-              </span>
+              <span>{authStrings.consentText}</span>
             </label>
           )}
 
           {errorMsg && (
-            <div role="alert" className="rounded-lg border border-rose-500/40 bg-rose-950/30 px-3 py-2 text-xs text-rose-200">
+            <div
+              role="alert"
+              className="rounded-xl border-2 border-danger bg-danger-surface/40 px-3 py-2 text-xs font-semibold text-danger-text"
+            >
               {errorMsg}
             </div>
           )}
 
           <button
             type="submit"
-            disabled={loading}
-            className="min-h-[44px] w-full rounded-lg bg-[#9274FF] py-2.5 text-sm font-semibold text-[#080B14] hover:bg-[#a68dff] disabled:opacity-60"
+            disabled={loading || googleLoading}
+            className="min-h-[44px] w-full rounded-xl border-2 border-theme-border bg-theme-accent py-2.5 text-sm font-extrabold text-theme-accent-ink shadow-brutal-sm transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none hover:bg-accent-hover disabled:opacity-60"
           >
-            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+            {loading
+              ? authStrings.pleaseWait
+              : mode === 'login'
+              ? authStrings.tabSignIn
+              : authStrings.createAccountBtn}
           </button>
         </form>
       </div>

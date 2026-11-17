@@ -1,18 +1,162 @@
 @import "tailwindcss";
+@config "../tailwind.config.ts";
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme inline {
+  --color-canvas: var(--econova-canvas);
+  --color-chrome: var(--econova-chrome);
+  --color-surface: var(--econova-surface);
+  --color-elevated: var(--econova-elevated);
+  --color-line: var(--econova-line);
+  --color-line-strong: var(--econova-line-strong);
+  --color-ink: var(--econova-ink);
+  --color-muted: var(--econova-muted);
+  --color-accent: var(--econova-accent);
+  --color-accent-hover: var(--econova-accent-hover);
+  --color-accent-ink: var(--econova-accent-ink);
+  --color-teal: var(--econova-teal);
+  --color-teal-hover: var(--econova-teal-hover);
+  --color-teal-ink: var(--econova-teal-ink);
+  --color-success: var(--econova-success);
+  --color-warning: var(--econova-warning);
+  --color-danger: var(--econova-danger);
+  --color-danger-surface: var(--econova-danger-surface);
+  --color-danger-text: var(--econova-danger-text);
+
+  --color-theme-base: var(--econova-canvas);
+  --color-theme-chrome: var(--econova-chrome);
+  --color-theme-panel: var(--econova-surface);
+  --color-theme-elevated: var(--econova-elevated);
+  --color-theme-border: var(--econova-line);
+  --color-theme-border-strong: var(--econova-line-strong);
+  --color-theme-ink: var(--econova-ink);
+  --color-theme-muted: var(--econova-muted);
+  --color-theme-accent: var(--econova-accent);
+  --color-theme-accent-hover: var(--econova-accent-hover);
+  --color-theme-accent-ink: var(--econova-accent-ink);
+  --color-theme-cyan: var(--econova-teal);
+  --color-theme-emerald: var(--econova-success);
+  --color-theme-amber: var(--econova-warning);
+}
+
 @layer base {
-  :root {
+  :root,
+  :root.dark,
+  [data-theme="dark"] {
     --font-display: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-body: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+    --econova-canvas: #080B14;
+    --econova-chrome: #0B0F19;
+    --econova-surface: #101522;
+    --econova-elevated: #141B2B;
+    --econova-line: #222B3D;
+    --econova-line-strong: #33415C;
+    --econova-ink: #F3F6FF;
+    --econova-muted: #B6C2DA;
+    --econova-accent: #9274FF;
+    --econova-accent-hover: #A68DFF;
+    --econova-accent-ink: #080B14;
+    --econova-teal: #5DE1D2;
+    --econova-teal-hover: #7CEBE0;
+    --econova-teal-ink: #080B14;
+    --econova-success: #6FE0A1;
+    --econova-warning: #FFC96B;
+    --econova-danger: #FB7185;
+    --econova-danger-surface: #4C0519;
+    --econova-danger-text: #FECDD3;
+    --econova-shadow-color: #000000;
+    --econova-shadow-hard: rgba(0, 0, 0, 1);
+    --econova-shadow-accent: #9274FF;
+    --theme-shadow-rgb: 0 0 0;
+    --theme-accent: 146 116 255;
+    --econova-grid-line: rgba(34, 43, 61, 0.55);
+    --econova-grain-dot-primary: rgba(243, 246, 255, 0.22);
+    --econova-grain-dot-secondary: rgba(146, 116, 255, 0.18);
+    color-scheme: dark;
   }
 
-  html {
+  :root.light,
+  [data-theme="light"] {
+    --econova-canvas: #F8FAFC;
+    --econova-chrome: #FFFFFF;
+    --econova-surface: #FFFFFF;
+    --econova-elevated: #E2E8F0;
+    --econova-line: #64748B;
+    --econova-line-strong: #334155;
+    --econova-ink: #090D16;
+    --econova-muted: #1E293B;
+    --econova-accent: #5B21B6;
+    --econova-accent-hover: #4C1D95;
+    --econova-accent-ink: #FFFFFF;
+    --econova-teal: #0F766E;
+    --econova-teal-hover: #115E59;
+    --econova-teal-ink: #FFFFFF;
+    --econova-success: #047857;
+    --econova-warning: #92400E;
+    --econova-danger: #B91C1C;
+    --econova-danger-surface: #FEE2E2;
+    --econova-danger-text: #7F1D1D;
+    --econova-shadow-color: #090D16;
+    --econova-shadow-hard: rgba(9, 13, 22, 1);
+    --econova-shadow-accent: #5B21B6;
+    --theme-shadow-rgb: 9 13 22;
+    --theme-accent: 91 33 182;
+    --econova-grid-line: rgba(148, 163, 184, 0.45);
+    --econova-grain-dot-primary: rgba(9, 13, 22, 0.2);
+    --econova-grain-dot-secondary: rgba(91, 33, 182, 0.16);
+    color-scheme: light;
+  }
+
+  html,
+  body {
     font-family: var(--font-body);
-    background-color: #080B14;
-    color: #F3F6FF;
-    color-scheme: dark;
+    background-color: var(--econova-canvas);
+    color: var(--econova-ink);
+  }
+
+  html.lenis,
+  html.lenis body {
+    height: auto;
+  }
+
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
+
+  .lenis.lenis-stopped {
+    overflow: hidden;
+  }
+
+  :where(
+    html,
+    body,
+    aside,
+    header,
+    main,
+    nav,
+    section,
+    article,
+    footer,
+    form,
+    fieldset,
+    dl,
+    button,
+    input,
+    select,
+    textarea,
+    [role="dialog"],
+    [role="region"],
+    [class*="bg-"]
+  ) {
+    transition-property: background-color, border-color, color;
+    transition-duration: 280ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   h1, h2, h3, h4, .font-display {
@@ -21,6 +165,112 @@
 
   .font-mono {
     font-family: var(--font-mono);
+  }
+
+  .shadow-brutal {
+    box-shadow: 8px 8px 0px 0px var(--econova-shadow-color);
+  }
+
+  .shadow-brutal-lg {
+    box-shadow: 8px 8px 0px 0px var(--econova-shadow-color);
+  }
+
+  .shadow-brutal-sm {
+    box-shadow: 3px 3px 0px 0px var(--econova-shadow-color);
+  }
+
+  .shadow-brutal-accent {
+    box-shadow: 8px 8px 0px 0px var(--econova-shadow-accent);
+  }
+
+  .glass-brutal-panel {
+    background-color: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 2px solid var(--econova-line);
+    box-shadow: 8px 8px 0px 0px var(--econova-shadow-color);
+  }
+
+  :root.dark .glass-brutal-panel,
+  [data-theme="dark"] .glass-brutal-panel {
+    background-color: rgba(16, 21, 34, 0.4);
+    border-color: #222B3D;
+    box-shadow: 8px 8px 0px 0px #000000;
+  }
+
+  .bg-arch-grid {
+    background-image:
+      linear-gradient(to right, var(--econova-grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--econova-grid-line) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .bg-arch-grid-sm {
+    background-image:
+      linear-gradient(to right, var(--econova-grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--econova-grid-line) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .bg-arch-dots-line {
+    background-image: radial-gradient(
+      circle,
+      var(--econova-line-strong) 2.5px,
+      transparent 2.75px
+    );
+    background-size: 14px 14px;
+    background-position: left center;
+    background-repeat: repeat-x;
+  }
+
+  .bg-chalk-dust {
+    background-image:
+      radial-gradient(var(--econova-grain-dot-primary) 1px, transparent 0),
+      radial-gradient(var(--econova-grain-dot-secondary) 1px, transparent 0);
+    background-size: 18px 18px;
+    background-position: 0 0, 9px 9px;
+  }
+
+  @keyframes econova-milestone-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.92) translateY(8px);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.03) translateY(0);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  @keyframes econova-confetti-fall {
+    0% {
+      opacity: 0;
+      transform: translate3d(0, -10px, 0) rotate(0deg) scale(0.8);
+    }
+    15% {
+      opacity: 0.95;
+      transform: translate3d(calc(var(--confetti-drift, 16px) * 0.25), 24px, 0)
+        rotate(calc(var(--confetti-rotate, 120deg) * 0.25)) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate3d(var(--confetti-drift, 16px), 190px, 0)
+        rotate(var(--confetti-rotate, 180deg)) scale(0.85);
+    }
+  }
+
+  .animate-milestone-pop {
+    animation: econova-milestone-pop 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .animate-confetti-piece {
+    animation-name: econova-confetti-fall;
+    animation-timing-function: cubic-bezier(0.25, 0.65, 0.35, 1);
+    animation-fill-mode: forwards;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -33,37 +283,138 @@
   }
 }
 
-/* Custom subtle scrollbars for dark theme */
+/* Custom subtle scrollbars tuned to active theme */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #080B14;
+  background: var(--econova-canvas);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #222B3D;
+  background: var(--econova-line);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #33415C;
+  background: var(--econova-line-strong);
 }
 
 @media print {
-  body {
-    background: #FFFFFF !important;
-    color: #0F172A !important;
+  @page {
+    margin: 14mm;
   }
-  .no-print {
+
+  :root,
+  :root.dark,
+  :root.light {
+    --econova-canvas: #ffffff;
+    --econova-chrome: #ffffff;
+    --econova-surface: #ffffff;
+    --econova-elevated: #f8fafc;
+    --econova-line: #cbd5e1;
+    --econova-line-strong: #94a3b8;
+    --econova-ink: #090d16;
+    --econova-muted: #475569;
+    --econova-accent: #4c1d95;
+    --econova-teal: #0f766e;
+    --econova-success: #047857;
+    --econova-warning: #92400e;
+    --econova-danger: #b91c1c;
+    color-scheme: light;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    box-shadow: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #090d16 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print,
+  aside[aria-label='Primary Sidebar Navigation'],
+  nav[aria-label='Section Navigation'],
+  nav[aria-label='Mobile Bottom Navigation'],
+  [data-print-hide='course-nav'],
+  [data-print-hide='course-syllabus'],
+  [data-print-hide='verify-lookup'],
+  [data-print-hide='cert-actions'],
+  [data-print-hide='lesson-controls'],
+  [data-print-hide='assessment-actions'] {
     display: none !important;
   }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  /* Expand Course Detail main column to full printable width */
+  [data-print-section='course-detail'] .lg\:grid-cols-12 {
+    display: block !important;
+  }
+
+  [data-print-section='course-detail'] [data-print-content='course-main'] {
+    width: 100% !important;
+    margin-top: 1rem;
+  }
+
+  /* Avoid awkward page splits inside lessons, quiz questions, and certificates */
+  section,
+  article,
+  fieldset,
+  .print-certificate,
+  [data-print-card='certificate'] {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Clean layout when printing the Certificate Preview Modal */
+  body:has(.print-certificate-modal) [data-print-hide-when-modal='true'] {
+    display: none !important;
+  }
+
+  .print-certificate-modal {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+  }
+
+  .print-certificate-modal > div {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+  }
+
   .print-certificate {
-    border: 2px solid #0F172A !important;
-    background: #FFFFFF !important;
-    color: #0F172A !important;
-    box-shadow: none !important;
+    border: 2px solid #0f172a !important;
+    background: #ffffff !important;
+    color: #090d16 !important;
+    padding: 2rem !important;
+    margin: 0 auto !important;
+    width: 100% !important;
   }
 }

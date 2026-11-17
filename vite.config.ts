@@ -45,18 +45,19 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
             // Keep private learner & admin endpoints strictly NetworkOnly to prevent shared-device cache leaks
             {
-              urlPattern: /^\/api\/(me|admin|auth|ai)\//i,
+              urlPattern: /^https?:\/\/[^/]+\/api\/(me|admin|auth|ai)\//i,
               handler: 'NetworkOnly',
             },
             // Public catalog can use NetworkFirst for graceful offline browsing
             {
-              urlPattern: /^\/api\/(catalog|courses)/i,
+              urlPattern: /^https?:\/\/[^/]+\/api\/(catalog|courses)/i,
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'econova-public-catalog',

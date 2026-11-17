@@ -1,11 +1,13 @@
-import { createRoot } from 'react-dom/client';
-import { registerSW } from 'virtual:pwa-register';
+import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import {installAuthFetchInterceptor} from './lib/auth-client.ts';
+import {initPwaServiceWorker} from './lib/pwa-register.ts';
+import {applyDocumentTheme, loadSavedTheme} from './lib/theme.ts';
 
-// Register Workbox service worker with safe auto-update
-registerSW({
-  immediate: true,
-});
+installAuthFetchInterceptor();
+applyDocumentTheme(loadSavedTheme());
+initPwaServiceWorker();
 
 createRoot(document.getElementById('root')!).render(<App />);
+

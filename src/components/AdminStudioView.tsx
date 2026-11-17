@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, FilePlus2, ShieldAlert, ShieldCheck } from 'lucide-react';
-import type { CourseCatalogItem, CourseEditionSummary, EditorialStatus, LocaleCode } from '../shared/types';
+import { CheckCircle2, FilePlus2, MessageSquarePlus, ShieldAlert, ShieldCheck } from 'lucide-react';
+import type { CourseCatalogItem, CourseEditionSummary, EditorialStatus, LocaleCode, SegmentReviewRequest } from '../shared/types';
 import { t } from '../lib/i18n';
+import { apiFetch } from '../lib/auth-client';
 import { AiCompanionPanel } from './AiCompanionPanel';
 
 interface AdminOverviewData {
@@ -10,12 +11,14 @@ interface AdminOverviewData {
     id: string;
     courseId: string | null;
     lessonId: string | null;
+    segmentHeading?: string | null;
     category: string;
     description: string;
     status: string;
     resolutionNote: string | null;
     createdAt: string;
   }>;
+  reviewRequests?: SegmentReviewRequest[];
   certificates: Array<{
     id: string;
     recipientDisplayName: string;
@@ -78,7 +81,7 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch('/api/admin/overview');
+      const res = await apiFetch('/api/admin/overview');
       const json = (await res.json()) as AdminOverviewData & { error?: string };
       if (!res.ok) throw new Error(json.error || 'Could not load staff overview.');
       setData(json);
@@ -101,7 +104,7 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
     setActionMsg(null);
     setErrorMsg(null);
     try {
-      const res = await fetch(`/api/admin/editions/${editionId}/transition`, {
+      const res = await apiFetch(`/api/admin/editions/${editionId}/transition`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nextStatus, signoffType }),
@@ -121,7 +124,7 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
     setErrorMsg(null);
     setActionMsg(null);
     try {
-      const res = await fetch('/api/admin/editions/draft', {
+      const res = await apiFetch('/api/admin/editions/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -154,7 +157,7 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
     const reason = revokeReasons[certId] || '';
     setErrorMsg(null);
     try {
-      const res = await fetch(`/api/admin/certificates/${certId}/revoke`, {
+      const res = await apiFetch(`/api/admin/certificates/${certId}/revoke`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
@@ -169,7 +172,7 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
   };
 
   const handleResolveReport = async (reportId: string) => {
-    await fetch(`/api/admin/reports/${reportId}`, {
+    await apiFetch(`/api/admin/reports/${reportId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'resolved', resolutionNote: 'Reviewed and logged by editorial operations.' }),
@@ -177,40 +180,56 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
     await loadOverview();
   };
 
+  const handleResolveReviewRequest = async (reviewId: string) => {
+    await apiFetch(`/api/admin/reviews/${reviewId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: 'resolved',
+        reviewerNote: 'Reviewed and clarified by human subject reviewer.',
+      }),
+    });
+    await loadOverview();
+  };
+
   if (loading && !data) {
-    return <div className="rounded-xl border border-[#222B3D] bg-[#101522] p-6 text-sm text-[#8994AA]">Loading Editorial Studio...</div>;
+    return (
+      <div className="rounded-xl border border-line bg-surface p-6 text-sm text-muted">
+        {strings.admin.loadingStudio}
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <header className="rounded-xl border border-[#222B3D] bg-[#101522] p-5 sm:p-6">
-        <h1 className="text-xl font-semibold text-[#F3F6FF] sm:text-2xl">
-          Editorial & Content Governance Studio
+      <header className="rounded-xl border border-line bg-surface p-5 sm:p-6">
+        <h1 className="text-xl font-semibold text-ink sm:text-2xl">
+          {strings.admin.title}
         </h1>
-        <p className="mt-1 text-xs text-[#8994AA]">
-          No AI-generated or externally sourced material may publish automatically. Every edition requires Provenance, Subject Review, Language Review, and Rights/Accessibility sign-off.
+        <p className="mt-1 text-xs text-muted">
+          {strings.admin.subtitle}
         </p>
         {data && (
           <div className="mt-4 grid gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border border-[#222B3D] bg-[#0B0F19] p-3">
-              <div className="text-xs text-[#8994AA]">Total Editions</div>
-              <div className="font-mono text-lg font-bold tabular-nums text-[#F3F6FF]">{data.editions.length}</div>
+            <div className="rounded-lg border border-line bg-chrome p-3">
+              <div className="text-xs text-muted">{strings.admin.totalEditions}</div>
+              <div className="font-mono text-lg font-bold tabular-nums text-ink">{data.editions.length}</div>
             </div>
-            <div className="rounded-lg border border-[#222B3D] bg-[#0B0F19] p-3">
-              <div className="text-xs text-[#8994AA]">Pending Review</div>
-              <div className="font-mono text-lg font-bold tabular-nums text-[#FFC96B]">
+            <div className="rounded-lg border border-line bg-chrome p-3">
+              <div className="text-xs text-muted">{strings.admin.pendingReview}</div>
+              <div className="font-mono text-lg font-bold tabular-nums text-warning">
                 {data.editions.filter((e) => e.status !== 'published' && e.status !== 'retired').length}
               </div>
             </div>
-            <div className="rounded-lg border border-[#222B3D] bg-[#0B0F19] p-3">
-              <div className="text-xs text-[#8994AA]">Open Issue Reports</div>
-              <div className="font-mono text-lg font-bold tabular-nums text-[#5DE1D2]">
+            <div className="rounded-lg border border-line bg-chrome p-3">
+              <div className="text-xs text-muted">{strings.admin.openIssueReports}</div>
+              <div className="font-mono text-lg font-bold tabular-nums text-teal">
                 {data.reports.filter((r) => r.status === 'open').length}
               </div>
             </div>
-            <div className="rounded-lg border border-[#222B3D] bg-[#0B0F19] p-3">
-              <div className="text-xs text-[#8994AA]">Non-Cash XP Issued</div>
-              <div className="font-mono text-lg font-bold tabular-nums text-[#6FE0A1]">
+            <div className="rounded-lg border border-line bg-chrome p-3">
+              <div className="text-xs text-muted">{strings.admin.nonCashXpIssued}</div>
+              <div className="font-mono text-lg font-bold tabular-nums text-success">
                 {data.ledgerSummary.totalNonCashXpIssued} XP
               </div>
             </div>
@@ -219,34 +238,42 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
       </header>
 
       {errorMsg && (
-        <div role="alert" className="rounded-lg border border-rose-500/50 bg-rose-950/30 px-4 py-3 text-xs text-rose-200">
+        <div role="alert" className="rounded-lg border border-danger/50 bg-danger-surface/40 px-4 py-3 text-xs text-danger-text">
           {errorMsg}
         </div>
       )}
       {actionMsg && (
-        <div role="status" className="rounded-lg border border-[#6FE0A1]/40 bg-[#0B0F19] px-4 py-3 text-xs text-[#6FE0A1]">
+        <div role="status" className="rounded-lg border border-success/40 bg-chrome px-4 py-3 text-xs text-success">
           {actionMsg}
         </div>
       )}
 
       {/* Editorial Queue & Publication Gate */}
-      <section className="rounded-xl border border-[#222B3D] bg-[#101522] p-5 sm:p-6">
-        <h2 className="text-base font-semibold text-[#F3F6FF]">Course Editions & Human Review Gate</h2>
+      <section className="rounded-xl border border-line bg-surface p-5 sm:p-6">
+        <h2 className="text-base font-semibold text-ink">{strings.admin.editionsGateTitle}</h2>
         <div className="mt-4 space-y-3">
           {data?.editions.map((ed) => (
-            <div key={ed.id} className="rounded-lg border border-[#222B3D] bg-[#0B0F19] p-4">
+            <div key={ed.id} className="rounded-lg border border-line bg-chrome p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="text-xs text-[#8994AA]">
-                    {ed.subject} · {ed.level} · {ed.locale.toUpperCase()} v{ed.version} · Status:{' '}
-                    <span className="font-semibold text-[#5DE1D2]">{strings.editorial[ed.status]}</span>
+                  <div className="text-xs text-muted">
+                    {ed.subject} · {ed.level} · {ed.locale.toUpperCase()} v{ed.version} · {strings.admin.statusLabel}{' '}
+                    <span className="font-semibold text-teal">{strings.editorial[ed.status]}</span>
                   </div>
-                  <h3 className="mt-1 text-sm font-semibold text-[#F3F6FF]">{ed.title}</h3>
-                  <div className="mt-1.5 flex flex-wrap gap-3 text-[11px] text-[#8994AA]">
-                    <span>Provenance: {ed.provenance ? 'Verified' : 'Missing'}</span>
-                    <span>Subject Review: {ed.subjectReviewerId ? 'Signed' : 'Pending'}</span>
-                    <span>Language Review: {ed.languageReviewerId ? 'Signed' : 'Pending'}</span>
-                    <span>Rights & Access: {ed.rightsReviewerId ? 'Signed' : 'Pending'}</span>
+                  <h3 className="mt-1 text-sm font-semibold text-ink">{ed.title}</h3>
+                  <div className="mt-1.5 flex flex-wrap gap-3 text-[11px] text-muted">
+                    <span>
+                      {strings.admin.provenanceLabel} {ed.provenance ? strings.admin.verified : strings.admin.missing}
+                    </span>
+                    <span>
+                      {strings.admin.subjectReviewLabel} {ed.subjectReviewerId ? strings.admin.signed : strings.admin.pending}
+                    </span>
+                    <span>
+                      {strings.admin.languageReviewLabel} {ed.languageReviewerId ? strings.admin.signed : strings.admin.pending}
+                    </span>
+                    <span>
+                      {strings.admin.rightsAccessLabel} {ed.rightsReviewerId ? strings.admin.signed : strings.admin.pending}
+                    </span>
                   </div>
                 </div>
 
@@ -255,63 +282,63 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
                     <button
                       type="button"
                       onClick={() => handleTransition(ed.id, 'subject_review')}
-                      className="min-h-[34px] rounded-lg border border-[#222B3D] bg-[#141B2B] px-3 py-1 text-xs font-medium text-[#F3F6FF]"
+                      className="min-h-[34px] rounded-lg border border-line bg-elevated px-3 py-1 text-xs font-medium text-ink"
                     >
-                      Send to Subject Review
+                      {strings.admin.sendToSubjectReview}
                     </button>
                   )}
                   {ed.status === 'subject_review' && (
                     <button
                       type="button"
                       onClick={() => handleTransition(ed.id, 'language_review', 'subject')}
-                      className="min-h-[34px] rounded-lg bg-[#9274FF] px-3 py-1 text-xs font-semibold text-[#080B14]"
+                      className="min-h-[34px] rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-ink hover:bg-accent-hover"
                     >
-                      Sign Subject Review
+                      {strings.admin.signSubjectReview}
                     </button>
                   )}
                   {ed.status === 'language_review' && (
                     <button
                       type="button"
                       onClick={() => handleTransition(ed.id, 'rights_accessibility_review', 'language')}
-                      className="min-h-[34px] rounded-lg bg-[#9274FF] px-3 py-1 text-xs font-semibold text-[#080B14]"
+                      className="min-h-[34px] rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-ink hover:bg-accent-hover"
                     >
-                      Sign Language Review
+                      {strings.admin.signLanguageReview}
                     </button>
                   )}
                   {ed.status === 'rights_accessibility_review' && (
                     <button
                       type="button"
                       onClick={() => handleTransition(ed.id, 'approved', 'rights')}
-                      className="min-h-[34px] rounded-lg bg-[#5DE1D2] px-3 py-1 text-xs font-semibold text-[#080B14]"
+                      className="min-h-[34px] rounded-lg bg-teal px-3 py-1 text-xs font-semibold text-teal-ink hover:bg-teal-hover"
                     >
-                      Sign Rights & Approve
+                      {strings.admin.signRightsApprove}
                     </button>
                   )}
                   {ed.status === 'approved' && (
                     <button
                       type="button"
                       onClick={() => handleTransition(ed.id, 'published')}
-                      className="min-h-[34px] rounded-lg bg-[#6FE0A1] px-3 py-1 text-xs font-semibold text-[#080B14]"
+                      className="min-h-[34px] rounded-lg bg-success px-3 py-1 text-xs font-semibold text-accent-ink"
                     >
-                      Publish Edition
+                      {strings.admin.publishEdition}
                     </button>
                   )}
                   {ed.status === 'published' && (
                     <button
                       type="button"
                       onClick={() => handleTransition(ed.id, 'retired')}
-                      className="min-h-[34px] rounded-lg border border-[#222B3D] px-3 py-1 text-xs text-[#8994AA] hover:text-rose-300"
+                      className="min-h-[34px] rounded-lg border border-line px-3 py-1 text-xs text-muted hover:text-danger"
                     >
-                      Retire / Unpublish
+                      {strings.admin.retireUnpublish}
                     </button>
                   )}
                   {ed.status === 'retired' && (
                     <button
                       type="button"
                       onClick={() => handleTransition(ed.id, 'approved')}
-                      className="min-h-[34px] rounded-lg border border-[#222B3D] px-3 py-1 text-xs text-[#5DE1D2]"
+                      className="min-h-[34px] rounded-lg border border-line px-3 py-1 text-xs text-teal"
                     >
-                      Restore to Approved
+                      {strings.admin.restoreToApproved}
                     </button>
                   )}
                 </div>
@@ -323,19 +350,19 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
 
       {/* Create Draft + AI Draft Studio */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <form onSubmit={handleCreateDraft} className="space-y-3 rounded-xl border border-[#222B3D] bg-[#101522] p-5">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-[#F3F6FF]">
-            <FilePlus2 className="h-4 w-4 text-[#9274FF]" aria-hidden="true" />
-            <span>Create New Versioned Draft Edition</span>
+        <form onSubmit={handleCreateDraft} className="space-y-3 rounded-xl border border-line bg-surface p-5">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+            <FilePlus2 className="h-4 w-4 text-accent" aria-hidden="true" />
+            <span>{strings.admin.createDraftTitle}</span>
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label htmlFor="draft-course" className="block text-xs text-[#8994AA]">Target Course</label>
+              <label htmlFor="draft-course" className="block text-xs text-muted">{strings.admin.targetCourse}</label>
               <select
                 id="draft-course"
                 value={courseId}
                 onChange={(e) => setCourseId(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 py-2 text-xs text-[#F3F6FF]"
+                className="mt-1 w-full rounded-lg border border-line bg-chrome px-3 py-2 text-xs text-ink"
               >
                 {courses.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -345,75 +372,75 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
               </select>
             </div>
             <div>
-              <label htmlFor="draft-locale" className="block text-xs text-[#8994AA]">Edition Locale</label>
+              <label htmlFor="draft-locale" className="block text-xs text-muted">{strings.admin.editionLocale}</label>
               <select
                 id="draft-locale"
                 value={draftLocale}
                 onChange={(e) => setDraftLocale(e.target.value as LocaleCode)}
-                className="mt-1 w-full rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 py-2 text-xs text-[#F3F6FF]"
+                className="mt-1 w-full rounded-lg border border-line bg-chrome px-3 py-2 text-xs text-ink"
               >
                 <option value="en">English (en)</option>
-                <option value="uz">Uzbek Latin (uz)</option>
+                <option value="uz">O‘zbekcha (uz)</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label htmlFor="draft-title" className="block text-xs text-[#8994AA]">Edition Title</label>
+            <label htmlFor="draft-title" className="block text-xs text-muted">{strings.admin.editionTitle}</label>
             <input
               id="draft-title"
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Elasticity & Consumer Welfare (v2)"
-              className="mt-1 w-full rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 py-2 text-xs text-[#F3F6FF]"
+              placeholder={strings.admin.editionTitlePlaceholder}
+              className="mt-1 w-full rounded-lg border border-line bg-chrome px-3 py-2 text-xs text-ink"
             />
           </div>
 
           <div>
-            <label htmlFor="draft-source" className="block text-xs text-[#8994AA]">Source Record & License Basis</label>
+            <label htmlFor="draft-source" className="block text-xs text-muted">{strings.admin.sourceLicense}</label>
             <input
               id="draft-source"
               value={sourceTitle}
               onChange={(e) => setSourceTitle(e.target.value)}
-              placeholder="Original ECONOVA Note / OpenStax CC BY 4.0"
-              className="mt-1 w-full rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 py-2 text-xs text-[#F3F6FF]"
+              placeholder={strings.admin.sourceLicensePlaceholder}
+              className="mt-1 w-full rounded-lg border border-line bg-chrome px-3 py-2 text-xs text-ink"
             />
           </div>
 
           <div>
-            <label htmlFor="draft-lesson-title" className="block text-xs text-[#8994AA]">Initial Lesson Title & Body</label>
+            <label htmlFor="draft-lesson-title" className="block text-xs text-muted">{strings.admin.initialLessonLabel}</label>
             <input
               id="draft-lesson-title"
               value={lessonTitle}
               onChange={(e) => setLessonTitle(e.target.value)}
-              placeholder="Lesson 1 Title"
-              className="mt-1 w-full rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 py-2 text-xs text-[#F3F6FF]"
+              placeholder={strings.admin.lessonTitlePlaceholder}
+              className="mt-1 w-full rounded-lg border border-line bg-chrome px-3 py-2 text-xs text-ink"
             />
             <textarea
               rows={3}
               value={lessonBody}
               onChange={(e) => setLessonBody(e.target.value)}
-              placeholder="Lesson body / transcript draft..."
-              className="mt-2 w-full rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 py-2 text-xs text-[#F3F6FF]"
+              placeholder={strings.admin.lessonBodyPlaceholder}
+              className="mt-2 w-full rounded-lg border border-line bg-chrome px-3 py-2 text-xs text-ink"
             />
           </div>
 
-          <label className="flex items-center gap-2 text-xs text-[#8994AA]">
+          <label className="flex items-center gap-2 text-xs text-muted">
             <input
               type="checkbox"
               checked={aiAssisted}
               onChange={(e) => setAiAssisted(e.target.checked)}
-              className="accent-[#9274FF]"
+              className="accent-accent"
             />
-            <span>Mark provenance as AI-assisted draft (requires human review before publishing)</span>
+            <span>{strings.admin.aiAssistedCheckbox}</span>
           </label>
 
           <button
             type="submit"
-            className="min-h-[40px] rounded-lg bg-[#9274FF] px-4 py-2 text-xs font-semibold text-[#080B14]"
+            className="min-h-[40px] rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-accent-ink hover:bg-accent-hover"
           >
-            Save New Draft Edition
+            {strings.admin.saveDraftBtn}
           </button>
         </form>
 
@@ -428,37 +455,37 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
 
       {/* Certificate Operations & Issue Reports */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-xl border border-[#222B3D] bg-[#101522] p-5">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-[#F3F6FF]">
-            <ShieldAlert className="h-4 w-4 text-[#FFC96B]" aria-hidden="true" />
-            <span>Certificate Revocation Operations</span>
+        <section className="rounded-xl border border-line bg-surface p-5">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+            <ShieldAlert className="h-4 w-4 text-warning" aria-hidden="true" />
+            <span>{strings.admin.revocationTitle}</span>
           </h2>
           {data?.certificates.length === 0 ? (
-            <p className="mt-3 text-xs text-[#8994AA]">No certificates issued yet.</p>
+            <p className="mt-3 text-xs text-muted">{strings.admin.noCertificatesIssued}</p>
           ) : (
             <div className="mt-3 space-y-2.5">
               {data?.certificates.map((c) => (
-                <div key={c.id} className="rounded-lg border border-[#222B3D] bg-[#0B0F19] p-3 text-xs">
+                <div key={c.id} className="rounded-lg border border-line bg-chrome p-3 text-xs">
                   <div className="flex justify-between">
-                    <span className="font-semibold text-[#F3F6FF]">{c.recipientDisplayName} · {c.courseTitle}</span>
-                    <span className={c.status === 'valid' ? 'text-[#6FE0A1]' : 'text-rose-400'}>{c.status}</span>
+                    <span className="font-semibold text-ink">{c.recipientDisplayName} · {c.courseTitle}</span>
+                    <span className={c.status === 'valid' ? 'text-success' : 'text-danger'}>{c.status}</span>
                   </div>
-                  <div className="mt-1 font-mono text-[11px] text-[#8994AA]">{c.publicToken}</div>
+                  <div className="mt-1 font-mono text-[11px] text-muted">{c.publicToken}</div>
                   {c.status === 'valid' && (
                     <div className="mt-2 flex gap-2">
                       <input
                         type="text"
                         value={revokeReasons[c.id] || ''}
                         onChange={(e) => setRevokeReasons((p) => ({ ...p, [c.id]: e.target.value }))}
-                        placeholder="Mandatory audit reason to revoke..."
-                        className="flex-1 rounded-md border border-[#222B3D] bg-[#101522] px-2.5 py-1 text-xs text-[#F3F6FF]"
+                        placeholder={strings.admin.revokeReasonPlaceholder}
+                        className="flex-1 rounded-md border border-line bg-surface px-2.5 py-1 text-xs text-ink"
                       />
                       <button
                         type="button"
                         onClick={() => handleRevokeCertificate(c.id)}
-                        className="rounded-md border border-rose-500/40 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-950/30"
+                        className="rounded-md border border-danger/50 bg-danger-surface/30 px-2.5 py-1 text-xs text-danger-text hover:bg-danger-surface/60"
                       >
-                        Revoke
+                        {strings.admin.revokeBtn}
                       </button>
                     </div>
                   )}
@@ -468,29 +495,71 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
           )}
         </section>
 
-        <section className="rounded-xl border border-[#222B3D] bg-[#101522] p-5">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-[#F3F6FF]">
-            <ShieldCheck className="h-4 w-4 text-[#5DE1D2]" aria-hidden="true" />
-            <span>Learner Reports & Audit Log</span>
+        <section
+          data-testid="admin-segment-review-queue"
+          className="rounded-xl border border-line bg-surface p-5"
+        >
+          <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+            <MessageSquarePlus className="h-4 w-4 text-theme-accent" aria-hidden="true" />
+            <span>{strings.admin.reviewQueueTitle}</span>
           </h2>
+
+          {data?.reviewRequests && data.reviewRequests.length > 0 && (
+            <div className="mt-3 space-y-2.5 border-b border-line pb-4">
+              <div className="text-xs font-semibold text-theme-cyan">
+                {strings.admin.segmentNotificationsHeader.replace('{count}', String(data.reviewRequests.length))}
+              </div>
+              {data.reviewRequests.map((rv) => (
+                <div
+                  key={rv.id}
+                  data-testid={`admin-review-request-${rv.id}`}
+                  className="rounded-lg border-2 border-theme-border bg-theme-base p-3 text-xs"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold text-ink">
+                      {rv.lessonTitle} · <span className="text-theme-accent">{rv.segmentHeading}</span>
+                    </span>
+                    <span className="font-mono text-[11px] text-theme-cyan">{rv.status}</span>
+                  </div>
+                  <p className="mt-1 text-muted">
+                    <span className="font-medium text-ink">{rv.studentDisplayName}:</span> {rv.comment}
+                  </p>
+                  {rv.status !== 'resolved' && (
+                    <button
+                      type="button"
+                      onClick={() => void handleResolveReviewRequest(rv.id)}
+                      data-testid={`resolve-review-request-${rv.id}`}
+                      className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-success hover:underline"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {strings.admin.markSegmentReviewed}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {data?.reports.length === 0 ? (
-            <p className="mt-3 text-xs text-[#8994AA]">No learner issue reports submitted.</p>
+            <p className="mt-3 text-xs text-muted">{strings.admin.noIssueReports}</p>
           ) : (
             <div className="mt-3 space-y-2.5">
               {data?.reports.map((r) => (
-                <div key={r.id} className="rounded-lg border border-[#222B3D] bg-[#0B0F19] p-3 text-xs">
+                <div key={r.id} className="rounded-lg border border-line bg-chrome p-3 text-xs">
                   <div className="flex justify-between">
-                    <span className="font-semibold text-[#F3F6FF]">{r.category}</span>
-                    <span className="text-[#5DE1D2]">{r.status}</span>
+                    <span className="font-semibold text-ink">
+                      {r.category}
+                      {r.segmentHeading ? ` · ${r.segmentHeading}` : ''}
+                    </span>
+                    <span className="text-teal">{r.status}</span>
                   </div>
-                  <p className="mt-1 text-[#8994AA]">{r.description}</p>
+                  <p className="mt-1 text-muted">{r.description}</p>
                   {r.status !== 'resolved' && (
                     <button
                       type="button"
                       onClick={() => handleResolveReport(r.id)}
-                      className="mt-2 inline-flex items-center gap-1 text-xs text-[#6FE0A1] hover:underline"
+                      className="mt-2 inline-flex items-center gap-1 text-xs text-success hover:underline"
                     >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Mark Resolved
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {strings.admin.markResolved}
                     </button>
                   )}
                 </div>

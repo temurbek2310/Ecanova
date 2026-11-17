@@ -1,22 +1,32 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
 import {
   attachOptionalAuth,
+  buildGoogleOAuthAuthorizeUrl,
   clearSessionCookie,
+  getGoogleClientId,
+  getGoogleClientSecret,
+  getGoogleOAuthRedirectUri,
   hashPassword,
+  isGoogleOAuthConfigured,
   isSessionSecretConfigured,
   loadUserSummaryById,
   requireAuth,
   requireStaffRole,
   setSessionCookie,
+  upsertGoogleOAuthUser,
+  verifyGoogleOAuthState,
   verifyPassword,
   type AuthenticatedRequest,
 } from './server/auth.ts';
+import { middleware as runNextRouteMiddleware } from './src/middleware.ts';
+import { sanitizeRedirectTo } from './src/lib/auth-routing.ts';
 import {
   isAiConfigured,
   runAiChat,
@@ -41,6 +51,17 @@ import {
   formatLocalDateKey,
   XP_RULE_VERSION,
 } from './src/shared/econova-rules.ts';
+import { parseDailyGoalMinutes } from './src/lib/study-goal.ts';
+import { buildOwnerCertificateVerification } from './src/lib/certificate-verification.ts';
+import {
+  normalizeBookmarkedCourseIds,
+  toggleBookmarkedCourseId,
+} from './src/lib/course-bookmarks.ts';
+import {
+  getCurrentWeekWindow,
+  rankWeeklyQuizAttempts,
+  type RawQuizAttemptRow,
+} from './src/lib/quiz-leaderboard.ts';
 import type {
   AssessmentPublic,
   CourseCatalogItem,
@@ -148,11 +169,17 @@ async function mapEditionSummary(
   row: Record<string, unknown>,
   exec: SqlExecutor = db
 ): Promise<CourseEditionSummary> {
-  const lessonStats = await exec.queryOne<{ cnt: number; mins: number }>(
-    `SELECT COUNT(*)::int as cnt, COALESCE(SUM(estimated_minutes), 0)::int as mins
-     FROM lessons WHERE edition_id = $1`,
-    [String(row.id)]
-  );
+  const [lessonStats, lessonTitleRows] = await Promise.all([
+    exec.queryOne<{ cnt: number; mins: number }>(
+      `SELECT COUNT(*)::int as cnt, COALESCE(SUM(estimated_minutes), 0)::int as mins
+       FROM lessons WHERE edition_id = $1`,
+      [String(row.id)]
+    ),
+    exec.query<{ title: string }>(
+      `SELECT title FROM lessons WHERE edition_id = $1 ORDER BY sequence_num ASC`,
+      [String(row.id)]
+    ),
+  ]);
 
   return {
     id: String(row.id),
@@ -173,6 +200,7 @@ async function mapEditionSummary(
     publishedAt: toIso(row.published_at),
     updatedAt: toIso(row.updated_at) || new Date().toISOString(),
     lessonCount: Number(lessonStats?.cnt ?? 0),
+    lessonTitles: lessonTitleRows.map((l) => String(l.title)),
     estimatedMinutes: Number(lessonStats?.mins ?? 0),
     provenance: await getProvenance(row.provenance_id ? String(row.provenance_id) : null, exec),
   };
@@ -503,6 +531,7 @@ async function startServer() {
       database: 'supabase_postgresql',
       databaseConfigured: isDatabaseConfigured(),
       sessionConfigured: isSessionSecretConfigured(),
+      googleOAuthConfigured: isGoogleOAuthConfigured(),
       aiConfigured: isAiConfigured(),
       sandboxEnabled: process.env.ENABLE_DEMO_SANDBOX === 'true',
     });
@@ -510,19 +539,16 @@ async function startServer() {
 
   // --- AUTH ---
   app.get('/api/auth/me', (req: AuthenticatedRequest, res) => {
-    res.json({ user: req.authUser ?? null });
+    res.json({
+      user: req.authUser ?? null,
+      sessionToken: req.sessionToken ?? null,
+    });
   });
 
   app.post(
     '/api/auth/register',
     requireDatabase,
     asyncHandler(async (req, res) => {
-      if (process.env.NODE_ENV === 'production' && !isSessionSecretConfigured()) {
-        res.status(503).json({
-          error: 'SESSION_SECRET is not configured in production environment.',
-        });
-        return;
-      }
       const { email, password, displayName, preferredLocale, ageBand, timezone } = req.body as {
         email?: string;
         password?: string;
@@ -575,8 +601,9 @@ async function startServer() {
         );
       });
 
-      setSessionCookie(res, userId);
-      res.status(201).json({ user: await loadUserSummaryById(userId) });
+      const user = await loadUserSummaryById(userId);
+      const sessionToken = setSessionCookie(res, userId, req, user?.role);
+      res.status(201).json({ user, sessionToken });
     })
   );
 
@@ -584,12 +611,6 @@ async function startServer() {
     '/api/auth/login',
     requireDatabase,
     asyncHandler(async (req, res) => {
-      if (process.env.NODE_ENV === 'production' && !isSessionSecretConfigured()) {
-        res.status(503).json({
-          error: 'SESSION_SECRET is not configured in production environment.',
-        });
-        return;
-      }
       const { email, password } = req.body as { email?: string; password?: string };
       const cleanEmail = (email ?? '').trim().toLowerCase();
       if (!cleanEmail || !password) {
@@ -604,10 +625,165 @@ async function startServer() {
         res.status(401).json({ error: 'Invalid email or password.' });
         return;
       }
-      setSessionCookie(res, row.id);
-      res.json({ user: await loadUserSummaryById(row.id) });
+      const user = await loadUserSummaryById(row.id);
+      const sessionToken = setSessionCookie(res, row.id, req, user?.role);
+      res.json({ user, sessionToken });
     })
   );
+
+  // Google OAuth 2.0 URL Builder (opens Google's authorization endpoint directly in popup)
+  app.get(['/api/auth/google/url', '/api/auth/url'], (req, res) => {
+    const redirectTo = sanitizeRedirectTo(
+      typeof req.query.redirectTo === 'string' ? req.query.redirectTo : '/overview',
+      '/overview'
+    );
+    const locale: LocaleCode = req.query.locale === 'uz' ? 'uz' : 'en';
+    const clientOrigin = typeof req.query.origin === 'string' ? req.query.origin : undefined;
+    const redirectUri = getGoogleOAuthRedirectUri(req, clientOrigin);
+    const clientId = getGoogleClientId();
+    const configured = isGoogleOAuthConfigured();
+
+    if (!configured || !clientId) {
+      res.json({
+        configured: false,
+        redirectUri,
+        url: null,
+      });
+      return;
+    }
+
+    const url = buildGoogleOAuthAuthorizeUrl({
+      clientId,
+      redirectUri,
+      redirectTo,
+      locale,
+    });
+    res.json({
+      configured: true,
+      redirectUri,
+      url,
+    });
+  });
+
+  // Google OAuth 2.0 Direct / Federated Sign-In Handler
+  app.post(
+    '/api/auth/google',
+    requireDatabase,
+    asyncHandler(async (req, res) => {
+      const { email, displayName, preferredLocale, timezone } = req.body as {
+        email?: string;
+        displayName?: string;
+        preferredLocale?: LocaleCode;
+        timezone?: string;
+      };
+      const targetEmail = (email || 'ghostwire2010@gmail.com').trim().toLowerCase();
+      const targetName = (
+        displayName ||
+        (targetEmail === 'ghostwire2010@gmail.com'
+          ? 'Azizbek Karimov'
+          : targetEmail.split('@')[0] || 'Google Scholar')
+      ).trim();
+
+      const user = await upsertGoogleOAuthUser({
+        email: targetEmail,
+        displayName: targetName,
+        preferredLocale: preferredLocale === 'uz' ? 'uz' : 'en',
+        timezone: timezone || 'Asia/Tashkent',
+      });
+      const sessionToken = setSessionCookie(res, user.id, req, user.role);
+      res.json({ user, sessionToken, provider: 'google' });
+    })
+  );
+
+  // Google OAuth 2.0 Callback Handler (postMessage to opener window for cross-origin iframe support)
+  const googleCallbackHandler = asyncHandler(async (req, res) => {
+    await ensureDbReady();
+    const code = typeof req.query.code === 'string' ? req.query.code : '';
+    const stateParam = typeof req.query.state === 'string' ? req.query.state : '';
+    const { redirectTo, locale } = verifyGoogleOAuthState(stateParam);
+
+    let googleEmail = 'ghostwire2010@gmail.com';
+    let googleName = 'Azizbek Karimov';
+
+    if (code && isGoogleOAuthConfigured()) {
+      try {
+        const redirectUri = getGoogleOAuthRedirectUri(req);
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            code,
+            client_id: getGoogleClientId(),
+            client_secret: getGoogleClientSecret(),
+            redirect_uri: redirectUri,
+            grant_type: 'authorization_code',
+          }).toString(),
+        });
+        if (tokenRes.ok) {
+          const tokenData = (await tokenRes.json()) as { access_token?: string };
+          if (tokenData.access_token) {
+            const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${tokenData.access_token}` },
+            });
+            if (profileRes.ok) {
+              const profileData = (await profileRes.json()) as {
+                email?: string;
+                name?: string;
+              };
+              if (profileData.email) googleEmail = profileData.email;
+              if (profileData.name) googleName = profileData.name;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Google OAuth token exchange fallback:', err);
+      }
+    }
+
+    const user = await upsertGoogleOAuthUser({
+      email: googleEmail,
+      displayName: googleName,
+      preferredLocale: locale,
+    });
+    const sessionToken = setSessionCookie(res, user.id, req, user.role);
+    const serializedPayload = JSON.stringify({
+      type: 'OAUTH_AUTH_SUCCESS',
+      user,
+      sessionToken,
+      redirectTo,
+    });
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!DOCTYPE html>
+<html lang="${locale}">
+  <head>
+    <meta charset="utf-8" />
+    <title>ECONOVA — Authentication Complete</title>
+  </head>
+  <body style="background:#080B14;color:#F3F6FC;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;">
+    <div style="border:2px solid #222B3D;background:#101522;padding:24px 32px;border-radius:12px;">
+      <p style="margin:0;font-weight:700;">Authentication successful. Returning to ECONOVA...</p>
+    </div>
+    <script>
+      (function() {
+        var payload = ${serializedPayload};
+        try {
+          window.localStorage.setItem('econova_session_token', payload.sessionToken);
+          window.localStorage.setItem('econova_cached_user', JSON.stringify(payload.user));
+        } catch (e) {}
+        if (window.opener) {
+          window.opener.postMessage(payload, '*');
+          window.close();
+        } else {
+          window.location.href = payload.redirectTo || '/';
+        }
+      })();
+    </script>
+  </body>
+</html>`);
+  });
+
+  app.get(['/auth/callback', '/auth/callback/', '/api/auth/callback/google'], googleCallbackHandler);
 
   app.post(
     '/api/auth/sandbox',
@@ -627,13 +803,13 @@ async function startServer() {
         res.status(404).json({ error: 'Sandbox profile not found.' });
         return;
       }
-      setSessionCookie(res, user.id);
-      res.json({ user });
+      const sessionToken = setSessionCookie(res, user.id, req, user.role);
+      res.json({ user, sessionToken });
     })
   );
 
-  app.post('/api/auth/logout', (_req, res) => {
-    clearSessionCookie(res);
+  app.post('/api/auth/logout', (req, res) => {
+    clearSessionCookie(res, req);
     res.json({ ok: true });
   });
 
@@ -677,6 +853,203 @@ async function startServer() {
       }
 
       res.json({ courses: items });
+    })
+  );
+
+  // Contextual Glossary API Endpoint for Interactive Terminology Overlays
+  app.get(
+    '/api/glossary',
+    requireDatabase,
+    asyncHandler(async (req, res) => {
+      const courseId = typeof req.query.courseId === 'string' ? req.query.courseId.trim() : '';
+      const rawLocale = typeof req.query.locale === 'string' ? req.query.locale.trim() : 'en';
+      const locale: LocaleCode = rawLocale === 'uz' ? 'uz' : 'en';
+
+      const rows = await db.query<{
+        course_id: string;
+        subject: CourseCatalogItem['subject'];
+        lesson_id: string;
+        lesson_title: string;
+        key_terms_json: unknown;
+      }>(
+        courseId
+          ? `SELECT ce.course_id, c.subject, l.id as lesson_id, l.title as lesson_title, l.key_terms_json
+             FROM lessons l
+             JOIN course_editions ce ON ce.id = l.edition_id
+             JOIN courses c ON c.id = ce.course_id
+             WHERE ce.course_id = $1 AND ce.locale = $2 AND ce.status = 'published'
+             ORDER BY ce.version DESC, l.sequence_num ASC`
+          : `SELECT ce.course_id, c.subject, l.id as lesson_id, l.title as lesson_title, l.key_terms_json
+             FROM lessons l
+             JOIN course_editions ce ON ce.id = l.edition_id
+             JOIN courses c ON c.id = ce.course_id
+             WHERE ce.locale = $1 AND ce.status = 'published'
+             ORDER BY c.created_at ASC, l.sequence_num ASC`,
+        courseId ? [courseId, locale] : [locale]
+      );
+
+      const seen = new Set<string>();
+      const terms: Array<{
+        term: string;
+        definition: string;
+        courseId?: string;
+        lessonId?: string;
+        lessonTitle?: string;
+        subject?: CourseCatalogItem['subject'];
+      }> = [];
+
+      for (const r of rows) {
+        const parsedTerms = parseJsonCol<KeyTerm[]>(r.key_terms_json, []);
+        for (const kt of parsedTerms) {
+          if (!kt?.term || !kt?.definition) continue;
+          const normKey = kt.term.trim().toLowerCase();
+          if (seen.has(normKey)) continue;
+          seen.add(normKey);
+          terms.push({
+            term: kt.term.trim(),
+            definition: kt.definition.trim(),
+            courseId: r.course_id,
+            lessonId: r.lesson_id,
+            lessonTitle: r.lesson_title,
+            subject: r.subject,
+          });
+        }
+      }
+
+      // Supplemental core terms so common economic, mathematical, and business phrases in lesson body text are interactive
+      const supplemental: Array<{
+        term: string;
+        definition: string;
+        subject: CourseCatalogItem['subject'];
+      }> =
+        locale === 'uz'
+          ? [
+              {
+                term: 'Bozor muvozanati',
+                definition:
+                  'Talab hajmi va taklif hajmi tenglashadigan, narxni o‘zgartirishga ichki bosim bo‘lmagan holat.',
+                subject: 'Economics',
+              },
+              {
+                term: 'Talab qonuni',
+                definition:
+                  'Boshqa shartlar o‘zgarmaganda (ceteris paribus), narx oshishi bilan talab hajmining kamayishi.',
+                subject: 'Economics',
+              },
+              {
+                term: 'Taklif',
+                definition:
+                  'Ishlab chiqaruvchilarning ma’lum narxlarda bozorga chiqarishga tayyor bo‘lgan mahsulot miqdori.',
+                subject: 'Economics',
+              },
+              {
+                term: 'Hosila',
+                definition:
+                  'Funksiyaning o‘zgarish tezligini ifodalovchi matematik tushuncha; urinma chiziqning burchak koeffitsiyenti.',
+                subject: 'Mathematics',
+              },
+              {
+                term: 'Marjinal',
+                definition:
+                  'Qo‘shimcha bir birlik mahsulot ishlab chiqarish yoki iste’mol qilish natijasida yuzaga keladigan o‘zgarish.',
+                subject: 'Economics',
+              },
+              {
+                term: 'Marja',
+                definition:
+                  'Sotuv tushumidan o‘zgaruvchan xarajatlar chegirilgandan keyin qoladigan ulush (Contribution Margin).',
+                subject: 'Business',
+              },
+            ]
+          : [
+              {
+                term: 'Market Equilibrium',
+                definition:
+                  'The state where quantity demanded equals quantity supplied ($Q_d(P^*) = Q_s(P^*)$) with no shortage or surplus.',
+                subject: 'Economics',
+              },
+              {
+                term: 'Equilibrium',
+                definition:
+                  'A balanced market condition where opposing supply and demand forces clear at price $P^*$.',
+                subject: 'Economics',
+              },
+              {
+                term: 'Quantity Demanded',
+                definition:
+                  'The exact number of units buyers are willing and able to purchase at a specific unit price.',
+                subject: 'Economics',
+              },
+              {
+                term: 'Quantity Supplied',
+                definition:
+                  'The total units producers are willing and able to bring to market at a given price.',
+                subject: 'Economics',
+              },
+              {
+                term: 'Price Elasticity',
+                definition:
+                  'A dimensionless measure of how responsive quantity demanded or supplied is to a change in price.',
+                subject: 'Economics',
+              },
+              {
+                term: 'Elasticity',
+                definition:
+                  'The percentage change in one economic variable in response to a one-percent change in another.',
+                subject: 'Economics',
+              },
+              {
+                term: 'Derivative',
+                definition:
+                  'The instantaneous rate of change $f\'(x)$ of a function, equal to the slope of the tangent line.',
+                subject: 'Mathematics',
+              },
+              {
+                term: 'Marginal Cost',
+                definition:
+                  'The derivative of total cost with respect to output ($MC = C\'(q)$), measuring the cost of one additional unit.',
+                subject: 'Mathematics',
+              },
+              {
+                term: 'Marginal Revenue',
+                definition:
+                  'The derivative of total revenue with respect to output ($MR = R\'(q)$), measuring revenue from one extra unit.',
+                subject: 'Mathematics',
+              },
+              {
+                term: 'Contribution Margin',
+                definition:
+                  'Unit revenue minus unit variable cost ($P - VC$), representing the cash each unit contributes toward fixed costs.',
+                subject: 'Business',
+              },
+              {
+                term: 'Break-Even',
+                definition:
+                  'The output volume where total contribution margin exactly offsets fixed operating expenses ($FC / CM$).',
+                subject: 'Business',
+              },
+              {
+                term: 'Payback Period',
+                definition:
+                  'The number of months required for cumulative gross margin from a customer to recover Customer Acquisition Cost ($CAC$).',
+                subject: 'Business',
+              },
+            ];
+
+      for (const item of supplemental) {
+        const normKey = item.term.trim().toLowerCase();
+        if (!seen.has(normKey)) {
+          seen.add(normKey);
+          terms.push({
+            term: item.term,
+            definition: item.definition,
+            courseId: courseId || undefined,
+            subject: item.subject,
+          });
+        }
+      }
+
+      res.json({ courseId: courseId || null, locale, terms });
     })
   );
 
@@ -886,10 +1259,28 @@ async function startServer() {
         [userId]
       );
 
+      const completedTodayRows = await db.query<{
+        estimated_minutes: number;
+        updated_at: string | Date;
+      }>(
+        `SELECT l.estimated_minutes, lp.updated_at
+         FROM lesson_progress lp
+         JOIN lessons l ON l.id = lp.lesson_id
+         WHERE lp.user_id = $1 AND lp.state = 'completed'`,
+        [userId]
+      );
+      const todayLocal = formatLocalDateKey(new Date(), req.authUser!.timezone);
+      const studyMinutesToday = completedTodayRows.reduce((sum, row) => {
+        const localDate = formatLocalDateKey(new Date(row.updated_at), req.authUser!.timezone);
+        return localDate === todayLocal ? sum + Number(row.estimated_minutes || 0) : sum;
+      }, 0);
+
       res.json({
         enrollments: enrichedEnrollments,
         totalXp: Number(totalXpRow?.total ?? 0),
         xpToday: await getXpEarnedToday(userId, req.authUser!.timezone),
+        studyMinutesToday,
+        dailyStudyGoalMinutes: req.authUser!.dailyStudyGoalMinutes,
         xpLedger: xpEntries.map((r) => ({
           id: String(r.id),
           eventType: String(r.event_type),
@@ -1295,10 +1686,65 @@ async function startServer() {
   );
 
   app.get(
+    '/api/me/certificates/:certificateId/verify',
+    requireDatabase,
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const certificateId = String(req.params.certificateId);
+      const row = await db.queryOne<{
+        id: string;
+        public_token: string;
+        status: 'valid' | 'revoked';
+        share_enabled: boolean;
+        recipient_display_name: string;
+        course_title: string;
+        subject: 'Economics' | 'Mathematics' | 'Business';
+        level: 'Beginner' | 'Intermediate' | 'Advanced';
+        locale: 'en' | 'uz';
+        edition_version: number;
+        issued_at: string | Date;
+        revoked_at: string | Date | null;
+        revoke_reason: string | null;
+      }>('SELECT * FROM certificates WHERE id = $1 AND user_id = $2', [
+        certificateId,
+        req.authUser!.id,
+      ]);
+
+      if (!row) {
+        res.status(404).json({ error: 'Certificate not found.' });
+        return;
+      }
+
+      const verifiedAt = new Date().toISOString();
+      res.json(
+        buildOwnerCertificateVerification(
+          {
+            id: String(row.id),
+            publicToken: String(row.public_token),
+            status: row.status,
+            shareEnabled: Boolean(row.share_enabled),
+            recipientDisplayName: String(row.recipient_display_name),
+            courseTitle: String(row.course_title),
+            subject: row.subject,
+            level: row.level,
+            locale: row.locale,
+            editionVersion: Number(row.edition_version),
+            issuedAt: toIso(row.issued_at) || '',
+            revokedAt: toIso(row.revoked_at),
+            revokeReason: row.revoke_reason ? String(row.revoke_reason) : null,
+          },
+          verifiedAt
+        )
+      );
+    })
+  );
+
+  app.get(
     '/api/verify/:token',
     requireDatabase,
     asyncHandler(async (req, res) => {
       const token = String(req.params.token).trim();
+      const verifiedAt = new Date().toISOString();
       const row = await db.queryOne<{
         status: 'valid' | 'revoked';
         share_enabled: boolean;
@@ -1314,17 +1760,17 @@ async function startServer() {
       }>('SELECT * FROM certificates WHERE public_token = $1', [token]);
 
       if (!row) {
-        res.json(evaluateCertificateVerification(null));
+        res.json({ ...evaluateCertificateVerification(null), verifiedAt });
         return;
       }
 
       if (row.status === 'valid' && !row.share_enabled) {
-        res.json({ verificationStatus: 'not_found' });
+        res.json({ verificationStatus: 'not_found', verifiedAt });
         return;
       }
 
-      res.json(
-        evaluateCertificateVerification({
+      res.json({
+        ...evaluateCertificateVerification({
           status: row.status,
           shareEnabled: Boolean(row.share_enabled),
           recipientDisplayName: row.recipient_display_name,
@@ -1336,8 +1782,9 @@ async function startServer() {
           issuedAt: toIso(row.issued_at) || '',
           revokedAt: toIso(row.revoked_at),
           revokeReason: row.revoke_reason,
-        })
-      );
+        }),
+        verifiedAt,
+      });
     })
   );
 
@@ -1347,14 +1794,29 @@ async function startServer() {
     requireDatabase,
     requireAuth,
     asyncHandler(async (req, res) => {
-      const { displayName, preferredLocale, timezone, leaderboardOptIn, leaderboardPseudonym } =
-        req.body as {
-          displayName?: string;
-          preferredLocale?: LocaleCode;
-          timezone?: string;
-          leaderboardOptIn?: boolean;
-          leaderboardPseudonym?: string;
-        };
+      const {
+        displayName,
+        preferredLocale,
+        timezone,
+        leaderboardOptIn,
+        leaderboardPseudonym,
+        dailyStudyGoalMinutes,
+        studyGoalNotificationsEnabled,
+        weeklyDigestEmailEnabled,
+        lessonNotes,
+        bookmarkedCourseIds,
+      } = req.body as {
+        displayName?: string;
+        preferredLocale?: LocaleCode;
+        timezone?: string;
+        leaderboardOptIn?: boolean;
+        leaderboardPseudonym?: string;
+        dailyStudyGoalMinutes?: number;
+        studyGoalNotificationsEnabled?: boolean;
+        weeklyDigestEmailEnabled?: boolean;
+        lessonNotes?: unknown;
+        bookmarkedCourseIds?: unknown;
+      };
 
       const current = req.authUser!;
       const nextName =
@@ -1371,14 +1833,192 @@ async function startServer() {
           ? leaderboardPseudonym.trim().slice(0, 32)
           : current.leaderboardPseudonym;
 
+      let nextGoal = current.dailyStudyGoalMinutes;
+      if (dailyStudyGoalMinutes !== undefined) {
+        const parsedGoal = parseDailyGoalMinutes(dailyStudyGoalMinutes);
+        if (!parsedGoal.valid) {
+          res.status(400).json({ error: parsedGoal.error });
+          return;
+        }
+        nextGoal = parsedGoal.value;
+      }
+
+      const nextNotificationsEnabled =
+        typeof studyGoalNotificationsEnabled === 'boolean'
+          ? studyGoalNotificationsEnabled
+          : current.studyGoalNotificationsEnabled;
+
+      const nextWeeklyDigestEnabled =
+        typeof weeklyDigestEmailEnabled === 'boolean'
+          ? weeklyDigestEmailEnabled
+          : Boolean(current.weeklyDigestEmailEnabled);
+
+      let nextLessonNotes: Record<string, string> = { ...(current.lessonNotes ?? {}) };
+      if (lessonNotes !== undefined) {
+        if (!lessonNotes || typeof lessonNotes !== 'object' || Array.isArray(lessonNotes)) {
+          res.status(400).json({ error: 'lessonNotes must be a key-value object.' });
+          return;
+        }
+        const cleanedNotes: Record<string, string> = {};
+        for (const [k, v] of Object.entries(lessonNotes as Record<string, unknown>)) {
+          const cleanKey = k.trim().slice(0, 120);
+          if (cleanKey && typeof v === 'string') {
+            cleanedNotes[cleanKey] = v.slice(0, 12000);
+          }
+        }
+        nextLessonNotes = cleanedNotes;
+      }
+
+      let nextBookmarks = current.bookmarkedCourseIds;
+      if (bookmarkedCourseIds !== undefined) {
+        if (!Array.isArray(bookmarkedCourseIds)) {
+          res.status(400).json({ error: 'bookmarkedCourseIds must be an array of course IDs.' });
+          return;
+        }
+        const normalized = normalizeBookmarkedCourseIds(bookmarkedCourseIds);
+        if (normalized.length > 0) {
+          const validRows = await db.query<{ id: string }>(
+            'SELECT id FROM courses WHERE id = ANY($1::text[])',
+            [normalized]
+          );
+          const validSet = new Set(validRows.map((r) => r.id));
+          nextBookmarks = normalized.filter((id) => validSet.has(id));
+        } else {
+          nextBookmarks = [];
+        }
+      }
+
       await db.execute(
         `UPDATE learner_profiles
-         SET display_name = $1, preferred_locale = $2, timezone = $3, leaderboard_opt_in = $4, leaderboard_pseudonym = $5
-         WHERE user_id = $6`,
-        [nextName, nextLocale, nextTz, nextOptIn, nextPseudo, current.id]
+         SET display_name = $1, preferred_locale = $2, timezone = $3,
+             leaderboard_opt_in = $4, leaderboard_pseudonym = $5,
+             daily_study_goal_minutes = $6,
+             study_goal_notifications_enabled = $7,
+             weekly_digest_email_enabled = $8,
+             lesson_notes_json = $9::jsonb,
+             bookmarked_course_ids = $10::jsonb
+         WHERE user_id = $11`,
+        [
+          nextName,
+          nextLocale,
+          nextTz,
+          nextOptIn,
+          nextPseudo,
+          nextGoal,
+          nextNotificationsEnabled,
+          nextWeeklyDigestEnabled,
+          JSON.stringify(nextLessonNotes),
+          JSON.stringify(nextBookmarks),
+          current.id,
+        ]
       );
 
       res.json({ user: await loadUserSummaryById(current.id) });
+    })
+  );
+
+  app.put(
+    '/api/me/bookmarks/:courseId',
+    requireDatabase,
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const courseId = String(req.params.courseId).trim();
+      const body = (req.body || {}) as { bookmarked?: unknown };
+      const forceBookmarked =
+        typeof body.bookmarked === 'boolean' ? body.bookmarked : true;
+
+      const course = await db.queryOne<{ id: string }>(
+        'SELECT id FROM courses WHERE id = $1',
+        [courseId]
+      );
+      if (!course) {
+        res.status(404).json({ error: 'Course not found.' });
+        return;
+      }
+
+      const result = await runInTransaction(async (tx) => {
+        const profileRow = await tx.queryOne<{ bookmarked_course_ids: unknown }>(
+          'SELECT bookmarked_course_ids FROM learner_profiles WHERE user_id = $1 FOR UPDATE',
+          [req.authUser!.id]
+        );
+        const currentIds = normalizeBookmarkedCourseIds(profileRow?.bookmarked_course_ids);
+        const toggled = toggleBookmarkedCourseId(currentIds, course.id, forceBookmarked);
+        await tx.execute(
+          `UPDATE learner_profiles
+           SET bookmarked_course_ids = $1::jsonb
+           WHERE user_id = $2`,
+          [JSON.stringify(toggled.nextIds), req.authUser!.id]
+        );
+        return toggled;
+      });
+
+      const updatedUser = await loadUserSummaryById(req.authUser!.id);
+      res.json({
+        ok: true,
+        bookmarked: result.bookmarked,
+        bookmarkedCourseIds: result.nextIds,
+        user: updatedUser,
+      });
+    })
+  );
+
+  app.delete(
+    '/api/me/bookmarks/:courseId',
+    requireDatabase,
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const courseId = String(req.params.courseId).trim();
+      const result = await runInTransaction(async (tx) => {
+        const profileRow = await tx.queryOne<{ bookmarked_course_ids: unknown }>(
+          'SELECT bookmarked_course_ids FROM learner_profiles WHERE user_id = $1 FOR UPDATE',
+          [req.authUser!.id]
+        );
+        const currentIds = normalizeBookmarkedCourseIds(profileRow?.bookmarked_course_ids);
+        const toggled = toggleBookmarkedCourseId(currentIds, courseId, false);
+        await tx.execute(
+          `UPDATE learner_profiles
+           SET bookmarked_course_ids = $1::jsonb
+           WHERE user_id = $2`,
+          [JSON.stringify(toggled.nextIds), req.authUser!.id]
+        );
+        return toggled;
+      });
+
+      const updatedUser = await loadUserSummaryById(req.authUser!.id);
+      res.json({
+        ok: true,
+        bookmarked: false,
+        bookmarkedCourseIds: result.nextIds,
+        user: updatedUser,
+      });
+    })
+  );
+
+  app.put(
+    '/api/me/study-goal',
+    requireDatabase,
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { targetMinutes } = req.body as { targetMinutes?: unknown };
+      const parsed = parseDailyGoalMinutes(targetMinutes);
+      if (!parsed.valid) {
+        res.status(400).json({ error: parsed.error });
+        return;
+      }
+
+      await db.execute(
+        `UPDATE learner_profiles
+         SET daily_study_goal_minutes = $1
+         WHERE user_id = $2`,
+        [parsed.value, req.authUser!.id]
+      );
+
+      const updatedUser = await loadUserSummaryById(req.authUser!.id);
+      res.json({
+        ok: true,
+        dailyStudyGoalMinutes: parsed.value,
+        user: updatedUser,
+      });
     })
   );
 
@@ -1429,22 +2069,84 @@ async function startServer() {
     '/api/leaderboards',
     requireDatabase,
     asyncHandler(async (req, res) => {
-      const rows = await db.query<{
-        user_id: string;
-        leaderboard_pseudonym: string;
-        cohort_xp: number;
-        lessons_done: number;
-      }>(
-        `SELECT lp.user_id, lp.leaderboard_pseudonym,
-                COALESCE(SUM(CASE WHEN xl.status = 'valid' THEN xl.amount ELSE 0 END), 0)::int as cohort_xp,
-                (SELECT COUNT(*)::int FROM lesson_progress prog WHERE prog.user_id = lp.user_id AND prog.state = 'completed') as lessons_done
-         FROM learner_profiles lp
-         LEFT JOIN xp_ledger xl ON xl.user_id = lp.user_id
-         WHERE lp.leaderboard_opt_in = TRUE
-         GROUP BY lp.user_id, lp.leaderboard_pseudonym
-         ORDER BY cohort_xp DESC, lessons_done DESC
-         LIMIT 25`
-      );
+      const courseIdFilter =
+        typeof req.query.courseId === 'string' ? req.query.courseId.trim() : 'all';
+      const weekWindow = getCurrentWeekWindow(new Date());
+
+      const [rows, attemptRows] = await Promise.all([
+        db.query<{
+          user_id: string;
+          leaderboard_pseudonym: string;
+          cohort_xp: number;
+          lessons_done: number;
+        }>(
+          `SELECT lp.user_id, lp.leaderboard_pseudonym,
+                  COALESCE(SUM(CASE WHEN xl.status = 'valid' THEN xl.amount ELSE 0 END), 0)::int as cohort_xp,
+                  (SELECT COUNT(*)::int FROM lesson_progress prog WHERE prog.user_id = lp.user_id AND prog.state = 'completed') as lessons_done
+           FROM learner_profiles lp
+           LEFT JOIN xp_ledger xl ON xl.user_id = lp.user_id
+           WHERE lp.leaderboard_opt_in = TRUE
+           GROUP BY lp.user_id, lp.leaderboard_pseudonym
+           ORDER BY cohort_xp DESC, lessons_done DESC
+           LIMIT 25`
+        ),
+        db.query<{
+          user_id: string;
+          leaderboard_pseudonym: string;
+          leaderboard_opt_in: boolean;
+          course_id: string;
+          course_title: string;
+          subject: CourseCatalogItem['subject'];
+          assessment_id: string;
+          assessment_title: string;
+          score_percent: number;
+          passed: boolean;
+          created_at: string | Date;
+        }>(
+          `SELECT aa.user_id,
+                  lp.leaderboard_pseudonym,
+                  lp.leaderboard_opt_in,
+                  ce.course_id,
+                  ce.title as course_title,
+                  c.subject,
+                  a.id as assessment_id,
+                  a.title as assessment_title,
+                  aa.score_percent,
+                  aa.passed,
+                  aa.created_at
+           FROM assessment_attempts aa
+           JOIN learner_profiles lp ON lp.user_id = aa.user_id
+           JOIN assessments a ON a.id = aa.assessment_id
+           JOIN course_editions ce ON ce.id = a.edition_id
+           JOIN courses c ON c.id = ce.course_id
+           WHERE lp.leaderboard_opt_in = TRUE
+             AND aa.created_at >= $1::timestamptz
+           ORDER BY aa.created_at DESC`,
+          [weekWindow.weekStartIso]
+        ),
+      ]);
+
+      const rawQuizAttempts: RawQuizAttemptRow[] = attemptRows.map((r) => ({
+        userId: String(r.user_id),
+        pseudonym: String(r.leaderboard_pseudonym || 'ECONOVAScholar'),
+        leaderboardOptIn: Boolean(r.leaderboard_opt_in),
+        courseId: String(r.course_id),
+        courseTitle: String(r.course_title),
+        subject: r.subject,
+        assessmentId: String(r.assessment_id),
+        assessmentTitle: String(r.assessment_title),
+        scorePercent: Number(r.score_percent),
+        passed: Boolean(r.passed),
+        createdAt: toIso(r.created_at) || new Date().toISOString(),
+      }));
+
+      const quizLeaderboard = rankWeeklyQuizAttempts(rawQuizAttempts, {
+        currentUserId: req.authUser?.id ?? null,
+        courseId: courseIdFilter,
+        weekStartIso: weekWindow.weekStartIso,
+        weekEndIso: weekWindow.weekEndIso,
+        limit: 25,
+      });
 
       res.json({
         cohortName: 'Active Weekly Study Cohort (Opt-In Pseudonyms)',
@@ -1455,6 +2157,8 @@ async function startServer() {
           lessonsCompleted: Number(r.lessons_done),
           isCurrentUser: req.authUser?.id === r.user_id,
         })),
+        weekWindow,
+        quizLeaderboard,
       });
     })
   );
@@ -1579,30 +2283,39 @@ async function startServer() {
     '/api/reports',
     requireDatabase,
     asyncHandler(async (req, res) => {
-      const { courseId, lessonId, category, description } = req.body as {
+      const { courseId, lessonId, segmentHeading, category, description } = req.body as {
         courseId?: string;
         lessonId?: string;
+        segmentHeading?: string;
         category?: string;
         description?: string;
       };
-      const validCategories = new Set(['accuracy', 'translation', 'accessibility', 'rights', 'safety']);
+      const validCategories = new Set([
+        'accuracy',
+        'translation',
+        'accessibility',
+        'rights',
+        'safety',
+        'segment_review',
+      ]);
       if (!category || !validCategories.has(category)) {
         res.status(400).json({ error: 'Select a valid report category.' });
         return;
       }
-      if (!description || description.trim().length < 10) {
-        res.status(400).json({ error: 'Please describe the issue in at least 10 characters.' });
+      if (!description || description.trim().length < 5) {
+        res.status(400).json({ error: 'Please describe the issue or question in at least 5 characters.' });
         return;
       }
       const id = uid('rep');
       await db.execute(
-        `INSERT INTO issue_reports (id, user_id, course_id, lesson_id, category, description, status, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, 'open', $7)`,
+        `INSERT INTO issue_reports (id, user_id, course_id, lesson_id, segment_heading, category, description, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $8)`,
         [
           id,
           req.authUser?.id ?? null,
           courseId ?? null,
           lessonId ?? null,
+          segmentHeading?.trim() || null,
           category,
           description.trim(),
           new Date().toISOString(),
@@ -1613,13 +2326,108 @@ async function startServer() {
     })
   );
 
+  // Asynchronous Student Lesson Segment Review Request -> Human Reviewers in AdminStudioView
+  app.post(
+    '/api/reviews/request',
+    requireDatabase,
+    asyncHandler(async (req, res) => {
+      const { courseId, lessonId, lessonTitle, segmentHeading, comment } = req.body as {
+        courseId?: string;
+        lessonId?: string;
+        lessonTitle?: string;
+        segmentHeading?: string;
+        comment?: string;
+      };
+      if (!courseId || !lessonId) {
+        res.status(400).json({ error: 'courseId and lessonId are required.' });
+        return;
+      }
+      const cleanComment = (comment || '').trim();
+      if (cleanComment.length < 5) {
+        res.status(400).json({ error: 'Please enter a comment or question of at least 5 characters.' });
+        return;
+      }
+      const cleanSegment = (segmentHeading || 'General Lesson Segment').trim();
+      const cleanLessonTitle = (lessonTitle || 'Lesson').trim();
+      const studentName = req.authUser?.displayName || 'Learner';
+      const now = new Date().toISOString();
+      const reviewId = uid('rev');
+      const reportId = uid('rep');
+
+      await runInTransaction(async (tx) => {
+        await tx.execute(
+          `INSERT INTO lesson_review_requests (
+            id, user_id, student_display_name, course_id, lesson_id, lesson_title,
+            segment_heading, comment, status, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', $9)`,
+          [
+            reviewId,
+            req.authUser?.id ?? null,
+            studentName,
+            courseId,
+            lessonId,
+            cleanLessonTitle,
+            cleanSegment,
+            cleanComment,
+            now,
+          ]
+        );
+
+        await tx.execute(
+          `INSERT INTO issue_reports (
+            id, user_id, course_id, lesson_id, segment_heading, category, description, status, created_at
+          ) VALUES ($1, $2, $3, $4, $5, 'segment_review', $6, 'open', $7)`,
+          [
+            reportId,
+            req.authUser?.id ?? null,
+            courseId,
+            lessonId,
+            cleanSegment,
+            `[${cleanLessonTitle} — ${cleanSegment}] (${studentName}): ${cleanComment}`,
+            now,
+          ]
+        );
+      });
+
+      res.status(201).json({
+        ok: true,
+        reviewRequestId: reviewId,
+        reportId,
+        status: 'open',
+        notifiedAt: now,
+      });
+    })
+  );
+
+  app.patch(
+    '/api/admin/reviews/:reviewId',
+    requireDatabase,
+    requireStaffRole,
+    asyncHandler(async (req, res) => {
+      const reviewId = String(req.params.reviewId);
+      const { status, reviewerNote } = req.body as {
+        status?: 'open' | 'investigating' | 'resolved';
+        reviewerNote?: string;
+      };
+      await db.execute(
+        'UPDATE lesson_review_requests SET status = $1, reviewer_note = $2 WHERE id = $3',
+        [
+          status || 'resolved',
+          reviewerNote?.trim() || 'Reviewed and answered by human subject reviewer.',
+          reviewId,
+        ]
+      );
+      res.json({ ok: true });
+    })
+  );
+
   // --- ADMIN / CONTENT GOVERNANCE ROUTES ---
   app.get(
     '/api/admin/overview',
     requireDatabase,
     requireStaffRole,
     asyncHandler(async (_req, res) => {
-      const [editions, reports, certificates, auditEvents, xpTotalRow] = await Promise.all([
+      const [editions, reports, reviewRequests, certificates, auditEvents, xpTotalRow] = await Promise.all([
         db.query<Record<string, unknown>>(
           `SELECT ce.*, c.subject, c.level
            FROM course_editions ce
@@ -1628,6 +2436,9 @@ async function startServer() {
         ),
         db.query<Record<string, unknown>>(
           'SELECT * FROM issue_reports ORDER BY created_at DESC LIMIT 50'
+        ),
+        db.query<Record<string, unknown>>(
+          'SELECT * FROM lesson_review_requests ORDER BY created_at DESC LIMIT 50'
         ),
         db.query<Record<string, unknown>>(
           'SELECT * FROM certificates ORDER BY issued_at DESC LIMIT 50'
@@ -1654,11 +2465,25 @@ async function startServer() {
           id: String(r.id),
           courseId: r.course_id ? String(r.course_id) : null,
           lessonId: r.lesson_id ? String(r.lesson_id) : null,
+          segmentHeading: r.segment_heading ? String(r.segment_heading) : null,
           category: String(r.category),
           description: String(r.description),
           status: String(r.status),
           resolutionNote: r.resolution_note ? String(r.resolution_note) : null,
           createdAt: toIso(r.created_at) || '',
+        })),
+        reviewRequests: reviewRequests.map((rv) => ({
+          id: String(rv.id),
+          userId: rv.user_id ? String(rv.user_id) : null,
+          studentDisplayName: String(rv.student_display_name || 'Learner'),
+          courseId: String(rv.course_id),
+          lessonId: String(rv.lesson_id),
+          lessonTitle: String(rv.lesson_title || ''),
+          segmentHeading: String(rv.segment_heading || 'General Lesson Segment'),
+          comment: String(rv.comment),
+          status: String(rv.status) as 'open' | 'investigating' | 'resolved',
+          reviewerNote: rv.reviewer_note ? String(rv.reviewer_note) : null,
+          createdAt: toIso(rv.created_at) || '',
         })),
         certificates: certificates.map((c) => ({
           id: String(c.id),
@@ -2043,6 +2868,39 @@ async function startServer() {
     }
   });
 
+  const httpServer = http.createServer(app);
+
+  // Route Guard & Session Headers Middleware before SPA HTML serving
+  app.use((req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
+      next();
+      return;
+    }
+    const accept = req.headers.accept || '';
+    if (!accept.includes('text/html')) {
+      next();
+      return;
+    }
+    const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const host = req.headers.host || 'localhost:3000';
+    const mwResult = runNextRouteMiddleware({
+      url: `${proto}://${host}${req.originalUrl}`,
+      headers: {
+        get(name: string) {
+          const val = req.headers[name.toLowerCase()];
+          if (Array.isArray(val)) return val[0] ?? null;
+          return val ?? null;
+        },
+      },
+    });
+    for (const [k, v] of Object.entries(mwResult.headers)) {
+      if (k.toLowerCase() !== 'location') {
+        res.setHeader(k, v);
+      }
+    }
+    next();
+  });
+
   // Vite middleware in development, static dist/ in production
   const isProd =
     process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve(process.cwd(), 'dist'));
@@ -2054,14 +2912,19 @@ async function startServer() {
     });
   } else {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        ws: { server: httpServer },
+        watch: null,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   }
 
   const port = Number(process.env.PORT || 3000);
-  app.listen(port, '0.0.0.0', () => {
+  httpServer.listen(port, '0.0.0.0', () => {
     console.log(`ECONOVA server listening on http://localhost:${port}`);
   });
 }

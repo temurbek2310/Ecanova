@@ -27,6 +27,11 @@ export interface UserSummary {
   leaderboardOptIn: boolean;
   leaderboardPseudonym: string;
   consentAcceptedAt: string | null;
+  dailyStudyGoalMinutes: number;
+  studyGoalNotificationsEnabled: boolean;
+  weeklyDigestEmailEnabled?: boolean;
+  lessonNotes?: Record<string, string>;
+  bookmarkedCourseIds: string[];
 }
 
 export interface ProvenanceSummary {
@@ -57,6 +62,29 @@ export interface LessonBlock {
 export interface KeyTerm {
   term: string;
   definition: string;
+}
+
+export interface GlossaryTermItem {
+  term: string;
+  definition: string;
+  courseId?: string;
+  lessonId?: string;
+  lessonTitle?: string;
+  subject?: Subject;
+}
+
+export interface SegmentReviewRequest {
+  id: string;
+  userId: string | null;
+  studentDisplayName: string;
+  courseId: string;
+  lessonId: string;
+  lessonTitle: string;
+  segmentHeading: string;
+  comment: string;
+  status: 'open' | 'investigating' | 'resolved';
+  reviewerNote: string | null;
+  createdAt: string;
 }
 
 export interface LessonPublic {
@@ -120,6 +148,7 @@ export interface CourseEditionSummary {
   publishedAt: string | null;
   updatedAt: string;
   lessonCount: number;
+  lessonTitles?: string[];
   estimatedMinutes: number;
   provenance: ProvenanceSummary | null;
 }
@@ -130,6 +159,7 @@ export interface CourseCatalogItem {
   subject: Subject;
   level: CourseLevel;
   estimatedMinutes: number;
+  topicTags?: string[];
   editions: Record<LocaleCode, CourseEditionSummary | null>;
 }
 
@@ -202,6 +232,7 @@ export interface CertificateRecord {
 
 export interface CertificateVerificationResult {
   verificationStatus: 'valid' | 'revoked' | 'not_found';
+  verifiedAt?: string;
   certificate?: {
     recipientDisplayName: string;
     courseTitle: string;
@@ -216,6 +247,24 @@ export interface CertificateVerificationResult {
   };
 }
 
+export interface CertificateServerVerification {
+  certificateId: string;
+  publicToken: string;
+  verificationStatus: 'valid' | 'revoked';
+  verifiedAt: string;
+  issuedAt: string;
+  shareEnabled: boolean;
+  recipientDisplayName: string;
+  courseTitle: string;
+  subject: Subject;
+  level: CourseLevel;
+  locale: LocaleCode;
+  editionVersion: number;
+  revokedAt: string | null;
+  revokeReason: string | null;
+  nonAccreditationNotice: string;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   pseudonym: string;
@@ -224,11 +273,33 @@ export interface LeaderboardEntry {
   isCurrentUser: boolean;
 }
 
+export interface QuizLeaderboardEntry {
+  rank: number;
+  pseudonym: string;
+  courseId: string;
+  courseTitle: string;
+  subject: Subject;
+  assessmentId: string;
+  assessmentTitle: string;
+  bestScorePercent: number;
+  attemptsCountThisWeek: number;
+  passed: boolean;
+  achievedAt: string;
+  isCurrentUser: boolean;
+}
+
+export interface WeeklyQuizLeaderboardData {
+  weekStartIso: string;
+  weekEndIso: string;
+  entries: QuizLeaderboardEntry[];
+}
+
 export interface IssueReportRecord {
   id: string;
   courseId: string | null;
   lessonId: string | null;
-  category: 'accuracy' | 'translation' | 'accessibility' | 'rights' | 'safety';
+  segmentHeading?: string | null;
+  category: 'accuracy' | 'translation' | 'accessibility' | 'rights' | 'safety' | 'segment_review';
   description: string;
   status: 'open' | 'investigating' | 'resolved';
   resolutionNote: string | null;

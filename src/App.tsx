@@ -1,36 +1,155 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Award,
+  Bookmark,
   BookOpen,
   CheckCircle2,
   ClipboardCheck,
+  CloudOff,
   Compass,
   Flame,
   Globe,
+  Keyboard,
   LayoutDashboard,
+  Loader2,
   LogOut,
   Menu,
   MessageSquare,
+  Moon,
   PauseCircle,
   PlayCircle,
+  RefreshCw,
+  Search,
+  Share2,
   Shield,
   SlidersHorizontal,
+  Sun,
   Trophy,
   User,
   X,
 } from 'lucide-react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { AchievementsView } from './components/AchievementsView';
 import { AdminStudioView } from './components/AdminStudioView';
 import { AiCompanionPanel } from './components/AiCompanionPanel';
 import { AssessmentView } from './components/AssessmentView';
 import { AuthModal } from './components/AuthModal';
+import { AuthPageView } from './components/AuthPageView';
+import { BusinessSection } from './components/BusinessSection';
 import { CertificatesView } from './components/CertificatesView';
+import { CommandBar } from './components/CommandBar';
 import { CommunityView } from './components/CommunityView';
+import { CourseMap } from './components/CourseMap';
+import { CourseShowcase } from './components/CourseShowcase';
+import { DailyStudyGoalCard } from './components/DailyStudyGoalCard';
+import { EconomicsLiquidBackground } from './components/EconomicsLiquidBackground';
+import { EconomicsSection } from './components/EconomicsSection';
+import { FloatingWatermark } from './components/FloatingWatermark';
+import { KineticHeroSection } from './components/KineticHeroSection';
 import { LessonPlayer } from './components/LessonPlayer';
+import { MagneticCourseCard } from './components/MagneticCourseCard';
+import { MathematicsSection } from './components/MathematicsSection';
+import { MilestoneCelebration } from './components/MilestoneCelebration';
+import { NeobrutalistSectionDivider } from './components/NeobrutalistSectionDivider';
 import { OfflineBanner } from './components/OfflineBanner';
 import { ProfilePoliciesView } from './components/ProfilePoliciesView';
 import { PWAInstallButton } from './components/PWAInstallButton';
-import { t } from './lib/i18n';
+import { SmoothScroll } from './components/SmoothScroll';
+import { StudyProgressChart } from './components/StudyProgressChart';
+import { WeaknessDetectionCard } from './components/WeaknessDetectionCard';
+import { useCourseOfflineCache } from './hooks/useCourseOfflineCache';
+import {
+  addRecentSearchQuery,
+  filterCatalogCourses,
+  getCourseTopicLabels,
+  getMatchingLessonTitles,
+  loadRecentSearches,
+  saveRecentSearches,
+} from './lib/catalog-filter';
+import { isCourseBookmarked } from './lib/course-bookmarks';
+import {
+  clearClientSessionState,
+  apiFetch,
+  consumeIntendedDestination,
+  getCachedUserSummary,
+  peekIntendedDestination,
+  persistCachedUserSummary,
+  persistSessionToken,
+  saveIntendedDestination,
+} from './lib/auth-client';
+import { scrollGlobalToTop } from './lib/scroll-sync';
+import {
+  buildPathForTab,
+  evaluateMiddlewareRouteGuard,
+  isProtectedTab,
+  parseRouteFromLocation,
+  resolveDestinationFromPath,
+  type AppNavTab,
+  type IntendedDestination,
+} from './lib/auth-routing';
+import {
+  formatTemplate,
+  persistLocalePreference,
+  resolveInitialLocale,
+  t,
+} from './lib/i18n';
+import {
+  clearGuestCompletedLessonIdsForCourse,
+  formatLessonSyncStatusMessage,
+  loadLocalCompletedLessonIds,
+  reconcileCompletedLessonIds,
+  recordLocalLessonCompletion,
+  saveLocalCompletedLessonIds,
+} from './lib/lesson-sync';
+import {
+  analyzeWeaknessDetection,
+  evaluateStreakFlameState,
+  loadLocalLessonNotes,
+  mergeLessonNotesMaps,
+  saveWeaknessConceptsToQuickNotes,
+  toggleExpandedRecommendationId,
+  type WeaknessLessonRecommendation,
+} from './lib/study-features';
+import {
+  getKeyboardShortcutCheatSheet,
+  getShortcutLabelForTab,
+  isCheatSheetShortcutEvent,
+  isEditableElementTarget,
+  resolveNavigationShortcut,
+} from './lib/keyboard-shortcuts';
+import { clearCachedCourseEdition, resolveCourseOfflineStatus } from './lib/offline-cache';
+import { loadSavedDailyGoalMinutes, saveDailyGoalMinutes } from './lib/study-goal';
+import { buildProgressShareData, shareProgressWithWebApi } from './lib/share-progress';
+import {
+  detectMilestoneCelebration,
+  type MilestoneCelebrationEvent,
+  type MilestoneSnapshot,
+} from './lib/celebrations';
+import {
+  buildStudyGoalNotificationPayload,
+  dispatchBrowserNotification,
+  getBrowserNotificationPermission,
+  hasSentReminderToday,
+  loadSavedGoalNotificationsEnabled,
+  markReminderSentToday,
+  saveGoalNotificationsEnabled,
+  shouldTriggerStudyGoalReminder,
+  type BrowserNotificationPermission,
+} from './lib/study-notifications';
+import { formatLocalDateKey } from './shared/econova-rules';
+import {
+  applyDocumentTheme,
+  detectSystemColorScheme,
+  getNextTheme,
+  loadSavedTheme,
+  loadSavedThemeSyncOs,
+  resolveEffectiveTheme,
+  saveThemePreference,
+  saveThemeSyncOsPreference,
+  subscribeToSystemColorScheme,
+  type ThemeMode,
+} from './lib/theme';
 import type {
   BadgeAward,
   CertificateRecord,
@@ -40,27 +159,109 @@ import type {
   EnrollmentRecord,
   LeaderboardEntry,
   LocaleCode,
+  QuizLeaderboardEntry,
   StreakSummary,
   Subject,
   UserSummary,
   XpLedgerEntry,
 } from './shared/types';
 
-type NavTab =
-  | 'overview'
-  | 'catalog'
-  | 'course'
-  | 'achievements'
-  | 'community'
-  | 'certificates'
-  | 'profile'
-  | 'admin';
+type NavTab = AppNavTab;
 
 export default function App() {
-  const [locale, setLocale] = useState<LocaleCode>('en');
+  const [locale, setLocale] = useState<LocaleCode>(() => resolveInitialLocale());
+  const [themeSyncWithOs, setThemeSyncWithOs] = useState<boolean>(() => loadSavedThemeSyncOs());
+  const [theme, setTheme] = useState<ThemeMode>(() =>
+    resolveEffectiveTheme({
+      syncWithOs: loadSavedThemeSyncOs(),
+      manualTheme: loadSavedTheme(),
+      systemTheme: detectSystemColorScheme(),
+    })
+  );
+  const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
+  const [weaknessRefreshTick, setWeaknessRefreshTick] = useState(0);
+  const [expandedWeaknessIds, setExpandedWeaknessIds] = useState<string[]>([]);
+  const [savedWeaknessNoteIds, setSavedWeaknessNoteIds] = useState<string[]>([]);
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const strings = t(locale);
 
-  const [activeTab, setActiveTab] = useState<NavTab>('overview');
+  useEffect(() => {
+    persistLocalePreference(locale);
+  }, [locale]);
+
+  useEffect(() => {
+    applyDocumentTheme(theme);
+    saveThemePreference(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    saveThemeSyncOsPreference(themeSyncWithOs);
+    if (!themeSyncWithOs) return;
+    setTheme(detectSystemColorScheme());
+    return subscribeToSystemColorScheme((nextSystemTheme) => {
+      setTheme(nextSystemTheme);
+    });
+  }, [themeSyncWithOs]);
+
+  const handleToggleThemeSyncWithOs = useCallback((nextSync: boolean) => {
+    setThemeSyncWithOs(nextSync);
+    saveThemeSyncOsPreference(nextSync);
+    if (nextSync) {
+      setTheme(detectSystemColorScheme());
+    }
+  }, []);
+
+  const handleSelectManualTheme = useCallback((nextTheme: ThemeMode) => {
+    setThemeSyncWithOs(false);
+    saveThemeSyncOsPreference(false);
+    setTheme(nextTheme);
+  }, []);
+
+  // User & protected state (hydrated synchronously from cached session to eliminate sign-in flicker)
+  const [user, setUser] = useState<UserSummary | null>(() => getCachedUserSummary());
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+
+  // Selected course detail workspace
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return parseRouteFromLocation(window.location.pathname, window.location.search).courseId;
+  });
+  const [courseDetail, setCourseDetail] = useState<CourseDetailResponse | null>(null);
+  const [courseLoading, setCourseLoading] = useState(false);
+  const [courseError, setCourseError] = useState<string | null>(null);
+  const [activeLessonIndex, setActiveLessonIndex] = useState<number | 'assessment'>(0);
+
+  const [intendedDestination, setIntendedDestination] = useState<IntendedDestination | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const initialRoute = parseRouteFromLocation(window.location.pathname, window.location.search);
+    if (initialRoute.redirectTo) {
+      const dest = resolveDestinationFromPath(initialRoute.redirectTo, initialRoute.courseId);
+      saveIntendedDestination(dest);
+      return dest;
+    }
+    return peekIntendedDestination();
+  });
+
+  const [activeTab, setActiveTab] = useState<NavTab>(() => {
+    if (typeof window === 'undefined') return 'overview';
+    const cached = getCachedUserSummary();
+    const guard = evaluateMiddlewareRouteGuard({
+      pathname: window.location.pathname,
+      search: window.location.search,
+      isAuthenticated: Boolean(cached),
+      userRole: cached?.role ?? null,
+    });
+    if (guard.action === 'redirect' && guard.destination) {
+      if (guard.reason === 'unauthenticated_protected') {
+        const dest = resolveDestinationFromPath(window.location.pathname);
+        saveIntendedDestination(dest);
+        return 'login';
+      }
+      return parseRouteFromLocation(guard.destination).tab;
+    }
+    return parseRouteFromLocation(window.location.pathname, window.location.search).tab;
+  });
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [companionOpen, setCompanionOpen] = useState(false);
@@ -71,19 +272,37 @@ export default function App() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [subjectFilter, setSubjectFilter] = useState<Subject | 'ALL'>('ALL');
   const [levelFilter, setLevelFilter] = useState<CourseLevel | 'ALL'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
+  const {
+    swStatus,
+    cachedEditionKeys,
+    refresh: refreshOfflineCache,
+  } = useCourseOfflineCache();
 
-  // Selected course detail workspace
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const [courseDetail, setCourseDetail] = useState<CourseDetailResponse | null>(null);
-  const [courseLoading, setCourseLoading] = useState(false);
-  const [courseError, setCourseError] = useState<string | null>(null);
-  const [activeLessonIndex, setActiveLessonIndex] = useState<number | 'assessment'>(0);
+  const recordRecentSearch = useCallback((query: string) => {
+    const clean = query.trim();
+    if (clean.length < 2) return;
+    setRecentSearches((prev) => {
+      const next = addRecentSearchQuery(prev, clean);
+      saveRecentSearches(next);
+      return next;
+    });
+  }, []);
 
-  // User & protected state
-  const [user, setUser] = useState<UserSummary | null>(null);
   const [enrollments, setEnrollments] = useState<EnrollmentRecord[]>([]);
   const [totalXp, setTotalXp] = useState(0);
   const [xpToday, setXpToday] = useState(0);
+  const [studyMinutesToday, setStudyMinutesToday] = useState(0);
+  const [dailyStudyGoalMinutes, setDailyStudyGoalMinutes] = useState<number>(() =>
+    loadSavedDailyGoalMinutes()
+  );
+  const [goalNotificationsEnabled, setGoalNotificationsEnabled] = useState<boolean>(() =>
+    loadSavedGoalNotificationsEnabled()
+  );
+  const [notificationPermission, setNotificationPermission] =
+    useState<BrowserNotificationPermission>(() => getBrowserNotificationPermission());
   const [xpLedger, setXpLedger] = useState<XpLedgerEntry[]>([]);
   const [streak, setStreak] = useState<StreakSummary>({
     currentStreak: 0,
@@ -97,6 +316,11 @@ export default function App() {
   // Community & referrals
   const [cohortName, setCohortName] = useState('Active Weekly Study Cohort');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [quizLeaderboard, setQuizLeaderboard] = useState<QuizLeaderboardEntry[]>([]);
+  const [weekWindow, setWeekWindow] = useState<{
+    weekStartIso: string;
+    weekEndIso: string;
+  } | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [referralsCount, setReferralsCount] = useState(0);
   const [claimedReferralCode, setClaimedReferralCode] = useState<string | null>(null);
@@ -114,6 +338,19 @@ export default function App() {
 
   // Deep link verification token (?verify=...)
   const [verifyTokenFromUrl, setVerifyTokenFromUrl] = useState<string | null>(null);
+  const [sharingProgress, setSharingProgress] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const [celebrationEvent, setCelebrationEvent] = useState<MilestoneCelebrationEvent | null>(null);
+  const prevMilestoneSnapshotRef = useRef<MilestoneSnapshot | null>(null);
+  const [bookmarkBusyId, setBookmarkBusyId] = useState<string | null>(null);
+  const pendingBookmarkCourseIdRef = useRef<string | null>(null);
+  const [syncingSyllabus, setSyncingSyllabus] = useState(false);
+  const [localSyllabusCompletedIds, setLocalSyllabusCompletedIds] = useState<string[]>([]);
+  const [syllabusSyncNote, setSyllabusSyncNote] = useState<{
+    kind: 'ok' | 'info' | 'error';
+    text: string;
+    syncedAt?: string;
+  } | null>(null);
 
   const isStaff = Boolean(
     user && ['editor', 'reviewer', 'publisher', 'admin'].includes(user.role)
@@ -121,7 +358,7 @@ export default function App() {
 
   const loadHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/health');
+      const res = await apiFetch('/api/health');
       if (res.ok) {
         const data = (await res.json()) as {
           aiConfigured?: boolean;
@@ -143,96 +380,239 @@ export default function App() {
     setCatalogLoading(true);
     setCatalogError(null);
     try {
-      const res = await fetch('/api/catalog');
+      const res = await apiFetch('/api/catalog');
       if (!res.ok) {
         const errBody = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(errBody.error || 'Unable to load course catalog.');
       }
       const data = (await res.json()) as { courses: CourseCatalogItem[] };
       setCourses(data.courses);
+      window.setTimeout(() => void refreshOfflineCache(), 250);
     } catch (err) {
       setCatalogError(err instanceof Error ? err.message : 'Catalog load failed.');
     } finally {
       setCatalogLoading(false);
     }
-  }, []);
+  }, [refreshOfflineCache]);
 
   const loadLeaderboard = useCallback(async () => {
     try {
-      const res = await fetch('/api/leaderboards');
+      const res = await apiFetch('/api/leaderboards');
       if (res.ok) {
         const data = (await res.json()) as {
           cohortName: string;
           entries: LeaderboardEntry[];
+          quizLeaderboard?: QuizLeaderboardEntry[];
+          weekWindow?: { weekStartIso: string; weekEndIso: string };
         };
         setCohortName(data.cohortName);
         setLeaderboard(data.entries);
+        if (Array.isArray(data.quizLeaderboard)) {
+          setQuizLeaderboard(data.quizLeaderboard);
+        }
+        if (data.weekWindow) {
+          setWeekWindow(data.weekWindow);
+        }
       }
     } catch {
       // Non-blocking
     }
   }, []);
 
-  const loadProtectedData = useCallback(async () => {
-    try {
-      const [ovRes, certRes, refRes] = await Promise.all([
-        fetch('/api/me/overview'),
-        fetch('/api/me/certificates'),
-        fetch('/api/me/referrals'),
-      ]);
-      if (ovRes.ok) {
-        const ov = (await ovRes.json()) as {
-          enrollments: EnrollmentRecord[];
-          totalXp: number;
-          xpToday: number;
-          xpLedger: XpLedgerEntry[];
-          streak: StreakSummary;
-          badges: BadgeAward[];
+  const loadProtectedData = useCallback(
+    async (options?: { allowCelebrate?: boolean }) => {
+      try {
+        const [ovRes, certRes, refRes] = await Promise.all([
+          apiFetch('/api/me/overview'),
+          apiFetch('/api/me/certificates'),
+          apiFetch('/api/me/referrals'),
+        ]);
+        if (ovRes.ok) {
+          const ov = (await ovRes.json()) as {
+            enrollments: EnrollmentRecord[];
+            totalXp: number;
+            xpToday: number;
+            studyMinutesToday?: number;
+            dailyStudyGoalMinutes?: number;
+            xpLedger: XpLedgerEntry[];
+            streak: StreakSummary;
+            badges: BadgeAward[];
+          };
+          const minutesToday = Number(ov.studyMinutesToday ?? 0);
+          const targetMinutes =
+            typeof ov.dailyStudyGoalMinutes === 'number'
+              ? ov.dailyStudyGoalMinutes
+              : dailyStudyGoalMinutes;
+
+          setEnrollments(ov.enrollments);
+          setTotalXp(ov.totalXp);
+          setXpToday(ov.xpToday);
+          setStudyMinutesToday(minutesToday);
+          if (typeof ov.dailyStudyGoalMinutes === 'number') {
+            setDailyStudyGoalMinutes(ov.dailyStudyGoalMinutes);
+          }
+          setXpLedger(ov.xpLedger);
+          setStreak(ov.streak);
+          setBadges(ov.badges);
+
+          const nextSnapshot: MilestoneSnapshot = {
+            completedCourseIds: ov.enrollments
+              .filter((e) => e.journeyStatus === 'completed')
+              .map((e) => e.courseId),
+            currentStreak: Number(ov.streak?.currentStreak ?? 0),
+            badgeKeys: ov.badges.map((b) => b.badgeKey),
+            dailyGoalMet: minutesToday >= targetMinutes,
+          };
+
+          if (options?.allowCelebrate) {
+            const evt = detectMilestoneCelebration(
+              prevMilestoneSnapshotRef.current,
+              nextSnapshot,
+              locale
+            );
+            if (evt) {
+              setCelebrationEvent(evt);
+            }
+          }
+          prevMilestoneSnapshotRef.current = nextSnapshot;
+        }
+        if (certRes.ok) {
+          const cData = (await certRes.json()) as { certificates: CertificateRecord[] };
+          setCertificates(cData.certificates);
+        }
+        if (refRes.ok) {
+          const rData = (await refRes.json()) as {
+            myCode: string;
+            referralsCount: number;
+            claimedByMe: { code: string } | null;
+          };
+          setReferralCode(rData.myCode);
+          setReferralsCount(rData.referralsCount);
+          setClaimedReferralCode(rData.claimedByMe?.code ?? null);
+        }
+      } catch {
+        // Offline or unauthenticated
+      }
+    },
+    [dailyStudyGoalMinutes, locale]
+  );
+
+  useEffect(() => {
+    if (!celebrationEvent) return;
+    const timer = window.setTimeout(() => {
+      setCelebrationEvent(null);
+    }, 5200);
+    return () => window.clearTimeout(timer);
+  }, [celebrationEvent]);
+
+  const syncBrowserPath = useCallback(
+    (tab: NavTab, options?: { courseId?: string | null; redirectTo?: string | null; replace?: boolean }) => {
+      if (typeof window === 'undefined') return;
+      const nextPath = buildPathForTab(tab, {
+        courseId: options?.courseId ?? selectedCourseId,
+        redirectTo: options?.redirectTo ?? null,
+      });
+      if (`${window.location.pathname}${window.location.search}` === nextPath) {
+        return;
+      }
+      if (options?.replace) {
+        window.history.replaceState({}, '', nextPath);
+      } else {
+        window.history.pushState({}, '', nextPath);
+      }
+    },
+    [selectedCourseId]
+  );
+
+  const navigateToLogin = useCallback(
+    (destinationOverride?: IntendedDestination, mode: 'login' | 'register' = 'login') => {
+      const currentSafeTab: Exclude<NavTab, 'login' | 'register'> =
+        activeTab === 'login' || activeTab === 'register' ? 'overview' : activeTab;
+      const dest: IntendedDestination =
+        destinationOverride ?? {
+          tab: currentSafeTab,
+          path: buildPathForTab(currentSafeTab, { courseId: selectedCourseId }),
+          courseId: selectedCourseId,
+          lessonIndex: activeLessonIndex,
         };
-        setEnrollments(ov.enrollments);
-        setTotalXp(ov.totalXp);
-        setXpToday(ov.xpToday);
-        setXpLedger(ov.xpLedger);
-        setStreak(ov.streak);
-        setBadges(ov.badges);
+      saveIntendedDestination(dest);
+      setIntendedDestination(dest);
+      setActiveTab(mode);
+      setAuthOpen(false);
+      syncBrowserPath(mode, { redirectTo: dest.path });
+    },
+    [activeTab, selectedCourseId, activeLessonIndex, syncBrowserPath]
+  );
+
+  const navigateToTab = useCallback(
+    (nextTab: NavTab) => {
+      if (nextTab === 'login' || nextTab === 'register') {
+        navigateToLogin(undefined, nextTab);
+        return;
       }
-      if (certRes.ok) {
-        const cData = (await certRes.json()) as { certificates: CertificateRecord[] };
-        setCertificates(cData.certificates);
-      }
-      if (refRes.ok) {
-        const rData = (await refRes.json()) as {
-          myCode: string;
-          referralsCount: number;
-          claimedByMe: { code: string } | null;
+      if (isProtectedTab(nextTab) && !user) {
+        const dest: IntendedDestination = {
+          tab: nextTab,
+          path: buildPathForTab(nextTab),
         };
-        setReferralCode(rData.myCode);
-        setReferralsCount(rData.referralsCount);
-        setClaimedReferralCode(rData.claimedByMe?.code ?? null);
+        navigateToLogin(dest, 'login');
+        return;
       }
-    } catch {
-      // Offline or unauthenticated
-    }
-  }, []);
+      setActiveTab(nextTab);
+      syncBrowserPath(nextTab);
+      scrollGlobalToTop(true);
+    },
+    [user, navigateToLogin, syncBrowserPath]
+  );
 
   const loadSession = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await apiFetch('/api/auth/me');
       if (res.ok) {
-        const data = (await res.json()) as { user: UserSummary | null };
+        const data = (await res.json()) as {
+          user: UserSummary | null;
+          sessionToken?: string | null;
+        };
+        if (data.sessionToken) {
+          persistSessionToken(data.sessionToken);
+        }
         setUser(data.user);
+        persistCachedUserSummary(data.user);
+
         if (data.user) {
+          setDailyStudyGoalMinutes(data.user.dailyStudyGoalMinutes);
+          setGoalNotificationsEnabled(Boolean(data.user.studyGoalNotificationsEnabled));
           await loadProtectedData();
         } else {
+          clearClientSessionState();
           setEnrollments([]);
           setCertificates([]);
           setXpLedger([]);
           setTotalXp(0);
+          setStudyMinutesToday(0);
+          setDailyStudyGoalMinutes(loadSavedDailyGoalMinutes());
+          setGoalNotificationsEnabled(loadSavedGoalNotificationsEnabled());
           setBadges([]);
+          if (typeof window !== 'undefined') {
+            const guard = evaluateMiddlewareRouteGuard({
+              pathname: window.location.pathname,
+              search: window.location.search,
+              isAuthenticated: false,
+            });
+            if (guard.action === 'redirect' && guard.destination) {
+              const dest = resolveDestinationFromPath(window.location.pathname);
+              saveIntendedDestination(dest);
+              setIntendedDestination(dest);
+              setActiveTab('login');
+              window.history.replaceState({}, '', guard.destination);
+            }
+          }
         }
       }
     } catch {
       // Ignore offline auth probe error
+    } finally {
+      setSessionLoaded(true);
     }
   }, [loadProtectedData]);
 
@@ -250,22 +630,30 @@ export default function App() {
   }, [loadHealth, loadCatalog, loadSession, loadLeaderboard]);
 
   const openCourse = useCallback(
-    async (courseId: string, editionLocale: LocaleCode = locale) => {
+    async (
+      courseId: string,
+      editionLocale: LocaleCode = locale,
+      options?: { lessonIndex?: number | 'assessment'; authenticatedUser?: UserSummary | null }
+    ) => {
       setSelectedCourseId(courseId);
       setActiveTab('course');
+      syncBrowserPath('course', { courseId });
+      scrollGlobalToTop(true);
       setCourseLoading(true);
       setCourseError(null);
-      setActiveLessonIndex(0);
+      setActiveLessonIndex(options?.lessonIndex ?? 0);
       try {
-        const res = await fetch(`/api/courses/${courseId}/editions/${editionLocale}`);
+        const res = await apiFetch(`/api/courses/${courseId}/editions/${editionLocale}`);
         const data = (await res.json()) as CourseDetailResponse & { error?: string };
         if (!res.ok) {
           setCourseDetail(null);
           throw new Error(data.error || strings.editionMissingNote);
         }
         setCourseDetail(data);
-        if (user) {
-          await fetch('/api/enrollments', {
+        window.setTimeout(() => void refreshOfflineCache(), 250);
+        const effectiveUser = options?.authenticatedUser !== undefined ? options.authenticatedUser : user;
+        if (effectiveUser) {
+          await apiFetch('/api/enrollments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ courseId, locale: editionLocale }),
@@ -278,8 +666,39 @@ export default function App() {
         setCourseLoading(false);
       }
     },
-    [locale, strings.editionMissingNote, user, loadProtectedData]
+    [locale, strings.editionMissingNote, user, loadProtectedData, refreshOfflineCache, syncBrowserPath]
   );
+
+  // If browser booted directly onto /course/:courseId, load it automatically
+  useEffect(() => {
+    if (activeTab === 'course' && selectedCourseId && !courseDetail && !courseLoading) {
+      void openCourse(selectedCourseId, locale);
+    }
+  }, [activeTab, selectedCourseId, courseDetail, courseLoading, locale, openCourse]);
+
+  // Listen to browser Back/Forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const parsed = parseRouteFromLocation(window.location.pathname, window.location.search);
+      if (isProtectedTab(parsed.tab) && !user) {
+        const dest = resolveDestinationFromPath(window.location.pathname, parsed.courseId);
+        navigateToLogin(dest, 'login');
+        return;
+      }
+      setActiveTab(parsed.tab);
+      if (parsed.courseId) {
+        void openCourse(parsed.courseId, locale);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [user, locale, navigateToLogin, openCourse]);
+
+  useEffect(() => {
+    if (activeTab === 'catalog' || activeTab === 'profile') {
+      void refreshOfflineCache();
+    }
+  }, [activeTab, locale, refreshOfflineCache]);
 
   // Reload selected course when switching global language edition
   const handleLocaleSwitch = (nextLocale: LocaleCode) => {
@@ -289,19 +708,139 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    const courseId = courseDetail?.course.id;
+    if (!courseId) {
+      setLocalSyllabusCompletedIds([]);
+      setSyllabusSyncNote(null);
+      return;
+    }
+    setLocalSyllabusCompletedIds(loadLocalCompletedLessonIds(courseId, user?.id));
+    setSyllabusSyncNote(null);
+  }, [courseDetail?.course.id, user?.id]);
+
   const handleCompleteLesson = async (lessonId: string) => {
-    const res = await fetch(`/api/me/progress/${lessonId}`, {
+    const activeCourseId = courseDetail?.course.id ?? selectedCourseId;
+    if (activeCourseId) {
+      const updatedLocal = recordLocalLessonCompletion(activeCourseId, lessonId, user?.id);
+      setLocalSyllabusCompletedIds(updatedLocal);
+    }
+    const res = await apiFetch(`/api/me/progress/${lessonId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ evidence: 'study_and_simulation' }),
     });
     const data = (await res.json()) as { error?: string };
     if (!res.ok) throw new Error(data.error || 'Could not record completion.');
-    await Promise.all([loadProtectedData(), loadLeaderboard()]);
+    await Promise.all([loadProtectedData({ allowCelebrate: true }), loadLeaderboard()]);
+  };
+
+  const handleSyncCourseProgress = async () => {
+    if (!courseDetail || syncingSyllabus) return;
+    const courseId = courseDetail.course.id;
+    const validCourseLessonIds = courseDetail.lessons.map((l) => l.id);
+    const localIds = loadLocalCompletedLessonIds(courseId, user?.id);
+    setLocalSyllabusCompletedIds(localIds);
+
+    if (!user) {
+      setSyllabusSyncNote({
+        kind: 'info',
+        text: formatLessonSyncStatusMessage({
+          locale,
+          pushedCount: 0,
+          pulledCount: 0,
+          totalSynced: localIds.length,
+          unauthenticated: true,
+        }),
+      });
+      return;
+    }
+
+    setSyncingSyllabus(true);
+    try {
+      // Fetch fresh server enrollment state so cross-device completions are pulled cleanly
+      const ovRes = await apiFetch('/api/me/overview');
+      if (!ovRes.ok) {
+        throw new Error(locale === 'uz' ? 'Server bilan bog‘lanib bo‘lmadi.' : 'Could not reach server.');
+      }
+      const ov = (await ovRes.json()) as { enrollments: EnrollmentRecord[] };
+      const freshEnrollment = ov.enrollments.find((e) => e.courseId === courseId);
+      const serverIds = freshEnrollment?.completedLessonIds ?? [];
+
+      const plan = reconcileCompletedLessonIds({
+        localIds,
+        serverIds,
+        validCourseLessonIds,
+      });
+
+      let pushedCount = 0;
+      const failedPushIds: string[] = [];
+      for (const lessonId of plan.missingOnServer) {
+        const putRes = await apiFetch(`/api/me/progress/${encodeURIComponent(lessonId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ evidence: 'manual_syllabus_sync' }),
+        });
+        if (putRes.ok) {
+          pushedCount += 1;
+        } else {
+          failedPushIds.push(lessonId);
+        }
+      }
+
+      await Promise.all([
+        loadProtectedData({ allowCelebrate: pushedCount > 0 }),
+        loadLeaderboard(),
+      ]);
+
+      const syncedIds =
+        failedPushIds.length === 0
+          ? plan.mergedIds
+          : plan.mergedIds.filter((id) => !failedPushIds.includes(id));
+      const savedLocal = saveLocalCompletedLessonIds(
+        courseId,
+        failedPushIds.length === 0 ? syncedIds : [...syncedIds, ...failedPushIds],
+        user.id
+      );
+      if (failedPushIds.length === 0) {
+        clearGuestCompletedLessonIdsForCourse(courseId);
+      }
+      setLocalSyllabusCompletedIds(savedLocal);
+
+      setSyllabusSyncNote({
+        kind: failedPushIds.length > 0 ? 'error' : 'ok',
+        text: formatLessonSyncStatusMessage({
+          locale,
+          pushedCount,
+          pulledCount: plan.missingLocally.length,
+          totalSynced: syncedIds.length,
+          error:
+            failedPushIds.length > 0
+              ? locale === 'uz'
+                ? `${failedPushIds.length} ta dars yuklanmadi`
+                : `${failedPushIds.length} lesson(s) failed to upload`
+              : null,
+        }),
+        syncedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+    } catch (err) {
+      setSyllabusSyncNote({
+        kind: 'error',
+        text: formatLessonSyncStatusMessage({
+          locale,
+          pushedCount: 0,
+          pulledCount: 0,
+          totalSynced: localIds.length,
+          error: err instanceof Error ? err.message : 'Sync error',
+        }),
+      });
+    } finally {
+      setSyncingSyllabus(false);
+    }
   };
 
   const handlePauseToggle = async (courseId: string, paused: boolean) => {
-    await fetch(`/api/enrollments/${courseId}/pause`, {
+    await apiFetch(`/api/enrollments/${courseId}/pause`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paused }),
@@ -309,26 +848,457 @@ export default function App() {
     await loadProtectedData();
   };
 
+  const applyBookmarkChange = useCallback(async (courseId: string, bookmarked: boolean) => {
+    setBookmarkBusyId(courseId);
+    try {
+      const res = await apiFetch(`/api/me/bookmarks/${encodeURIComponent(courseId)}`, {
+        method: bookmarked ? 'PUT' : 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: bookmarked ? JSON.stringify({ bookmarked: true }) : undefined,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        user?: UserSummary | null;
+        bookmarkedCourseIds?: string[];
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not update bookmark.');
+      }
+      if (data.user) {
+        setUser(data.user);
+      } else if (Array.isArray(data.bookmarkedCourseIds)) {
+        setUser((prev) =>
+          prev ? { ...prev, bookmarkedCourseIds: data.bookmarkedCourseIds! } : prev
+        );
+      }
+    } finally {
+      setBookmarkBusyId(null);
+    }
+  }, []);
+
+  const handleToggleBookmark = useCallback(
+    async (courseId: string) => {
+      if (!user) {
+        pendingBookmarkCourseIdRef.current = courseId;
+        const currentSafeTab: Exclude<NavTab, 'login' | 'register'> =
+          activeTab === 'login' || activeTab === 'register' ? 'catalog' : activeTab;
+        navigateToLogin({
+          tab: currentSafeTab,
+          path: buildPathForTab(currentSafeTab, { courseId: selectedCourseId }),
+          courseId: selectedCourseId,
+          lessonIndex: activeLessonIndex,
+        });
+        return;
+      }
+      const currentlyBookmarked = isCourseBookmarked(user.bookmarkedCourseIds ?? [], courseId);
+      await applyBookmarkChange(courseId, !currentlyBookmarked);
+    },
+    [user, activeTab, selectedCourseId, activeLessonIndex, navigateToLogin, applyBookmarkChange]
+  );
+
+  const handleUpdateDailyGoal = async (nextTargetMinutes: number) => {
+    if (!user) {
+      saveDailyGoalMinutes(nextTargetMinutes);
+      setDailyStudyGoalMinutes(nextTargetMinutes);
+      return;
+    }
+    const res = await apiFetch('/api/me/study-goal', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetMinutes: nextTargetMinutes }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      dailyStudyGoalMinutes?: number;
+      user?: UserSummary | null;
+      error?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.error || 'Could not update daily study goal.');
+    }
+    const confirmedMinutes = data.dailyStudyGoalMinutes ?? nextTargetMinutes;
+    setDailyStudyGoalMinutes(confirmedMinutes);
+    if (data.user) {
+      setUser(data.user);
+    }
+  };
+
+  const handleToggleGoalNotifications = async (nextEnabled: boolean): Promise<{
+    enabled: boolean;
+    permission: BrowserNotificationPermission;
+    error?: string;
+  }> => {
+    if (nextEnabled) {
+      if (typeof window === 'undefined' || typeof Notification === 'undefined') {
+        setNotificationPermission('unsupported');
+        return {
+          enabled: false,
+          permission: 'unsupported',
+          error: strings.notifications.unsupportedHelp,
+        };
+      }
+      let perm: BrowserNotificationPermission = Notification.permission;
+      if (perm === 'default') {
+        try {
+          perm = await Notification.requestPermission();
+        } catch {
+          perm = getBrowserNotificationPermission();
+        }
+      }
+      setNotificationPermission(perm);
+
+      if (perm !== 'granted') {
+        saveGoalNotificationsEnabled(false);
+        setGoalNotificationsEnabled(false);
+        if (user) {
+          await apiFetch('/api/me/profile', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studyGoalNotificationsEnabled: false }),
+          }).catch(() => {});
+        }
+        return {
+          enabled: false,
+          permission: perm,
+          error: strings.notifications.deniedHelp,
+        };
+      }
+    }
+
+    saveGoalNotificationsEnabled(nextEnabled);
+    setGoalNotificationsEnabled(nextEnabled);
+
+    if (user) {
+      const res = await apiFetch('/api/me/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studyGoalNotificationsEnabled: nextEnabled }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        user?: UserSummary | null;
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not save notification preference.');
+      }
+      if (data.user) {
+        setUser(data.user);
+      }
+    }
+
+    return {
+      enabled: nextEnabled,
+      permission: getBrowserNotificationPermission(),
+    };
+  };
+
+  const handleSendTestNotification = async () => {
+    const completed = user ? studyMinutesToday : 0;
+    return dispatchBrowserNotification(
+      buildStudyGoalNotificationPayload({
+        completedMinutes: completed,
+        targetMinutes: dailyStudyGoalMinutes,
+        locale,
+      })
+    );
+  };
+
+  useEffect(() => {
+    if (!sessionLoaded) return;
+    const perm = getBrowserNotificationPermission();
+    setNotificationPermission(perm);
+
+    const timeZone = user?.timezone || streak.timezone || 'Asia/Tashkent';
+    const todayDateKey = formatLocalDateKey(new Date(), timeZone);
+    const scopeKey = user?.id || 'guest';
+    const completed = user ? studyMinutesToday : 0;
+
+    if (
+      shouldTriggerStudyGoalReminder({
+        notificationsEnabled: goalNotificationsEnabled,
+        permission: perm,
+        completedMinutes: completed,
+        targetMinutes: dailyStudyGoalMinutes,
+        alreadySentToday: hasSentReminderToday(scopeKey, todayDateKey),
+      })
+    ) {
+      markReminderSentToday(scopeKey, todayDateKey);
+      void dispatchBrowserNotification(
+        buildStudyGoalNotificationPayload({
+          completedMinutes: completed,
+          targetMinutes: dailyStudyGoalMinutes,
+          locale,
+        })
+      );
+    }
+  }, [
+    sessionLoaded,
+    user,
+    studyMinutesToday,
+    dailyStudyGoalMinutes,
+    goalNotificationsEnabled,
+    notificationPermission,
+    locale,
+    streak.timezone,
+  ]);
+
+  const handleShareProgress = async () => {
+    setSharingProgress(true);
+    setShareFeedback(null);
+    try {
+      const shareData = buildProgressShareData({
+        xpToday: user ? xpToday : 0,
+        currentStreak: user ? streak.currentStreak : 0,
+        locale,
+        url: window.location.origin,
+      });
+      const result = await shareProgressWithWebApi(shareData);
+      if (result.ok) {
+        setShareFeedback(
+          result.method === 'web-share'
+            ? strings.shareProgress.sharedWebApi
+            : strings.shareProgress.sharedClipboard
+        );
+      } else if (!result.cancelled) {
+        setShareFeedback(strings.shareProgress.unavailable);
+      }
+    } finally {
+      setSharingProgress(false);
+    }
+  };
+
+  const handleUserAuthenticated = useCallback(
+    async (
+      authedUser: UserSummary,
+      options?: { sessionToken?: string | null; redirectTo?: string | null }
+    ) => {
+      if (options?.sessionToken) {
+        persistSessionToken(options.sessionToken);
+      }
+      persistCachedUserSummary(authedUser);
+      setUser(authedUser);
+      setLocale(authedUser.preferredLocale);
+      setDailyStudyGoalMinutes(authedUser.dailyStudyGoalMinutes);
+      setGoalNotificationsEnabled(Boolean(authedUser.studyGoalNotificationsEnabled));
+      setAuthOpen(false);
+
+      const storedDest = consumeIntendedDestination();
+      const targetDest: IntendedDestination =
+        storedDest ??
+        (options?.redirectTo
+          ? resolveDestinationFromPath(options.redirectTo, selectedCourseId)
+          : {
+              tab:
+                activeTab === 'login' || activeTab === 'register'
+                  ? selectedCourseId
+                    ? 'course'
+                    : 'overview'
+                  : activeTab,
+              path: buildPathForTab(
+                activeTab === 'login' || activeTab === 'register'
+                  ? selectedCourseId
+                    ? 'course'
+                    : 'overview'
+                  : activeTab,
+                { courseId: selectedCourseId }
+              ),
+              courseId: selectedCourseId,
+              lessonIndex: activeLessonIndex,
+            });
+
+      setIntendedDestination(null);
+
+      const pendingCourseId = pendingBookmarkCourseIdRef.current;
+      pendingBookmarkCourseIdRef.current = null;
+
+      await Promise.all([loadProtectedData(), loadLeaderboard()]);
+
+      if (pendingCourseId) {
+        await applyBookmarkChange(pendingCourseId, true).catch(() => {});
+      }
+
+      if (targetDest.tab === 'course' && (targetDest.courseId || selectedCourseId)) {
+        const cid = targetDest.courseId || selectedCourseId!;
+        await openCourse(cid, authedUser.preferredLocale, {
+          lessonIndex: targetDest.lessonIndex ?? activeLessonIndex,
+          authenticatedUser: authedUser,
+        });
+        syncBrowserPath('course', { courseId: cid, replace: true });
+      } else {
+        setActiveTab(targetDest.tab);
+        syncBrowserPath(targetDest.tab, { replace: true });
+      }
+    },
+    [
+      activeTab,
+      selectedCourseId,
+      activeLessonIndex,
+      loadProtectedData,
+      loadLeaderboard,
+      applyBookmarkChange,
+      openCourse,
+      syncBrowserPath,
+    ]
+  );
+
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    clearClientSessionState();
     setUser(null);
     setEnrollments([]);
     setCertificates([]);
     setXpLedger([]);
     setTotalXp(0);
+    setXpToday(0);
+    setStudyMinutesToday(0);
+    setDailyStudyGoalMinutes(loadSavedDailyGoalMinutes());
+    setGoalNotificationsEnabled(loadSavedGoalNotificationsEnabled());
+    setStreak({
+      currentStreak: 0,
+      bestStreak: 0,
+      lastActivityLocalDate: null,
+      timezone: 'Asia/Tashkent',
+    });
     setBadges([]);
-    if (activeTab === 'admin') setActiveTab('overview');
+    setShareFeedback(null);
+    setCelebrationEvent(null);
+    prevMilestoneSnapshotRef.current = null;
+    if (isProtectedTab(activeTab)) {
+      setActiveTab('overview');
+      syncBrowserPath('overview', { replace: true });
+    }
   };
 
-  const filteredCourses = courses.filter((c) => {
-    if (subjectFilter !== 'ALL' && c.subject !== subjectFilter) return false;
-    if (levelFilter !== 'ALL' && c.level !== levelFilter) return false;
-    return true;
+  const filteredCourses = filterCatalogCourses(courses, {
+    subject: subjectFilter,
+    level: levelFilter,
+    searchQuery,
+    locale,
   });
+
+  const hasActiveCatalogFilters =
+    subjectFilter !== 'ALL' || levelFilter !== 'ALL' || searchQuery.trim().length > 0;
 
   const activeEnrollment = selectedCourseId
     ? enrollments.find((e) => e.courseId === selectedCourseId)
     : undefined;
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      const targetEl = event.target as HTMLElement | null;
+      const isEditable = isEditableElementTarget(targetEl);
+
+      if (event.key === 'Escape' && cheatSheetOpen) {
+        event.preventDefault();
+        setCheatSheetOpen(false);
+        return;
+      }
+
+      if (
+        isCheatSheetShortcutEvent({
+          key: event.key,
+          shiftKey: event.shiftKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          altKey: event.altKey,
+          repeat: event.repeat,
+          defaultPrevented: event.defaultPrevented,
+          isEditableTarget: isEditable,
+        })
+      ) {
+        event.preventDefault();
+        setCheatSheetOpen((prev) => !prev);
+        return;
+      }
+
+      const inDialog =
+        authOpen ||
+        companionOpen ||
+        cheatSheetOpen ||
+        Boolean(targetEl?.closest?.('[role="dialog"]')) ||
+        Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
+
+      const nextTab = resolveNavigationShortcut({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        repeat: event.repeat,
+        defaultPrevented: event.defaultPrevented,
+        isEditableTarget: isEditable,
+        hasOpenDialog: inDialog,
+        isStaff,
+      });
+
+      if (nextTab) {
+        event.preventDefault();
+        setActiveTab(nextTab);
+        setMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [authOpen, companionOpen, cheatSheetOpen, isStaff]);
+
+  const streakFlame = evaluateStreakFlameState({
+    currentStreak: streak.currentStreak,
+    xpToday,
+    studyMinutesToday,
+    dailyStudyGoalMinutes,
+    locale,
+  });
+
+  const weaknessAnalysis = React.useMemo(
+    () =>
+      analyzeWeaknessDetection({
+        courses,
+        enrollments,
+        locale,
+      }),
+    [courses, enrollments, locale, weaknessRefreshTick]
+  );
+
+  const handleSaveWeaknessToNotes = useCallback(
+    async (rec: WeaknessLessonRecommendation) => {
+      const enr = enrollments.find((e) => e.courseId === rec.courseId);
+      const targetLessonId = enr?.requiredLessonIds?.[rec.lessonIndex];
+      const existingMerged = mergeLessonNotesMaps(loadLocalLessonNotes(), user?.lessonNotes);
+
+      const { updatedNotes } = saveWeaknessConceptsToQuickNotes({
+        recommendation: rec,
+        existingNotes: existingMerged,
+        targetLessonId,
+        locale,
+      });
+
+      setSavedWeaknessNoteIds((prev) => (prev.includes(rec.id) ? prev : [...prev, rec.id]));
+
+      if (user) {
+        try {
+          const res = await apiFetch('/api/me/profile', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lessonNotes: updatedNotes }),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as { user?: UserSummary };
+            if (data.user) {
+              setUser(data.user);
+              persistCachedUserSummary(data.user);
+            }
+          }
+        } catch {
+          // Local Quick Notes are already persisted in localStorage
+        }
+      }
+    },
+    [enrollments, locale, user]
+  );
+
+  const shortcutCheatSheet = React.useMemo(
+    () => getKeyboardShortcutCheatSheet(locale, isStaff),
+    [locale, isStaff]
+  );
 
   const navItems: Array<{ id: NavTab; label: string; icon: React.ReactNode }> = [
     { id: 'overview', label: strings.nav.overview, icon: <LayoutDashboard className="h-4 w-4" aria-hidden="true" /> },
@@ -347,53 +1317,131 @@ export default function App() {
     });
   }
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    gsap.registerPlugin(ScrollTrigger);
+    const id = window.requestAnimationFrame(() => {
+      ScrollTrigger.refresh();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [activeTab, locale, courses.length]);
+
   return (
-    <div className="min-h-screen bg-[#080B14] text-[#F3F6FF] flex flex-col md:flex-row">
+    <SmoothScroll>
+    <div className="relative min-h-screen overflow-x-clip bg-theme-base bg-canvas text-ink flex flex-col md:flex-row">
+      {/* Economics WebGL Liquid Background (z-0, above base #080B14) */}
+      <EconomicsLiquidBackground
+        active={activeTab !== 'admin'}
+        theme={theme}
+      />
+
+      {/* Global Dynamic Island Command Bar (Cmd+K / Ctrl+K) */}
+      <CommandBar
+        locale={locale}
+        theme={theme}
+        courses={courses}
+        onNavigateTab={navigateToTab}
+        onOpenCourse={(courseId, editionLocale) => void openCourse(courseId, editionLocale)}
+        onJumpSection={(sectionId) => {
+          navigateToTab('overview');
+          window.setTimeout(() => {
+            const target = document.querySelector(`[data-testid="${sectionId}-section"]`);
+            target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 120);
+        }}
+        onSwitchLocale={handleLocaleSwitch}
+        onToggleTheme={handleSelectManualTheme}
+        onOpenShortcuts={() => setCheatSheetOpen(true)}
+      />
+
       {/* Desktop Sidebar */}
       <aside
+        ref={sidebarRef}
         aria-label="Primary Sidebar Navigation"
-        className="no-print hidden md:flex md:w-64 md:shrink-0 md:flex-col md:justify-between border-r border-[#222B3D] bg-[#0B0F19] p-4"
+        className="no-print relative z-20 hidden md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:justify-between md:overflow-x-hidden md:overflow-y-auto border-r-2 border-slate-500 bg-white/40 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 p-4"
       >
-        <div className="space-y-6">
-          <div className="px-2 pt-1">
+        <FloatingWatermark
+          theme="sidebar"
+          scopeRef={sidebarRef}
+          parallaxMode="raf"
+          testId="sidebar-floating-watermark"
+        />
+
+        <div className="relative z-10 space-y-6">
+          <div className="px-2 pt-1 flex items-center justify-between">
             <button
               type="button"
-              onClick={() => setActiveTab('overview')}
-              className="font-display text-xl font-bold tracking-tight text-[#F3F6FF] whitespace-nowrap"
+              onClick={() => navigateToTab('overview')}
+              className="inline-flex items-center gap-2 font-display text-xl font-extrabold tracking-tight text-ink whitespace-nowrap"
             >
-              ECONOVA
+              <span className="inline-block h-3 w-3 rounded-xs border-2 border-theme-border bg-theme-accent" aria-hidden="true" />
+              <span>ECONOVA</span>
             </button>
           </div>
 
-          <nav className="space-y-1">
+          <nav aria-label="Section Navigation" className="space-y-1.5">
             {navItems.map((item) => {
               const isActive = activeTab === item.id || (item.id === 'catalog' && activeTab === 'course');
+              const shortcut = getShortcutLabelForTab(item.id);
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setActiveTab(item.id)}
-                  className={`flex w-full min-h-[42px] items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                  onClick={() => navigateToTab(item.id)}
+                  aria-keyshortcuts={shortcut ? shortcut.toLowerCase() : undefined}
+                  className={`flex w-full min-h-[42px] items-center justify-between gap-2 rounded-lg border-2 px-3 py-2 text-sm font-semibold transition-all whitespace-nowrap ${
                     isActive
-                      ? 'bg-[#141B2B] text-[#5DE1D2]'
-                      : 'text-[#8994AA] hover:bg-[#101522] hover:text-[#F3F6FF]'
+                      ? 'border-theme-border bg-theme-base text-theme-accent shadow-brutal-sm'
+                      : 'border-transparent text-muted hover:border-theme-border hover:bg-theme-base/60 hover:text-ink'
                   }`}
                 >
-                  {item.icon}
-                  <span>{item.label}</span>
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    {item.icon}
+                    <span className="truncate">{item.label}</span>
+                    {item.id === 'overview' && (
+                      <span
+                        data-testid="nav-streak-flame"
+                        data-glowing={streakFlame.isMilestoneGlowing ? 'true' : 'false'}
+                        title={streakFlame.tooltip}
+                        className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-bold transition-all ${
+                          streakFlame.isMilestoneGlowing
+                            ? 'border-amber-400/70 bg-amber-400/15 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.45)]'
+                            : 'border-theme-border bg-theme-base text-muted'
+                        }`}
+                      >
+                        <Flame
+                          className={`h-3 w-3 shrink-0 ${
+                            streakFlame.isMilestoneGlowing
+                              ? 'fill-amber-400 text-amber-400 animate-pulse'
+                              : 'text-muted'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        <span>{streakFlame.streakDays}d</span>
+                      </span>
+                    )}
+                  </span>
+                  {shortcut && (
+                    <kbd
+                      aria-hidden="true"
+                      className="hidden lg:inline-flex min-w-[20px] items-center justify-center rounded border-2 border-theme-border bg-theme-base px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted"
+                    >
+                      {shortcut}
+                    </kbd>
+                  )}
                 </button>
               );
             })}
           </nav>
         </div>
 
-        <div className="space-y-3 border-t border-[#222B3D] pt-4">
+        <div className="relative z-10 space-y-3 border-t-2 border-theme-border pt-4">
           <button
             type="button"
             onClick={() => setCompanionOpen(true)}
-            className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg border border-[#222B3D] bg-[#101522] px-3 py-2 text-xs font-medium text-[#F3F6FF] hover:border-[#5DE1D2]/50"
+            className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2 text-xs font-semibold text-ink shadow-brutal-sm hover:border-theme-accent"
           >
-            <MessageSquare className="h-4 w-4 text-[#5DE1D2]" aria-hidden="true" />
+            <MessageSquare className="h-4 w-4 text-teal" aria-hidden="true" />
             <span>{locale === 'uz' ? 'O‘quv yordamchisi' : 'Study Companion'}</span>
           </button>
 
@@ -402,78 +1450,112 @@ export default function App() {
       </aside>
 
       {/* Main Content Shell */}
-      <div className="flex flex-1 flex-col min-w-0 pb-20 md:pb-0">
+      <div className="relative z-10 flex flex-1 flex-col min-w-0 overflow-x-clip pb-20 md:pb-0">
         <OfflineBanner message={strings.offlineBanner} />
 
-        {/* Clean 3-Zone Top Bar */}
-        <header className="no-print sticky top-0 z-30 flex h-14 items-center justify-between gap-2 sm:gap-4 border-b border-[#222B3D] bg-[#0B0F19]/95 px-3 backdrop-blur-md sm:px-6">
+        {/* Clean 3-Zone Top Bar (adds top clearance for Dynamic Island CommandBar on mobile) */}
+        <header className="no-print sticky top-0 z-30 flex items-center justify-between gap-2 sm:gap-4 border-b-2 border-slate-500 bg-white/40 px-3 pt-[68px] pb-2.5 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 sm:px-6 md:h-16 md:py-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
               onClick={() => setMobileMenuOpen((v) => !v)}
               aria-label="Toggle navigation menu"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#222B3D] text-[#F3F6FF] md:hidden"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-theme-border bg-theme-base text-ink shadow-brutal-sm md:hidden"
             >
               {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('overview')}
-              className="font-display text-base font-bold tracking-tight text-[#F3F6FF] whitespace-nowrap shrink-0 md:hidden"
+              className="font-display text-sm sm:text-base font-extrabold tracking-tight text-ink whitespace-nowrap shrink-0 md:hidden"
             >
               ECONOVA
             </button>
-            <span className="hidden text-xs font-medium text-[#8994AA] truncate md:inline">
+            <span className="hidden text-xs font-semibold text-muted truncate md:inline">
               {activeTab === 'course' && courseDetail
                 ? `${strings.subjects[courseDetail.course.subject]} / ${courseDetail.edition.title}`
                 : navItems.find((n) => n.id === activeTab)?.label || 'ECONOVA'}
             </span>
           </div>
 
-          {/* Language Edition Toggle (EN / O'Z) */}
-          <div
-            role="group"
-            aria-label="Language Edition Switcher"
-            className="flex items-center rounded-lg border border-[#222B3D] bg-[#101522] p-0.5 text-xs shrink-0"
-          >
-            <Globe className="ml-2 mr-1 hidden h-3.5 w-3.5 text-[#8994AA] sm:block" aria-hidden="true" />
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Keyboard Shortcuts Cheat Sheet Trigger (Shift + ?) */}
             <button
               type="button"
-              onClick={() => handleLocaleSwitch('en')}
-              className={`min-h-[32px] rounded-md px-2 sm:px-2.5 py-1 font-medium whitespace-nowrap transition-colors ${
-                locale === 'en' ? 'bg-[#141B2B] text-[#5DE1D2]' : 'text-[#8994AA] hover:text-[#F3F6FF]'
-              }`}
+              onClick={() => setCheatSheetOpen(true)}
+              aria-label={locale === 'uz' ? 'Klaviatura yorliqlari (Shift + ?)' : 'Keyboard Shortcuts (Shift + ?)'}
+              title={locale === 'uz' ? 'Klaviatura yorliqlari (Shift + ?)' : 'Keyboard Shortcuts (Shift + ?)'}
+              data-testid="header-shortcuts-cheatsheet-btn"
+              className="hidden sm:inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base px-2.5 py-1.5 text-xs font-semibold text-ink shadow-brutal-sm transition-colors hover:border-theme-accent whitespace-nowrap shrink-0"
             >
-              EN
+              <Keyboard className="h-3.5 w-3.5 text-theme-cyan shrink-0" aria-hidden="true" />
+              <kbd className="hidden lg:inline font-mono text-[10px] font-bold text-muted">Shift+?</kbd>
             </button>
-            <button
-              type="button"
-              onClick={() => handleLocaleSwitch('uz')}
-              className={`min-h-[32px] rounded-md px-2 sm:px-2.5 py-1 font-medium whitespace-nowrap transition-colors ${
-                locale === 'uz' ? 'bg-[#141B2B] text-[#5DE1D2]' : 'text-[#8994AA] hover:text-[#F3F6FF]'
-              }`}
-            >
-              O‘Z
-            </button>
-          </div>
 
-          {/* Primary Account Action */}
-          <div className="flex items-center gap-2 shrink-0">
+            {/* Theme Mode Toggle (Dark <-> High-Contrast Light, sets Manual Override) */}
+            <button
+              type="button"
+              onClick={() => handleSelectManualTheme(getNextTheme(theme))}
+              aria-label={theme === 'dark' ? strings.theme.switchToLight : strings.theme.switchToDark}
+              aria-pressed={theme === 'light'}
+              data-testid="theme-mode-toggle"
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-ink shadow-brutal-sm transition-colors hover:border-theme-accent whitespace-nowrap shrink-0"
+            >
+              {theme === 'dark' ? (
+                <Sun className="h-3.5 w-3.5 text-warning shrink-0" aria-hidden="true" />
+              ) : (
+                <Moon className="h-3.5 w-3.5 text-accent shrink-0" aria-hidden="true" />
+              )}
+              <span className="hidden sm:inline">
+                {theme === 'dark' ? strings.theme.lightLabel : strings.theme.darkLabel}
+              </span>
+            </button>
+
+            {/* Language Edition Toggle (EN / O'Z) */}
+            <div
+              role="group"
+              aria-label="Language Edition Switcher"
+              className="flex items-center rounded-lg border-2 border-theme-border bg-theme-base p-0.5 text-xs shadow-brutal-sm shrink-0"
+            >
+              <Globe className="ml-2 mr-1 hidden h-3.5 w-3.5 text-muted sm:block" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={() => handleLocaleSwitch('en')}
+                className={`min-h-[30px] rounded-md px-2 sm:px-2.5 py-1 font-semibold whitespace-nowrap transition-colors ${
+                  locale === 'en' ? 'bg-theme-panel text-teal' : 'text-muted hover:text-ink'
+                }`}
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLocaleSwitch('uz')}
+                className={`min-h-[30px] rounded-md px-2 sm:px-2.5 py-1 font-semibold whitespace-nowrap transition-colors ${
+                  locale === 'uz' ? 'bg-theme-panel text-teal' : 'text-muted hover:text-ink'
+                }`}
+              >
+                O‘Z
+              </button>
+            </div>
+
+            {/* Primary Account Action */}
             {user ? (
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('profile')}
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-[#222B3D] bg-[#101522] px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#F3F6FF] hover:border-[#9274FF]"
+                  onClick={() => navigateToTab('profile')}
+                  data-testid="header-user-profile-btn"
+                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-ink shadow-brutal-sm hover:border-theme-accent"
                 >
-                  <User className="h-3.5 w-3.5 text-[#9274FF] shrink-0" aria-hidden="true" />
+                  <User className="h-3.5 w-3.5 text-accent shrink-0" aria-hidden="true" />
                   <span className="max-w-[78px] sm:max-w-[120px] truncate">{user.displayName}</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleLogout}
                   aria-label={strings.signOut}
-                  className="hidden sm:inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg border border-[#222B3D] text-[#8994AA] hover:text-[#F3F6FF]"
+                  data-testid="header-logout-btn"
+                  className="hidden sm:inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg border-2 border-theme-border bg-theme-base text-muted shadow-brutal-sm hover:text-ink"
                 >
                   <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
@@ -481,8 +1563,9 @@ export default function App() {
             ) : (
               <button
                 type="button"
-                onClick={() => setAuthOpen(true)}
-                className="min-h-[38px] rounded-lg bg-[#9274FF] px-3.5 sm:px-4 py-1.5 text-xs font-semibold text-[#080B14] hover:bg-[#a68dff] whitespace-nowrap"
+                onClick={() => navigateToLogin()}
+                data-testid="header-signin-btn"
+                className="min-h-[38px] rounded-lg border-2 border-theme-border bg-theme-accent px-3.5 sm:px-4 py-1.5 text-xs font-bold text-theme-accent-ink shadow-brutal-sm transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:bg-accent-hover whitespace-nowrap"
               >
                 {strings.signIn}
               </button>
@@ -492,20 +1575,20 @@ export default function App() {
 
         {/* Mobile Drawer Menu */}
         {mobileMenuOpen && (
-          <div className="no-print border-b border-[#222B3D] bg-[#0B0F19] p-4 md:hidden">
+          <div className="no-print border-b-2 border-slate-500 bg-white/55 p-4 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/65 md:hidden">
             <nav className="grid grid-cols-2 gap-2">
               {navItems.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => {
-                    setActiveTab(item.id);
+                    navigateToTab(item.id);
                     setMobileMenuOpen(false);
                   }}
-                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold ${
                     activeTab === item.id
-                      ? 'border-[#5DE1D2]/50 bg-[#141B2B] text-[#5DE1D2]'
-                      : 'border-[#222B3D] bg-[#101522] text-[#8994AA]'
+                      ? 'border-theme-accent bg-theme-base text-theme-accent shadow-brutal-sm'
+                      : 'border-theme-border bg-theme-base text-muted'
                   }`}
                 >
                   {item.icon}
@@ -518,9 +1601,9 @@ export default function App() {
                   setCompanionOpen(true);
                   setMobileMenuOpen(false);
                 }}
-                className="flex min-h-[44px] items-center gap-2 rounded-lg border border-[#222B3D] bg-[#101522] px-3 py-2 text-xs font-medium text-[#F3F6FF]"
+                className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2 text-xs font-semibold text-ink"
               >
-                <MessageSquare className="h-4 w-4 text-[#5DE1D2]" aria-hidden="true" />
+                <MessageSquare className="h-4 w-4 text-teal" aria-hidden="true" />
                 <span>{locale === 'uz' ? 'Yordamchi' : 'Companion'}</span>
               </button>
               {user && (
@@ -530,7 +1613,7 @@ export default function App() {
                     handleLogout();
                     setMobileMenuOpen(false);
                   }}
-                  className="flex min-h-[44px] items-center gap-2 rounded-lg border border-[#222B3D] bg-[#101522] px-3 py-2 text-xs font-medium text-[#8994AA]"
+                  className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2 text-xs font-semibold text-muted"
                 >
                   <LogOut className="h-4 w-4" aria-hidden="true" />
                   <span>{strings.signOut}</span>
@@ -544,98 +1627,175 @@ export default function App() {
         )}
 
         {/* Main Viewport */}
-        <main className="mx-auto w-full max-w-6xl flex-1 p-4 sm:p-6 lg:p-8">
+        <main className="mx-auto w-full max-w-6xl flex-1 overflow-x-clip p-4 sm:p-6 lg:p-8">
+          {/* NEOBRUTALIST /login AND /register ROUTES */}
+          {(activeTab === 'login' || activeTab === 'register') && (
+            <AuthPageView
+              mode={activeTab}
+              locale={locale}
+              sandboxEnabled={health.sandboxEnabled}
+              intendedDestination={intendedDestination}
+              onSwitchMode={(nextMode) => {
+                setActiveTab(nextMode);
+                syncBrowserPath(nextMode, { redirectTo: intendedDestination?.path ?? '/overview' });
+              }}
+              onBackToOverview={() => navigateToTab('overview')}
+              onAuthenticated={handleUserAuthenticated}
+            />
+          )}
+
           {/* OVERVIEW & DASHBOARD */}
           {activeTab === 'overview' && (
             <div className="space-y-8">
-              <section className="rounded-2xl border border-[#222B3D] bg-[#101522] p-6 sm:p-8">
-                <div className="max-w-3xl">
-                  <div className="text-xs font-medium text-[#5DE1D2]">
-                    {strings.subjects.Economics} · {strings.subjects.Mathematics} · {strings.subjects.Business}
-                  </div>
-                  <h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-[#F3F6FF] sm:text-4xl [text-wrap:balance]">
-                    {strings.heroTitle}
-                  </h1>
-                  <p className="mt-3 text-sm leading-relaxed text-[#8994AA] sm:text-base">
-                    {strings.heroSubtitle}
-                  </p>
-                  <div className="mt-6 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('catalog')}
-                      className="min-h-[44px] rounded-lg bg-[#9274FF] px-5 py-2.5 text-sm font-semibold text-[#080B14] hover:bg-[#a68dff]"
-                    >
-                      {strings.browseCatalog}
-                    </button>
-                    {!user && (
-                      <button
-                        type="button"
-                        onClick={() => setAuthOpen(true)}
-                        className="min-h-[44px] rounded-lg border border-[#222B3D] bg-[#141B2B] px-5 py-2.5 text-sm font-medium text-[#F3F6FF] hover:border-[#5DE1D2]/50"
-                      >
-                        {strings.signIn}
-                      </button>
-                    )}
-                  </div>
-                </div>
+              <KineticHeroSection
+                locale={locale}
+                isAuthenticated={Boolean(user)}
+                sharingProgress={sharingProgress}
+                shareFeedback={shareFeedback}
+                activeCoursesCount={enrollments.length}
+                currentStreak={streak.currentStreak}
+                totalXp={totalXp}
+                certificatesCount={certificates.length}
+                streakPopActive={celebrationEvent?.kind === 'streak_reached'}
+                onExploreCatalog={() => navigateToTab('catalog')}
+                onSignIn={() => navigateToLogin()}
+                onShareProgress={() => void handleShareProgress()}
+              />
 
-                {/* Learner Stats Strip (if signed in) */}
-                {user && (
-                  <div className="mt-8 grid grid-cols-2 gap-3 border-t border-[#222B3D] pt-6 sm:grid-cols-4">
-                    <div className="rounded-lg bg-[#0B0F19]/75 p-3.5">
-                      <div className="text-xs text-[#8994AA]">Active Courses</div>
-                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[#F3F6FF]">
-                        {enrollments.length}
-                      </div>
-                    </div>
-                    <div className="rounded-lg bg-[#0B0F19]/75 p-3.5">
-                      <div className="text-xs text-[#8994AA]">Study Streak</div>
-                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[#5DE1D2]">
-                        {streak.currentStreak}d
-                      </div>
-                    </div>
-                    <div className="rounded-lg bg-[#0B0F19]/75 p-3.5">
-                      <div className="text-xs text-[#8994AA]">Non-Cash XP</div>
-                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[#FFC96B]">
-                        {totalXp} XP
-                      </div>
-                    </div>
-                    <div className="rounded-lg bg-[#0B0F19]/75 p-3.5">
-                      <div className="text-xs text-[#8994AA]">Certificates</div>
-                      <div className="mt-1 font-mono text-xl font-bold tabular-nums text-[#6FE0A1]">
-                        {certificates.length}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </section>
+              {/* Daily Study Goal Ring & 7-Day XP Progress Chart */}
+              <div className="relative z-10 grid gap-6 lg:grid-cols-12">
+                <div className="lg:col-span-5">
+                  <DailyStudyGoalCard
+                    locale={locale}
+                    isAuthenticated={Boolean(user)}
+                    completedMinutesToday={studyMinutesToday}
+                    targetMinutes={dailyStudyGoalMinutes}
+                    onUpdateTarget={handleUpdateDailyGoal}
+                    onRequireAuth={() => navigateToLogin()}
+                  />
+                </div>
+                <div className="lg:col-span-7">
+                  <StudyProgressChart
+                    locale={locale}
+                    isAuthenticated={Boolean(user)}
+                    xpLedger={xpLedger}
+                    timeZone={user?.timezone || streak.timezone || 'Asia/Tashkent'}
+                    onRequireAuth={() => navigateToLogin()}
+                  />
+                </div>
+              </div>
+
+              {/* Weakness Detection Card (Radar Chart + Blocky List View Toggle) */}
+              <WeaknessDetectionCard
+                locale={locale}
+                weaknessAnalysis={weaknessAnalysis}
+                courses={courses}
+                enrollments={enrollments}
+                expandedWeaknessIds={expandedWeaknessIds}
+                savedWeaknessNoteIds={savedWeaknessNoteIds}
+                onToggleExpand={(id) =>
+                  setExpandedWeaknessIds((prev) =>
+                    toggleExpandedRecommendationId(prev, id)
+                  )
+                }
+                onSaveToNotes={handleSaveWeaknessToNotes}
+                onReviewLesson={(courseId, lessonIndex) =>
+                  void openCourse(courseId, locale, { lessonIndex })
+                }
+              />
+
+              {/* Horizontal Pinned GSAP ScrollTrigger Course Showcase */}
+              <CourseShowcase
+                locale={locale}
+                courses={courses}
+                enrollments={enrollments}
+                bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
+                bookmarkBusyId={bookmarkBusyId}
+                onOpenCourse={(courseId, openLocale, lessonIndex) =>
+                  void openCourse(
+                    courseId,
+                    openLocale,
+                    typeof lessonIndex === 'number' ? { lessonIndex } : undefined
+                  )
+                }
+                onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
+              />
+
+              {/* Neobrutalist Dotted Section Divider: Economics */}
+              <NeobrutalistSectionDivider subject="Economics" locale={locale} indexLabel="01" />
+
+              {/* Economics Subject Section ("Data & Flow" WebGL Liquid Shader + Neobrutalist Overlay) */}
+              <EconomicsSection
+                locale={locale}
+                courses={courses}
+                enrollments={enrollments}
+                bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
+                bookmarkBusyId={bookmarkBusyId}
+                swStatus={swStatus}
+                cachedEditionKeys={cachedEditionKeys}
+                showFixedShaderBackground={false}
+                onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
+              />
+
+              {/* Neobrutalist Dotted Section Divider: Mathematics */}
+              <NeobrutalistSectionDivider subject="Mathematics" locale={locale} indexLabel="02" />
+
+              {/* Mathematics Subject Section ("Precision & The Human Touch" Chalkboard SVG + GSAP DrawSVG) */}
+              <MathematicsSection
+                locale={locale}
+                courses={courses}
+                enrollments={enrollments}
+                bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
+                bookmarkBusyId={bookmarkBusyId}
+                swStatus={swStatus}
+                cachedEditionKeys={cachedEditionKeys}
+                onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
+              />
+
+              {/* Neobrutalist Dotted Section Divider: Business */}
+              <NeobrutalistSectionDivider subject="Business" locale={locale} indexLabel="03" />
+
+              {/* Business Subject Section ("Structure & High-Impact" Asymmetrical Bento + GSAP Pin & Stack) */}
+              <BusinessSection
+                locale={locale}
+                courses={courses}
+                enrollments={enrollments}
+                bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
+                bookmarkBusyId={bookmarkBusyId}
+                swStatus={swStatus}
+                cachedEditionKeys={cachedEditionKeys}
+                onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
+              />
 
               {/* Featured Courses Preview */}
-              <section className="space-y-4">
+              <section className="relative z-10 isolate mt-8 space-y-4">
                 <div className="flex items-center justify-between gap-4">
-                  <h2 className="text-lg font-semibold text-[#F3F6FF]">
+                  <h2 className="text-lg font-semibold text-ink">
                     {locale === 'uz' ? 'Nashr etilgan kurslar' : 'Published Curriculum'}
                   </h2>
                   <button
                     type="button"
                     onClick={() => setActiveTab('catalog')}
-                    className="text-xs font-medium text-[#5DE1D2] hover:underline"
+                    className="text-xs font-medium text-teal hover:underline"
                   >
                     {locale === 'uz' ? 'Barchasini filtrlash' : 'Filter all courses'}
                   </button>
                 </div>
 
                 {catalogLoading ? (
-                  <div className="rounded-xl border border-[#222B3D] bg-[#101522] p-6 text-sm text-[#8994AA]">
-                    Loading published courses...
+                  <div className="rounded-xl border-2 border-slate-500 bg-white/40 p-6 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                    {strings.overview.loadingCourses}
                   </div>
                 ) : catalogError ? (
-                  <div className="rounded-xl border border-rose-500/40 bg-[#101522] p-6 text-sm text-rose-200">
+                  <div className="rounded-xl border-2 border-danger/60 bg-danger-surface/40 p-6 text-sm text-danger-text shadow-[8px_8px_0px_#000000] backdrop-blur-2xl">
                     {catalogError}
                   </div>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-3">
-                    {courses.map((course) => {
+                    {courses.map((course, idx) => {
                       const ed = course.editions[locale];
                       const enr = enrollments.find((e) => e.courseId === course.id);
                       const pct =
@@ -648,31 +1808,34 @@ export default function App() {
                           : 0;
 
                       return (
-                        <div
+                        <MagneticCourseCard
                           key={course.id}
-                          className="flex flex-col justify-between rounded-xl border border-[#222B3D] bg-[#101522] p-5"
+                          testId={`overview-course-card-${course.id}`}
+                          subject={course.subject}
+                          artifactIndex={idx}
+                          className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
                         >
                           <div>
-                            <div className="text-xs text-[#8994AA]">
-                              {strings.subjects[course.subject]} · {strings.levels[course.level]} · {course.estimatedMinutes} min
+                            <div className="text-xs font-medium text-muted">
+                              {strings.subjects[course.subject]} · {strings.levels[course.level]} · {course.estimatedMinutes} {strings.overview.minUnit}
                             </div>
-                            <h3 className="mt-2 text-base font-semibold text-[#F3F6FF]">
+                            <h3 className="mt-2 text-base font-bold text-ink">
                               {ed ? ed.title : course.editions.en?.title || course.slug}
                             </h3>
-                            <p className="mt-1.5 text-xs leading-relaxed text-[#8994AA]">
+                            <p className="mt-1.5 text-xs leading-relaxed text-muted">
                               {ed ? ed.subtitle : strings.editionMissingNote}
                             </p>
                           </div>
 
-                          <div className="mt-5 space-y-3 border-t border-[#222B3D] pt-3">
+                          <div className="mt-5 space-y-3 border-t-2 border-theme-border pt-3">
                             {enr && (
                               <div>
                                 <div className="flex justify-between text-[11px]">
-                                  <span className="text-[#5DE1D2]">{strings.journey[enr.journeyStatus]}</span>
-                                  <span className="font-mono tabular-nums text-[#8994AA]">{pct}%</span>
+                                  <span className="text-teal">{strings.journey[enr.journeyStatus]}</span>
+                                  <span className="font-mono tabular-nums text-muted">{pct}%</span>
                                 </div>
-                                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#080B14]">
-                                  <div className="h-full bg-[#9274FF]" style={{ width: `${pct}%` }} />
+                                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-canvas border border-theme-border">
+                                  <div className="h-full bg-theme-accent" style={{ width: `${pct}%` }} />
                                 </div>
                               </div>
                             )}
@@ -681,7 +1844,7 @@ export default function App() {
                               type="button"
                               disabled={!ed}
                               onClick={() => openCourse(course.id, locale)}
-                              className="min-h-[40px] w-full rounded-lg bg-[#141B2B] border border-[#222B3D] px-3 py-2 text-xs font-semibold text-[#F3F6FF] hover:border-[#9274FF] disabled:opacity-50"
+                              className="min-h-[40px] w-full rounded-lg bg-theme-base border-2 border-theme-border px-3 py-2 text-xs font-bold text-ink shadow-brutal-sm hover:border-theme-accent disabled:opacity-50"
                             >
                               {ed
                                 ? enr
@@ -694,7 +1857,7 @@ export default function App() {
                                 : 'Edition Unavailable'}
                             </button>
                           </div>
-                        </div>
+                        </MagneticCourseCard>
                       );
                     })}
                   </div>
@@ -706,104 +1869,429 @@ export default function App() {
           {/* COURSE CATALOG */}
           {activeTab === 'catalog' && (
             <div className="space-y-6">
-              <header className="rounded-xl border border-[#222B3D] bg-[#101522] p-5 sm:p-6">
-                <h1 className="text-xl font-semibold text-[#F3F6FF] sm:text-2xl">
-                  {locale === 'uz' ? 'Kurslar katalogi' : 'Course Catalog'}
-                </h1>
-                <p className="mt-1 text-xs text-[#8994AA]">
-                  Subjects: Economics, Mathematics, Business · Difficulty Levels: Beginner, Intermediate, Advanced. Progressing reflects ongoing learner status, not a fourth difficulty level.
+              <header className="rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h1 className="text-xl font-semibold text-ink sm:text-2xl">
+                    {strings.catalog.title}
+                  </h1>
+                  <div className="flex flex-wrap items-center gap-3 text-xs">
+                    <span
+                      className={`inline-flex items-center gap-1.5 font-medium ${
+                        swStatus === 'active' ? 'text-teal' : 'text-muted'
+                      }`}
+                    >
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          swStatus === 'active'
+                            ? 'bg-success'
+                            : swStatus === 'registering'
+                            ? 'bg-warning animate-pulse'
+                            : 'bg-muted'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span>
+                        {swStatus === 'active'
+                          ? strings.catalog.swActive
+                          : swStatus === 'registering'
+                          ? strings.catalog.swPending
+                          : strings.catalog.swUnavailable}
+                      </span>
+                    </span>
+                    {!catalogLoading && (
+                      <span className="font-mono tabular-nums text-muted" aria-live="polite">
+                        {filteredCourses.length} / {courses.length}{' '}
+                        {locale === 'uz' ? 'kurs' : filteredCourses.length === 1 ? 'course' : 'courses'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  {strings.catalog.subtitleTaxonomy}
                 </p>
 
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-wrap gap-1 rounded-lg border border-[#222B3D] bg-[#0B0F19] p-1 text-xs">
-                    {(['ALL', 'Economics', 'Mathematics', 'Business'] as const).map((sub) => (
+                <div className="mt-4 space-y-3">
+                  <div className="relative">
+                    <label htmlFor="catalog-search-input" className="sr-only">
+                      {strings.catalog.searchLabel}
+                    </label>
+                    <Search
+                      className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+                      aria-hidden="true"
+                    />
+                    <input
+                      id="catalog-search-input"
+                      data-testid="catalog-search-input"
+                      type="text"
+                      value={searchQuery}
+                      onFocus={() => setSearchDropdownOpen(true)}
+                      onBlur={() => {
+                        if (searchQuery.trim().length >= 2) {
+                          recordRecentSearch(searchQuery);
+                        }
+                        window.setTimeout(() => setSearchDropdownOpen(false), 180);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && searchQuery.trim().length >= 2) {
+                          recordRecentSearch(searchQuery);
+                          setSearchDropdownOpen(false);
+                        } else if (e.key === 'Escape') {
+                          setSearchDropdownOpen(false);
+                        }
+                      }}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setSearchDropdownOpen(true);
+                      }}
+                      placeholder={
+                        locale === 'uz'
+                          ? 'Kurs nomi, mavzu yoki dars sarlavhasi bo‘yicha qidirish...'
+                          : 'Search by course title, topic label, or specific lesson title...'
+                      }
+                      aria-label={strings.catalog.searchLabel}
+                      className="min-h-[42px] w-full rounded-lg border-2 border-theme-border bg-theme-base pl-10 pr-10 py-2 text-sm text-ink placeholder:text-muted transition-colors focus:border-theme-accent focus:outline-none"
+                    />
+                    {searchQuery.length > 0 && (
                       <button
-                        key={sub}
                         type="button"
-                        onClick={() => setSubjectFilter(sub)}
-                        className={`min-h-[34px] rounded-md px-3 py-1 font-medium whitespace-nowrap ${
-                          subjectFilter === sub ? 'bg-[#141B2B] text-[#5DE1D2]' : 'text-[#8994AA] hover:text-[#F3F6FF]'
-                        }`}
+                        onClick={() => {
+                          if (searchQuery.trim().length >= 2) {
+                            recordRecentSearch(searchQuery);
+                          }
+                          setSearchQuery('');
+                        }}
+                        aria-label={strings.catalog.clearSearch}
+                        className="absolute right-1.5 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted transition-colors hover:bg-elevated hover:text-ink"
                       >
-                        {sub === 'ALL' ? strings.allSubjects : strings.subjects[sub]}
+                        <X className="h-4 w-4" aria-hidden="true" />
                       </button>
-                    ))}
+                    )}
+
+                    {/* Recent Searches Dropdown (stores last 5 unique queries in localStorage) */}
+                    {searchDropdownOpen && recentSearches.length > 0 && (
+                      <div
+                        data-testid="catalog-recent-searches-dropdown"
+                        className="absolute left-0 right-0 top-full z-30 mt-1.5 rounded-xl border-2 border-slate-500 bg-white/75 p-3 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/80"
+                      >
+                        <div className="flex items-center justify-between gap-2 border-b border-theme-border pb-2 text-[11px] font-semibold text-muted">
+                          <span>
+                            {locale === 'uz'
+                              ? 'So‘nggi qidiruvlar (oxirgi 5 ta)'
+                              : 'Recent Searches (Last 5)'}
+                          </span>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setRecentSearches(saveRecentSearches([]));
+                            }}
+                            data-testid="clear-recent-searches-btn"
+                            className="text-theme-accent hover:underline"
+                          >
+                            {locale === 'uz' ? 'Tozalash' : 'Clear'}
+                          </button>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {recentSearches.map((q, idx) => (
+                            <button
+                              key={q}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setSearchQuery(q);
+                                recordRecentSearch(q);
+                                setSearchDropdownOpen(false);
+                              }}
+                              data-testid={`recent-search-item-${idx}`}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-theme-border bg-theme-base px-2.5 py-1 text-xs font-medium text-ink hover:border-theme-accent hover:text-theme-accent"
+                            >
+                              <Search className="h-3 w-3 text-muted" aria-hidden="true" />
+                              <span>{q}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex flex-wrap gap-1 rounded-lg border border-[#222B3D] bg-[#0B0F19] p-1 text-xs">
-                    {(['ALL', 'Beginner', 'Intermediate', 'Advanced'] as const).map((lvl) => (
-                      <button
-                        key={lvl}
-                        type="button"
-                        onClick={() => setLevelFilter(lvl)}
-                        className={`min-h-[34px] rounded-md px-3 py-1 font-medium whitespace-nowrap ${
-                          levelFilter === lvl ? 'bg-[#141B2B] text-[#9274FF]' : 'text-[#8994AA] hover:text-[#F3F6FF]'
-                        }`}
-                      >
-                        {lvl === 'ALL' ? strings.allLevels : strings.levels[lvl]}
-                      </button>
-                    ))}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap gap-1 rounded-lg border border-line bg-chrome p-1 text-xs">
+                      {(['ALL', 'Economics', 'Mathematics', 'Business'] as const).map((sub) => (
+                        <button
+                          key={sub}
+                          type="button"
+                          onClick={() => setSubjectFilter(sub)}
+                          className={`min-h-[34px] rounded-md px-3 py-1 font-medium whitespace-nowrap ${
+                            subjectFilter === sub ? 'bg-elevated text-teal' : 'text-muted hover:text-ink'
+                          }`}
+                        >
+                          {sub === 'ALL' ? strings.allSubjects : strings.subjects[sub]}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap gap-1 rounded-lg border border-line bg-chrome p-1 text-xs">
+                      {(['ALL', 'Beginner', 'Intermediate', 'Advanced'] as const).map((lvl) => (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() => setLevelFilter(lvl)}
+                          className={`min-h-[34px] rounded-md px-3 py-1 font-medium whitespace-nowrap ${
+                            levelFilter === lvl ? 'bg-elevated text-accent' : 'text-muted hover:text-ink'
+                          }`}
+                        >
+                          {lvl === 'ALL' ? strings.allLevels : strings.levels[lvl]}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </header>
 
+              {(subjectFilter === 'ALL' || subjectFilter === 'Economics') && (
+                <>
+                  <NeobrutalistSectionDivider subject="Economics" locale={locale} indexLabel="01" />
+                  <EconomicsSection
+                    locale={locale}
+                    courses={filteredCourses}
+                    enrollments={enrollments}
+                    bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
+                    bookmarkBusyId={bookmarkBusyId}
+                    swStatus={swStatus}
+                    cachedEditionKeys={cachedEditionKeys}
+                    showFixedShaderBackground={false}
+                    onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                    onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
+                  />
+                </>
+              )}
+
+              {(subjectFilter === 'ALL' || subjectFilter === 'Mathematics') && (
+                <>
+                  <NeobrutalistSectionDivider subject="Mathematics" locale={locale} indexLabel="02" />
+                  <MathematicsSection
+                    locale={locale}
+                    courses={filteredCourses}
+                    enrollments={enrollments}
+                    bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
+                    bookmarkBusyId={bookmarkBusyId}
+                    swStatus={swStatus}
+                    cachedEditionKeys={cachedEditionKeys}
+                    onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                    onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
+                  />
+                </>
+              )}
+
+              {(subjectFilter === 'ALL' || subjectFilter === 'Business') && (
+                <>
+                  <NeobrutalistSectionDivider subject="Business" locale={locale} indexLabel="03" />
+                  <BusinessSection
+                    locale={locale}
+                    courses={filteredCourses}
+                    enrollments={enrollments}
+                    bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
+                    bookmarkBusyId={bookmarkBusyId}
+                    swStatus={swStatus}
+                    cachedEditionKeys={cachedEditionKeys}
+                    onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                    onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
+                  />
+                </>
+              )}
+
               {filteredCourses.length === 0 ? (
-                <div className="rounded-xl border border-[#222B3D] bg-[#101522] p-8 text-center text-sm text-[#8994AA]">
-                  No courses match this subject and difficulty filter.
+                <div className="relative z-10 isolate mt-8 rounded-xl border-2 border-slate-500 bg-white/40 p-8 text-center text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                  <p>{strings.catalog.noMatches}</p>
+                  {hasActiveCatalogFilters && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setSubjectFilter('ALL');
+                        setLevelFilter('ALL');
+                      }}
+                      className="mt-4 min-h-[38px] rounded-lg border-2 border-theme-border bg-white/60 dark:bg-[#080B14]/60 px-4 py-1.5 text-xs font-semibold text-ink shadow-brutal-sm transition-colors hover:border-theme-accent"
+                    >
+                      {strings.catalog.resetFilters}
+                    </button>
+                  )}
                 </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {filteredCourses.map((course) => {
+                <div className="relative z-10 isolate mt-8 grid gap-4 md:grid-cols-2">
+                  {filteredCourses.map((course, idx) => {
                     const ed = course.editions[locale];
                     const hasEn = Boolean(course.editions.en);
                     const hasUz = Boolean(course.editions.uz);
                     const enr = enrollments.find((e) => e.courseId === course.id);
+                    const courseTitle = ed ? ed.title : course.editions.en?.title || course.slug;
+                    const bookmarked = user
+                      ? isCourseBookmarked(user.bookmarkedCourseIds ?? [], course.id)
+                      : false;
+                    const offlineStatus = resolveCourseOfflineStatus({
+                      swStatus,
+                      cachedEditionKeys,
+                      courseId: course.id,
+                      locale,
+                      hasEditionInLocale: Boolean(ed),
+                    });
+                    const topicLabels = getCourseTopicLabels(course, locale);
+                    const matchedLessons = getMatchingLessonTitles(course, searchQuery, locale);
 
                     return (
-                      <article
+                      <MagneticCourseCard
                         key={course.id}
-                        className="flex flex-col justify-between rounded-xl border border-[#222B3D] bg-[#101522] p-5"
+                        testId={`catalog-course-card-${course.id}`}
+                        subject={course.subject}
+                        artifactIndex={idx}
+                        className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
                       >
                         <div>
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#8994AA]">
-                            <span>
-                              {strings.subjects[course.subject]} · {strings.levels[course.level]}
-                            </span>
-                            <span>
-                              Editions: {hasEn ? 'EN' : ''}{hasEn && hasUz ? ' / ' : ''}{hasUz ? 'O‘Z' : ''}
-                            </span>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                                <span>
+                                  {strings.subjects[course.subject]} · {strings.levels[course.level]}
+                                </span>
+                                <span aria-hidden="true">·</span>
+                                <span>
+                                  {strings.catalog.editionsLabel} {hasEn ? 'EN' : ''}{hasEn && hasUz ? ' / ' : ''}{hasUz ? 'O‘Z' : ''}
+                                </span>
+                              </div>
+
+                              {/* Small Color-Coded Topic Labels */}
+                              {topicLabels.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {topicLabels.map((lbl) => (
+                                    <span
+                                      key={lbl.id}
+                                      data-testid="course-topic-label"
+                                      className={`inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[10px] font-bold tracking-wide ${
+                                        lbl.colorVariant === 'cyan'
+                                          ? 'border-theme-cyan/50 bg-theme-cyan/10 text-theme-cyan'
+                                          : lbl.colorVariant === 'emerald'
+                                          ? 'border-theme-emerald/50 bg-theme-emerald/10 text-theme-emerald'
+                                          : lbl.colorVariant === 'violet'
+                                          ? 'border-theme-accent/50 bg-theme-accent/15 text-theme-accent'
+                                          : 'border-amber-400/50 bg-amber-400/10 text-amber-300'
+                                      }`}
+                                    >
+                                      {lbl.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              <h2 className="mt-2 text-lg font-semibold text-ink">
+                                {courseTitle}
+                              </h2>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={bookmarkBusyId === course.id}
+                              onClick={() => void handleToggleBookmark(course.id)}
+                              aria-label={`${bookmarked ? strings.bookmarks.removeLabel : strings.bookmarks.addLabel}: ${courseTitle}`}
+                              aria-pressed={bookmarked}
+                              title={bookmarked ? strings.bookmarks.removeLabel : strings.bookmarks.addLabel}
+                              data-testid={`catalog-bookmark-btn-${course.id}`}
+                              className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
+                                bookmarked
+                                  ? 'border-accent/60 bg-accent/15 text-accent hover:bg-accent/25'
+                                  : 'border-line bg-chrome text-muted hover:border-line-strong hover:text-ink'
+                              }`}
+                            >
+                              <Bookmark
+                                className={`h-4 w-4 ${bookmarked ? 'fill-current' : ''}`}
+                                aria-hidden="true"
+                              />
+                            </button>
                           </div>
-                          <h2 className="mt-2 text-lg font-semibold text-[#F3F6FF]">
-                            {ed ? ed.title : course.editions.en?.title || course.slug}
-                          </h2>
-                          <p className="mt-1.5 text-sm leading-relaxed text-[#8994AA]">
+                          <p className="mt-1.5 text-sm leading-relaxed text-muted">
                             {ed ? ed.description : strings.editionMissingNote}
                           </p>
-                          {ed && (
-                            <div className="mt-3 text-xs text-[#8994AA]">
-                              {ed.lessonCount} lessons · {ed.estimatedMinutes} min · Passing {ed.passingScorePercent}% · Dedicated course certificate
+
+                          {/* Matched Lesson Content Titles when searching */}
+                          {matchedLessons.length > 0 && (
+                            <div
+                              data-testid="course-matched-lesson-badge"
+                              className="mt-2.5 rounded-lg border border-theme-cyan/40 bg-theme-base px-3 py-2 text-xs"
+                            >
+                              <span className="font-semibold text-theme-cyan">
+                                {locale === 'uz' ? 'Mos kelgan dars: ' : 'Matching Lesson: '}
+                              </span>
+                              <span className="text-ink">{matchedLessons.join(' · ')}</span>
                             </div>
                           )}
+
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                            {ed ? (
+                              <span className="text-xs text-muted">
+                                {formatTemplate(strings.catalog.cardMetaSummary, {
+                                  lessons: ed.lessonCount,
+                                  minutes: ed.estimatedMinutes,
+                                  pass: ed.passingScorePercent,
+                                })}
+                              </span>
+                            ) : (
+                              <span />
+                            )}
+                            <span
+                              data-offline-status={offlineStatus}
+                              title={
+                                offlineStatus === 'cached_full'
+                                  ? strings.catalog.offlineCachedHint
+                                  : offlineStatus === 'not_cached'
+                                  ? strings.catalog.offlineNotCachedHint
+                                  : undefined
+                              }
+                              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${
+                                offlineStatus === 'cached_full'
+                                  ? 'border-success/40 bg-success/10 text-success'
+                                  : 'border-line bg-chrome text-muted'
+                              }`}
+                            >
+                              {offlineStatus === 'cached_full' ? (
+                                <>
+                                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                  <span>{strings.catalog.offlineCached}</span>
+                                </>
+                              ) : offlineStatus === 'sw_pending' ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                                  <span>{strings.catalog.offlineChecking}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CloudOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                  <span>
+                                    {offlineStatus === 'sw_unavailable'
+                                      ? strings.catalog.offlineUnavailable
+                                      : strings.catalog.offlineNotCached}
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#222B3D] pt-4">
+                        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
                           {enr ? (
-                            <span className="text-xs font-medium text-[#5DE1D2]">
+                            <span className="text-xs font-medium text-teal">
                               {strings.journey[enr.journeyStatus]}
                             </span>
                           ) : (
-                            <span className="text-xs text-[#8994AA]">Public preview available</span>
+                            <span className="text-xs text-muted">{strings.catalog.publicPreviewAvailable}</span>
                           )}
                           <button
                             type="button"
                             disabled={!ed}
                             onClick={() => openCourse(course.id, locale)}
-                            className="min-h-[40px] rounded-lg bg-[#9274FF] px-4 py-2 text-xs font-semibold text-[#080B14] hover:bg-[#a68dff] disabled:opacity-50"
+                            className="min-h-[40px] rounded-lg border-2 border-theme-border bg-theme-accent px-4 py-2 text-xs font-bold text-theme-accent-ink shadow-brutal-sm hover:bg-accent-hover disabled:opacity-50"
                           >
-                            {ed ? 'Open Course Edition' : 'Unavailable in Selected Language'}
+                            {ed ? strings.catalog.openCourseEdition : strings.catalog.unavailableInLocale}
                           </button>
                         </div>
-                      </article>
+                      </MagneticCourseCard>
                     );
                   })}
                 </div>
@@ -813,12 +2301,15 @@ export default function App() {
 
           {/* COURSE DETAIL & LESSON WORKSPACE */}
           {activeTab === 'course' && (
-            <div className="space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            <div data-print-section="course-detail" className="relative space-y-6">
+              {courseDetail?.course.subject === 'Economics' && (
+                <EconomicsLiquidBackground active={true} />
+              )}
+              <div data-print-hide="course-nav" className="no-print relative z-10 flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => setActiveTab('catalog')}
-                  className="text-xs font-medium text-[#5DE1D2] hover:underline"
+                  className="text-xs font-medium text-teal hover:underline"
                 >
                   ← {locale === 'uz' ? 'Kurslar katalogiga qaytish' : 'Back to Course Catalog'}
                 </button>
@@ -831,17 +2322,17 @@ export default function App() {
                         activeEnrollment.journeyStatus !== 'paused'
                       )
                     }
-                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-[#222B3D] bg-[#101522] px-3 py-1.5 text-xs text-[#8994AA] hover:text-[#F3F6FF]"
+                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-muted hover:text-ink"
                   >
                     {activeEnrollment.journeyStatus === 'paused' ? (
                       <>
-                        <PlayCircle className="h-3.5 w-3.5 text-[#5DE1D2]" aria-hidden="true" />
-                        <span>Resume Journey</span>
+                        <PlayCircle className="h-3.5 w-3.5 text-teal" aria-hidden="true" />
+                        <span>{strings.courseDetail.resumeJourney}</span>
                       </>
                     ) : (
                       <>
                         <PauseCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                        <span>Pause Course</span>
+                        <span>{strings.courseDetail.pauseCourse}</span>
                       </>
                     )}
                   </button>
@@ -849,67 +2340,193 @@ export default function App() {
               </div>
 
               {courseLoading ? (
-                <div className="rounded-xl border border-[#222B3D] bg-[#101522] p-8 text-sm text-[#8994AA]">
-                  Loading course edition...
+                <div className="relative z-10 rounded-xl border-2 border-slate-500 bg-white/40 p-8 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                  {strings.courseDetail.loadingEdition}
                 </div>
               ) : courseError || !courseDetail ? (
-                <div className="rounded-xl border border-[#FFC96B]/40 bg-[#101522] p-6 text-sm text-[#FFC96B]">
+                <div className="relative z-10 rounded-xl border-2 border-warning/60 bg-white/40 p-6 text-sm text-warning shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:bg-[#101522]/40">
                   {courseError || strings.editionMissingNote}
                 </div>
               ) : (
-                <>
+                <div className="relative z-10 space-y-6">
                   {/* Course Metadata & Completion Criteria */}
-                  <section className="rounded-xl border border-[#222B3D] bg-[#101522] p-5 sm:p-6">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#8994AA]">
-                      <span>
-                        {strings.subjects[courseDetail.course.subject]} · {strings.levels[courseDetail.course.level]} ·{' '}
-                        {courseDetail.edition.locale === 'uz' ? strings.editionUz : strings.editionEn} (v{courseDetail.edition.version})
-                      </span>
-                      {activeEnrollment && (
-                        <span className="font-semibold text-[#5DE1D2]">
-                          {strings.journey[activeEnrollment.journeyStatus]}
-                        </span>
-                      )}
-                    </div>
-                    <h1 className="mt-2 text-xl font-bold text-[#F3F6FF] sm:text-2xl">
-                      {courseDetail.edition.title}
-                    </h1>
-                    <p className="mt-1.5 text-sm text-[#8994AA]">{courseDetail.edition.description}</p>
+                  <section className="rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                    {(() => {
+                      const detailBookmarked = user
+                        ? isCourseBookmarked(user.bookmarkedCourseIds ?? [], courseDetail.course.id)
+                        : false;
+                      return (
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                              <span>
+                                {strings.subjects[courseDetail.course.subject]} · {strings.levels[courseDetail.course.level]} ·{' '}
+                                {courseDetail.edition.locale === 'uz' ? strings.editionUz : strings.editionEn} (v{courseDetail.edition.version})
+                              </span>
+                              {activeEnrollment && (
+                                <span className="font-semibold text-teal">
+                                  · {strings.journey[activeEnrollment.journeyStatus]}
+                                </span>
+                              )}
+                            </div>
+                            <h1 className="mt-2 text-xl font-bold text-ink sm:text-2xl">
+                              {courseDetail.edition.title}
+                            </h1>
+                          </div>
 
-                    <div className="mt-4 grid gap-4 border-t border-[#222B3D] pt-4 text-xs md:grid-cols-3">
+                          <button
+                            type="button"
+                            disabled={bookmarkBusyId === courseDetail.course.id}
+                            onClick={() => void handleToggleBookmark(courseDetail.course.id)}
+                            aria-label={`${detailBookmarked ? strings.bookmarks.removeLabel : strings.bookmarks.addLabel}: ${courseDetail.edition.title}`}
+                            aria-pressed={detailBookmarked}
+                            data-testid="course-detail-bookmark-btn"
+                            className={`no-print inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                              detailBookmarked
+                                ? 'border-accent/60 bg-accent/15 text-accent hover:bg-accent/25'
+                                : 'border-line bg-chrome text-muted hover:border-line-strong hover:text-ink'
+                            }`}
+                          >
+                            <Bookmark
+                              className={`h-4 w-4 ${detailBookmarked ? 'fill-current' : ''}`}
+                              aria-hidden="true"
+                            />
+                            <span>
+                              {detailBookmarked
+                                ? strings.bookmarks.bookmarkedLabel
+                                : strings.bookmarks.buttonLabel}
+                            </span>
+                          </button>
+                        </div>
+                      );
+                    })()}
+                    <p className="mt-1.5 text-sm text-muted">{courseDetail.edition.description}</p>
+
+                    <div className="mt-4 grid gap-4 border-t border-line pt-4 text-xs md:grid-cols-3">
                       <div>
-                        <div className="font-semibold text-[#F3F6FF]">Learning Outcomes</div>
-                        <ul className="mt-1 space-y-1 text-[#8994AA]">
+                        <div className="font-semibold text-ink">{strings.courseDetail.learningOutcomes}</div>
+                        <ul className="mt-1 space-y-1 text-muted">
                           {courseDetail.edition.outcomes.map((o, i) => (
                             <li key={i}>• {o}</li>
                           ))}
                         </ul>
                       </div>
                       <div>
-                        <div className="font-semibold text-[#F3F6FF]">Prerequisites</div>
-                        <ul className="mt-1 space-y-1 text-[#8994AA]">
+                        <div className="font-semibold text-ink">{strings.courseDetail.prerequisites}</div>
+                        <ul className="mt-1 space-y-1 text-muted">
                           {courseDetail.edition.prerequisites.map((p, i) => (
                             <li key={i}>• {p}</li>
                           ))}
                         </ul>
                       </div>
                       <div>
-                        <div className="font-semibold text-[#F3F6FF]">Certificate Criteria</div>
-                        <p className="mt-1 text-[#8994AA]">{courseDetail.edition.completionRules}</p>
+                        <div className="font-semibold text-ink">{strings.courseDetail.certificateCriteria}</div>
+                        <p className="mt-1 text-muted">{courseDetail.edition.completionRules}</p>
                       </div>
                     </div>
                   </section>
 
+                  {/* Interactive D3 Course Map: Prerequisites, Lessons & Assessment Flow */}
+                  <div className="no-print">
+                    <CourseMap
+                      courseId={courseDetail.course.id}
+                      prerequisites={courseDetail.edition.prerequisites}
+                      lessons={courseDetail.lessons}
+                      assessment={courseDetail.assessment}
+                      completedLessonIds={activeEnrollment?.completedLessonIds ?? []}
+                      passedAssessment={activeEnrollment?.passedAssessment ?? false}
+                      activeLessonIndex={activeLessonIndex}
+                      locale={courseDetail.edition.locale}
+                      onSelectLesson={(idx) => setActiveLessonIndex(idx)}
+                      onSelectAssessment={() => setActiveLessonIndex('assessment')}
+                    />
+                  </div>
+
                   {/* Syllabus + Active Lesson/Assessment Split */}
                   <div className="grid gap-6 lg:grid-cols-12">
-                    <aside className="space-y-2 lg:col-span-4">
-                      <div className="rounded-xl border border-[#222B3D] bg-[#101522] p-4">
-                        <h2 className="text-xs font-semibold text-[#8994AA]">
-                          {locale === 'uz' ? 'Kurs dasturi' : 'Course Syllabus'}
-                        </h2>
+                    <aside data-print-hide="course-syllabus" className="no-print min-w-0 space-y-2 lg:col-span-4">
+                      <div className="rounded-xl border-2 border-slate-500 bg-white/40 p-4 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h2 className="text-xs font-semibold text-muted">
+                            {locale === 'uz' ? 'Kurs dasturi' : 'Course Syllabus'}
+                          </h2>
+                          <button
+                            type="button"
+                            data-testid="syllabus-sync-now-btn"
+                            disabled={syncingSyllabus}
+                            onClick={() => void handleSyncCourseProgress()}
+                            title={
+                              locale === 'uz'
+                                ? 'Mahalliy (localStorage) va serverdagi tugallangan darslarni qo‘lda sinxronlash'
+                                : 'Reconcile completed lesson IDs between localStorage and server'
+                            }
+                            className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-bold text-ink shadow-brutal-sm transition-all hover:border-theme-accent hover:text-theme-accent active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-60"
+                          >
+                            <RefreshCw
+                              className={`h-3 w-3 text-theme-cyan ${syncingSyllabus ? 'animate-spin' : ''}`}
+                              aria-hidden="true"
+                            />
+                            <span>
+                              {syncingSyllabus
+                                ? locale === 'uz'
+                                  ? 'Sinxronlanmoqda...'
+                                  : 'Syncing...'
+                                : locale === 'uz'
+                                ? 'Hozir sinxronlash'
+                                : 'Sync Now'}
+                            </span>
+                          </button>
+                        </div>
+
+                        {(() => {
+                          const pendingLocalCount = reconcileCompletedLessonIds({
+                            localIds: localSyllabusCompletedIds,
+                            serverIds: activeEnrollment?.completedLessonIds ?? [],
+                            validCourseLessonIds: courseDetail.lessons.map((l) => l.id),
+                          }).missingOnServer.length;
+
+                          if (!syllabusSyncNote && pendingLocalCount === 0) return null;
+
+                          return (
+                            <div
+                              role="status"
+                              data-testid="syllabus-sync-status"
+                              className={`mt-2.5 flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-[11px] ${
+                                syllabusSyncNote?.kind === 'error'
+                                  ? 'border-danger/60 bg-danger-surface/40 text-danger-text'
+                                  : syllabusSyncNote?.kind === 'ok'
+                                  ? 'border-theme-emerald/50 bg-theme-base/70 text-theme-emerald'
+                                  : 'border-theme-border bg-theme-base/70 text-muted'
+                              }`}
+                            >
+                              <span className="min-w-0 leading-snug">
+                                {syllabusSyncNote
+                                  ? `${syllabusSyncNote.text}${
+                                      syllabusSyncNote.syncedAt ? ` · ${syllabusSyncNote.syncedAt}` : ''
+                                    }`
+                                  : locale === 'uz'
+                                  ? `${pendingLocalCount} ta mahalliy dars sinxronlashni kutmoqda`
+                                  : `${pendingLocalCount} local completion pending server sync`}
+                              </span>
+                              {!user && (
+                                <button
+                                  type="button"
+                                  onClick={() => setAuthOpen(true)}
+                                  className="shrink-0 font-semibold text-theme-accent underline"
+                                >
+                                  {strings.signIn}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                         <div className="mt-3 space-y-1.5">
                           {courseDetail.lessons.map((les, idx) => {
-                            const done = activeEnrollment?.completedLessonIds.includes(les.id) ?? false;
+                            const serverDone =
+                              activeEnrollment?.completedLessonIds.includes(les.id) ?? false;
+                            const localPending =
+                              !serverDone && localSyllabusCompletedIds.includes(les.id);
                             const isSelected = activeLessonIndex === idx;
                             return (
                               <button
@@ -918,15 +2535,28 @@ export default function App() {
                                 onClick={() => setActiveLessonIndex(idx)}
                                 className={`flex w-full min-h-[44px] items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
                                   isSelected
-                                    ? 'border-[#9274FF] bg-[#141B2B] text-[#F3F6FF]'
-                                    : 'border-[#222B3D] bg-[#0B0F19] text-[#8994AA] hover:text-[#F3F6FF]'
+                                    ? 'border-accent bg-elevated text-ink'
+                                    : 'border-line bg-chrome text-muted hover:text-ink'
                                 }`}
                               >
                                 <span className="flex items-center gap-2 min-w-0">
-                                  <BookOpen className="h-3.5 w-3.5 shrink-0 text-[#5DE1D2]" aria-hidden="true" />
+                                  <BookOpen className="h-3.5 w-3.5 shrink-0 text-teal" aria-hidden="true" />
                                   <span className="truncate">{les.sequenceNum}. {les.title}</span>
                                 </span>
-                                {done && <CheckCircle2 className="h-4 w-4 shrink-0 text-[#6FE0A1]" aria-label="Completed" />}
+                                {serverDone ? (
+                                  <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-label="Completed" />
+                                ) : localPending ? (
+                                  <span
+                                    title={
+                                      locale === 'uz'
+                                        ? 'Mahalliy saqlangan — Sync Now tugmasini bosing'
+                                        : 'Saved locally — click Sync Now to upload'
+                                    }
+                                    className="shrink-0 rounded border border-theme-amber/60 bg-theme-base px-1.5 py-0.5 font-mono text-[10px] font-semibold text-theme-amber"
+                                  >
+                                    {locale === 'uz' ? 'Mahalliy' : 'Local'}
+                                  </span>
+                                ) : null}
                               </button>
                             );
                           })}
@@ -937,18 +2567,18 @@ export default function App() {
                               onClick={() => setActiveLessonIndex('assessment')}
                               className={`flex w-full min-h-[44px] items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
                                 activeLessonIndex === 'assessment'
-                                  ? 'border-[#5DE1D2] bg-[#141B2B] text-[#F3F6FF]'
-                                  : 'border-[#222B3D] bg-[#0B0F19] text-[#8994AA] hover:text-[#F3F6FF]'
+                                  ? 'border-teal bg-elevated text-ink'
+                                  : 'border-line bg-chrome text-muted hover:text-ink'
                               }`}
                             >
                               <span className="flex items-center gap-2 min-w-0">
-                                <ClipboardCheck className="h-3.5 w-3.5 shrink-0 text-[#9274FF]" aria-hidden="true" />
+                                <ClipboardCheck className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />
                                 <span className="truncate">
                                   {locale === 'uz' ? 'Yakuniy baholash' : 'Final Course Assessment'}
                                 </span>
                               </span>
                               {activeEnrollment?.passedAssessment && (
-                                <CheckCircle2 className="h-4 w-4 shrink-0 text-[#6FE0A1]" aria-label="Passed" />
+                                <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-label="Passed" />
                               )}
                             </button>
                           )}
@@ -956,10 +2586,11 @@ export default function App() {
                       </div>
                     </aside>
 
-                    <div className="lg:col-span-8">
+                    <div data-print-content="course-main" className="min-w-0 lg:col-span-8">
                       {typeof activeLessonIndex === 'number' && courseDetail.lessons[activeLessonIndex] && (
                         <LessonPlayer
                           courseId={courseDetail.course.id}
+                          courseTitle={courseDetail.edition.title}
                           lesson={courseDetail.lessons[activeLessonIndex]}
                           locale={courseDetail.edition.locale}
                           isCompleted={
@@ -968,8 +2599,28 @@ export default function App() {
                             ) ?? false
                           }
                           isAuthenticated={Boolean(user)}
+                          profileNotes={user?.lessonNotes}
+                          onSyncNotesToProfile={async (nextNotes) => {
+                            if (!user) return;
+                            const res = await apiFetch('/api/me/profile', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ lessonNotes: nextNotes }),
+                            });
+                            if (res.ok) {
+                              const data = (await res.json()) as { user?: UserSummary };
+                              if (data.user) setUser(data.user);
+                            }
+                          }}
                           onCompleteLesson={handleCompleteLesson}
-                          onRequireAuth={() => setAuthOpen(true)}
+                          onRequireAuth={() =>
+                            navigateToLogin({
+                              tab: 'course',
+                              path: buildPathForTab('course', { courseId: courseDetail.course.id }),
+                              courseId: courseDetail.course.id,
+                              lessonIndex: activeLessonIndex,
+                            })
+                          }
                           onNextLesson={
                             activeLessonIndex + 1 < courseDetail.lessons.length
                               ? () => setActiveLessonIndex(activeLessonIndex + 1)
@@ -983,19 +2634,31 @@ export default function App() {
 
                       {activeLessonIndex === 'assessment' && courseDetail.assessment && (
                         <AssessmentView
+                          courseId={courseDetail.course.id}
                           assessment={courseDetail.assessment}
                           locale={courseDetail.edition.locale}
                           isAuthenticated={Boolean(user)}
-                          onRequireAuth={() => setAuthOpen(true)}
+                          onRequireAuth={() =>
+                            navigateToLogin({
+                              tab: 'course',
+                              path: buildPathForTab('course', { courseId: courseDetail.course.id }),
+                              courseId: courseDetail.course.id,
+                              lessonIndex: 'assessment',
+                            })
+                          }
                           onAttemptCompleted={async () => {
-                            await Promise.all([loadProtectedData(), loadLeaderboard()]);
+                            setWeaknessRefreshTick((t) => t + 1);
+                            await Promise.all([
+                              loadProtectedData({ allowCelebrate: true }),
+                              loadLeaderboard(),
+                            ]);
                           }}
-                          onViewCertificates={() => setActiveTab('certificates')}
+                          onViewCertificates={() => navigateToTab('certificates')}
                         />
                       )}
                     </div>
                   </div>
-                </>
+                </div>
               )}
             </div>
           )}
@@ -1010,7 +2673,12 @@ export default function App() {
               xpLedger={xpLedger}
               streak={streak}
               badges={badges}
-              onRequireAuth={() => setAuthOpen(true)}
+              onRequireAuth={() =>
+                navigateToLogin({
+                  tab: 'achievements',
+                  path: '/achievements',
+                })
+              }
             />
           )}
 
@@ -1021,12 +2689,15 @@ export default function App() {
               user={user}
               cohortName={cohortName}
               entries={leaderboard}
+              quizEntries={quizLeaderboard}
+              weekWindow={weekWindow}
+              courses={courses}
               referralCode={referralCode}
               referralsCount={referralsCount}
               claimedReferralCode={claimedReferralCode}
               onToggleLeaderboardOptIn={async (optIn, pseudonym) => {
                 if (!user) return;
-                const res = await fetch('/api/me/profile', {
+                const res = await apiFetch('/api/me/profile', {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -1037,10 +2708,11 @@ export default function App() {
                 const data = (await res.json()) as { user?: UserSummary; error?: string };
                 if (!res.ok || !data.user) throw new Error(data.error || 'Could not update.');
                 setUser(data.user);
+                persistCachedUserSummary(data.user);
                 await loadLeaderboard();
               }}
               onClaimReferral={async (code) => {
-                const res = await fetch('/api/referrals/claim', {
+                const res = await apiFetch('/api/referrals/claim', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ code }),
@@ -1049,7 +2721,12 @@ export default function App() {
                 if (!res.ok) throw new Error(data.error || 'Could not apply code.');
                 await loadProtectedData();
               }}
-              onRequireAuth={() => setAuthOpen(true)}
+              onRequireAuth={() =>
+                navigateToLogin({
+                  tab: 'community',
+                  path: '/community',
+                })
+              }
             />
           )}
 
@@ -1059,9 +2736,17 @@ export default function App() {
               locale={locale}
               isAuthenticated={Boolean(user)}
               certificates={certificates}
+              completedLessonsCount={
+                new Set(enrollments.flatMap((enr) => enr.completedLessonIds)).size
+              }
               initialVerifyToken={verifyTokenFromUrl}
               onRefreshCertificates={loadProtectedData}
-              onRequireAuth={() => setAuthOpen(true)}
+              onRequireAuth={() =>
+                navigateToLogin({
+                  tab: 'certificates',
+                  path: '/certificates',
+                })
+              }
             />
           )}
 
@@ -1070,24 +2755,75 @@ export default function App() {
             <ProfilePoliciesView
               locale={locale}
               user={user}
+              courses={courses}
+              catalogLoading={catalogLoading}
+              enrollments={enrollments}
+              xpLedger={xpLedger}
+              bookmarkBusyId={bookmarkBusyId}
+              swStatus={swStatus}
+              cachedEditionKeys={cachedEditionKeys}
+              goalNotificationsEnabled={goalNotificationsEnabled}
+              notificationPermission={notificationPermission}
+              theme={theme}
+              themeSyncWithOs={themeSyncWithOs}
+              onToggleThemeSyncWithOs={handleToggleThemeSyncWithOs}
+              onSelectManualTheme={handleSelectManualTheme}
+              onToggleGoalNotifications={handleToggleGoalNotifications}
+              onSendTestNotification={handleSendTestNotification}
+              onClearCourseCache={async (courseId, editionLocale) => {
+                await clearCachedCourseEdition(courseId, editionLocale);
+                await refreshOfflineCache();
+              }}
+              onToggleBookmark={handleToggleBookmark}
+              onOpenBookmarkedCourse={(courseId, openLocale) => {
+                void openCourse(courseId, openLocale);
+              }}
+              onToggleWeeklyDigestEmail={async (enabled) => {
+                if (!user) return;
+                const res = await apiFetch('/api/me/profile', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ weeklyDigestEmailEnabled: enabled }),
+                });
+                if (res.ok) {
+                  const data = (await res.json()) as { user?: UserSummary };
+                  if (data.user) {
+                    setUser(data.user);
+                    persistCachedUserSummary(data.user);
+                  }
+                }
+              }}
               onUpdateProfile={async (patch) => {
-                const res = await fetch('/api/me/profile', {
+                const res = await apiFetch('/api/me/profile', {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(patch),
                 });
                 const data = (await res.json()) as { user: UserSummary };
                 setUser(data.user);
+                persistCachedUserSummary(data.user);
                 setLocale(data.user.preferredLocale);
                 await Promise.all([loadProtectedData(), loadLeaderboard()]);
               }}
               onAccountDeleted={async () => {
+                clearClientSessionState();
                 setUser(null);
                 setEnrollments([]);
                 setCertificates([]);
+                setStudyMinutesToday(0);
+                setDailyStudyGoalMinutes(loadSavedDailyGoalMinutes());
+                setGoalNotificationsEnabled(loadSavedGoalNotificationsEnabled());
+                setCelebrationEvent(null);
+                prevMilestoneSnapshotRef.current = null;
                 setActiveTab('overview');
+                syncBrowserPath('overview', { replace: true });
               }}
-              onRequireAuth={() => setAuthOpen(true)}
+              onRequireAuth={() =>
+                navigateToLogin({
+                  tab: 'profile',
+                  path: '/profile',
+                })
+              }
             />
           )}
 
@@ -1106,7 +2842,7 @@ export default function App() {
       {/* Mobile Fixed Bottom Navigation Bar (4 destinations, 56px height) */}
       <nav
         aria-label="Mobile Bottom Navigation"
-        className="no-print fixed bottom-0 left-0 right-0 z-40 grid h-14 grid-cols-4 border-t border-[#222B3D] bg-[#0B0F19]/95 backdrop-blur-md md:hidden"
+        className="no-print fixed bottom-0 left-0 right-0 z-40 grid h-14 grid-cols-4 border-t-2 border-slate-500 bg-white/50 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/50 md:hidden"
       >
         {(
           [
@@ -1121,9 +2857,9 @@ export default function App() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium ${
-                active ? 'text-[#5DE1D2]' : 'text-[#8994AA]'
+              onClick={() => navigateToTab(tab.id)}
+              className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${
+                active ? 'text-theme-accent' : 'text-muted'
               }`}
             >
               {tab.icon}
@@ -1152,19 +2888,127 @@ export default function App() {
         </div>
       )}
 
+      {/* Subtle Milestone Celebration Confetti & Banner */}
+      <MilestoneCelebration
+        event={celebrationEvent}
+        onDismiss={() => setCelebrationEvent(null)}
+      />
+
       {/* Auth Modal */}
       {authOpen && (
         <AuthModal
           locale={locale}
           sandboxEnabled={health.sandboxEnabled}
-          onClose={() => setAuthOpen(false)}
-          onAuthenticated={async (authedUser) => {
-            setUser(authedUser);
-            setLocale(authedUser.preferredLocale);
-            await Promise.all([loadProtectedData(), loadLeaderboard()]);
+          redirectTo={intendedDestination?.path ?? null}
+          onClose={() => {
+            pendingBookmarkCourseIdRef.current = null;
+            setAuthOpen(false);
           }}
+          onAuthenticated={handleUserAuthenticated}
         />
       )}
+
+      {/* Keyboard Shortcuts Cheat Sheet Modal (Shift + ?) */}
+      {cheatSheetOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={locale === 'uz' ? 'Klaviatura yorliqlari jadvali' : 'Keyboard Shortcuts Cheat Sheet'}
+          data-testid="keyboard-shortcuts-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
+          onClick={() => setCheatSheetOpen(false)}
+        >
+          <div
+            className="w-full max-w-xl rounded-xl border-2 border-slate-500 bg-white/40 p-6 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b-2 border-theme-border pb-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-theme-cyan">
+                  <Keyboard className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Shift + ?</span>
+                </div>
+                <h2 className="mt-2 font-display text-lg font-extrabold text-ink">
+                  {locale === 'uz' ? 'Klaviatura yorliqlari jadvali' : 'Keyboard Shortcuts Cheat Sheet'}
+                </h2>
+                <p className="mt-1 text-xs text-muted">
+                  {locale === 'uz'
+                    ? 'ECONOVA bo‘ylab tezkor harakatlanish uchun tugmalar kombinatsiyasi.'
+                    : 'Navigate rapidly across ECONOVA tabs and modal tools using single-key shortcuts.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCheatSheetOpen(false)}
+                data-testid="close-shortcuts-modal-btn"
+                aria-label={locale === 'uz' ? 'Yopish' : 'Close'}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-theme-border bg-theme-base text-muted shadow-brutal-sm hover:border-theme-accent hover:text-ink"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-muted">
+                  {locale === 'uz' ? 'Asosiy navigatsiya' : 'Navigation Shortcuts'}
+                </div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {shortcutCheatSheet
+                    .filter((item) => item.category === 'navigation')
+                    .map((item) => {
+                      const keyLabel = item.keys.join(' + ');
+                      return (
+                        <div
+                          key={item.id}
+                          data-testid={`shortcut-cheat-item-${item.keys.join('-')}`}
+                          className="flex items-center justify-between gap-3 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2.5"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-ink truncate">{item.title}</div>
+                            <div className="text-[11px] text-muted truncate">{item.description}</div>
+                          </div>
+                          <kbd className="inline-flex min-w-[28px] shrink-0 items-center justify-center rounded-md border-2 border-theme-border bg-theme-panel px-2 py-1 font-mono text-xs font-extrabold text-theme-accent shadow-brutal-sm">
+                            {keyLabel}
+                          </kbd>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-muted">
+                  {locale === 'uz' ? 'Yordamchi tugmalar' : 'Interface & Modal Controls'}
+                </div>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {shortcutCheatSheet
+                    .filter((item) => item.category === 'workspace')
+                    .map((item) => {
+                      const keyLabel = item.keys.join(' + ');
+                      return (
+                        <div
+                          key={item.id}
+                          data-testid={`shortcut-cheat-item-${item.keys.join('-')}`}
+                          className="flex items-center justify-between gap-3 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2.5"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-ink truncate">{item.title}</div>
+                            <div className="text-[11px] text-muted truncate">{item.description}</div>
+                          </div>
+                          <kbd className="inline-flex shrink-0 items-center justify-center rounded-md border-2 border-theme-border bg-theme-panel px-2 py-1 font-mono text-xs font-extrabold text-theme-cyan shadow-brutal-sm">
+                            {keyLabel}
+                          </kbd>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+    </SmoothScroll>
   );
 }

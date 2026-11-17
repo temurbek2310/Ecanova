@@ -77,16 +77,19 @@ define(['./workbox-25ee6505'], (function (workbox) { 'use strict';
    * See https://goo.gl/S9QRab
    */
   workbox.precacheAndRoute([{
+    "url": "registerSW.js",
+    "revision": "3ca0b8505b4bec776b69afdba2768812"
+  }, {
     "url": "/index.html",
-    "revision": "0.441eulmk83g"
+    "revision": "0.prusiq5on2"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
     allowlist: [/^\/$/],
     denylist: [/^\/api\//]
   }));
-  workbox.registerRoute(/^\/api\/(me|admin|auth|ai)\//i, new workbox.NetworkOnly(), 'GET');
-  workbox.registerRoute(/^\/api\/(catalog|courses)/i, new workbox.NetworkFirst({
+  workbox.registerRoute(/^https?:\/\/[^/]+\/api\/(me|admin|auth|ai)\//i, new workbox.NetworkOnly(), 'GET');
+  workbox.registerRoute(/^https?:\/\/[^/]+\/api\/(catalog|courses)/i, new workbox.NetworkFirst({
     "cacheName": "econova-public-catalog",
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 30,

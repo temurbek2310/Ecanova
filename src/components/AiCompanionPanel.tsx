@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Image as ImageIcon, MessageSquare, Send, X } from 'lucide-react';
 import type { LocaleCode } from '../shared/types';
+import { t } from '../lib/i18n';
+import { apiFetch } from '../lib/auth-client';
 
 interface ChatTurn {
   role: 'user' | 'model';
@@ -25,6 +27,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
   onClose,
   embedded = false,
 }) => {
+  const compStrings = t(locale).companion;
   const [mode, setMode] = useState<'study_tutor' | 'editorial_draft'>(
     isStaff ? defaultMode : 'study_tutor'
   );
@@ -58,7 +61,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
     setLoading(true);
 
     try {
-      const res = await fetch('/api/ai/chat', {
+      const res = await apiFetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -90,7 +93,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
     setImgError(null);
     setImgLoading(true);
     try {
-      const res = await fetch('/api/ai/generate-image', {
+      const res = await apiFetch('/api/ai/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -122,34 +125,24 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
 
   return (
     <div
-      className={`flex flex-col rounded-xl border border-[#222B3D] bg-[#101522] ${
+      className={`flex flex-col rounded-xl border-2 border-slate-500 bg-white/50 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/55 ${
         embedded ? 'p-5' : 'h-full max-h-[82vh] p-5'
       }`}
     >
-      <div className="flex items-start justify-between gap-3 border-b border-[#222B3D] pb-3">
+      <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
         <div>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-[#F3F6FF]">
-            <MessageSquare className="h-4 w-4 text-[#5DE1D2]" aria-hidden="true" />
-            <span>
-              {mode === 'editorial_draft'
-                ? 'Editorial AI Draft Studio (Human Review Required)'
-                : locale === 'uz'
-                ? 'O‘quv yordamchisi (Qoralama ko‘mak)'
-                : 'Study Companion'}
-            </span>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <MessageSquare className="h-4 w-4 text-teal" aria-hidden="true" />
+            <span>{compStrings.title}</span>
           </h3>
-          <p className="mt-0.5 text-xs text-[#8994AA]">
-            {mode === 'editorial_draft'
-              ? 'AI output stays strictly in Draft status until human subject, language, and rights reviewers approve.'
-              : 'Guided explanations for Economics, Mathematics, and Business. Never reveals assessment answer keys.'}
-          </p>
+          <p className="mt-0.5 text-xs text-muted">{compStrings.subtitle}</p>
         </div>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close AI Companion"
-            className="rounded-lg p-1.5 text-[#8994AA] hover:bg-[#141B2B] hover:text-[#F3F6FF]"
+            aria-label={locale === 'uz' ? 'Yordamchini yopish' : 'Close AI Companion'}
+            className="rounded-lg p-1.5 text-muted hover:bg-elevated hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
@@ -159,7 +152,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
       {!aiConfigured && (
         <div
           role="status"
-          className="mt-3 rounded-lg border border-[#FFC96B]/40 bg-[#0B0F19] px-3.5 py-2.5 text-xs leading-relaxed text-[#FFC96B]"
+          className="mt-3 rounded-lg border border-warning/40 bg-chrome px-3.5 py-2.5 text-xs leading-relaxed text-warning"
         >
           {locale === 'uz'
             ? 'Sun’iy intellekt funksiyalari AI Studio Settings > Secrets bo‘limida GEMINI_API_KEY sozlanmaguncha o‘chirilgan. Barcha asosiy darslar, testlar va sertifikatlar to‘liq ishlaydi.'
@@ -170,54 +163,54 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
       {/* Role & Model Controls */}
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
         {isStaff && (
-          <div className="flex items-center rounded-lg border border-[#222B3D] bg-[#0B0F19] p-0.5">
+          <div className="flex items-center rounded-lg border border-line bg-chrome p-0.5">
             <button
               type="button"
               onClick={() => setMode('study_tutor')}
               className={`rounded-md px-2.5 py-1 font-medium ${
-                mode === 'study_tutor' ? 'bg-[#141B2B] text-[#F3F6FF]' : 'text-[#8994AA]'
+                mode === 'study_tutor' ? 'bg-elevated text-ink' : 'text-muted'
               }`}
             >
-              Study Tutor
+              {compStrings.modeTutor}
             </button>
             <button
               type="button"
               onClick={() => setMode('editorial_draft')}
               className={`rounded-md px-2.5 py-1 font-medium ${
-                mode === 'editorial_draft' ? 'bg-[#141B2B] text-[#5DE1D2]' : 'text-[#8994AA]'
+                mode === 'editorial_draft' ? 'bg-elevated text-teal' : 'text-muted'
               }`}
             >
-              Editorial Draft
+              {compStrings.modeEditorial}
             </button>
           </div>
         )}
 
-        <label className="flex items-center gap-1.5 text-[#8994AA]">
-          <span>Model:</span>
+        <label className="flex items-center gap-1.5 text-muted">
+          <span>{compStrings.modelLabel}</span>
           <select
             value={model}
             disabled={!aiConfigured}
             onChange={(e) => setModel(e.target.value)}
-            className="rounded-md border border-[#222B3D] bg-[#0B0F19] px-2 py-1 text-xs text-[#F3F6FF] disabled:opacity-50"
+            className="rounded-md border border-line bg-chrome px-2 py-1 text-xs text-ink disabled:opacity-50"
           >
-            <option value="gemini-4-hydrogen">gemini-4-hydrogen (General)</option>
-            <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Fast)</option>
-            <option value="gemini-4-argon">gemini-4-argon (Complex Interactive)</option>
-            <option value="gemini-4-carbon">gemini-4-carbon (Deep Reasoning)</option>
+            <option value="gemini-4-hydrogen">gemini-4-hydrogen</option>
+            <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+            <option value="gemini-4-argon">gemini-4-argon</option>
+            <option value="gemini-4-carbon">gemini-4-carbon</option>
           </select>
         </label>
       </div>
 
       {/* Scrollable Multi-Turn Conversation Thread */}
       <div
-        aria-label="Conversation history"
-        className="mt-3 flex-1 min-h-[220px] max-h-[340px] space-y-3 overflow-y-auto rounded-lg border border-[#222B3D] bg-[#0B0F19] p-3.5"
+        aria-label={locale === 'uz' ? 'Suhbat tarixi' : 'Conversation history'}
+        className="mt-3 flex-1 min-h-[220px] max-h-[340px] space-y-3 overflow-y-auto rounded-lg border border-line bg-chrome p-3.5"
       >
         {history.length === 0 && (
-          <p className="text-xs text-[#8994AA]">
+          <p className="text-xs text-muted">
             {mode === 'editorial_draft'
-              ? 'Ask to outline a draft lesson or bilingual glossary note. Generated drafts must be reviewed before publishing.'
-              : 'Ask a concept question about Supply & Demand, Derivatives, or Unit Economics.'}
+              ? compStrings.emptyEditorial
+              : compStrings.emptyTutor}
           </p>
         )}
         {history.map((turn, idx) => (
@@ -225,24 +218,24 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
             key={idx}
             className={`rounded-lg p-3 text-xs leading-relaxed ${
               turn.role === 'user'
-                ? 'ml-6 bg-[#141B2B] text-[#F3F6FF]'
-                : 'mr-4 border border-[#222B3D] bg-[#101522] text-[#F3F6FF]'
+                ? 'ml-6 bg-elevated text-ink'
+                : 'mr-4 border border-line bg-surface text-ink'
             }`}
           >
-            <div className="mb-1 flex items-center justify-between text-[11px] text-[#8994AA]">
-              <span>{turn.role === 'user' ? 'You' : 'ECONOVA Assistant'}</span>
+            <div className="mb-1 flex items-center justify-between text-[11px] text-muted">
+              <span>{turn.role === 'user' ? compStrings.youLabel : compStrings.assistantLabel}</span>
               {turn.modelUsed && <span className="font-mono">{turn.modelUsed}</span>}
             </div>
             <div className="whitespace-pre-wrap">{turn.text}</div>
           </div>
         ))}
         {loading && (
-          <div className="text-xs text-[#5DE1D2]">Generating response...</div>
+          <div className="text-xs text-teal">{compStrings.generating}</div>
         )}
       </div>
 
       {errorMsg && (
-        <div role="alert" className="mt-2 rounded-lg border border-[#FFC96B]/40 bg-[#0B0F19] px-3 py-2 text-xs text-[#FFC96B]">
+        <div role="alert" className="mt-2 rounded-lg border border-warning/40 bg-chrome px-3 py-2 text-xs text-warning">
           {errorMsg}
         </div>
       )}
@@ -254,40 +247,38 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
           disabled={!aiConfigured}
           onChange={(e) => setInput(e.target.value)}
           placeholder={
-            !aiConfigured
-              ? 'AI disabled until GEMINI_API_KEY is configured in Secrets...'
-              : mode === 'editorial_draft'
-              ? 'Draft an Economics lesson outline on price elasticity...'
-              : 'Explain the difference between movement along a curve and a shift...'
+            mode === 'editorial_draft'
+              ? compStrings.placeholderEditorial
+              : compStrings.placeholderTutor
           }
-          className="min-h-[42px] flex-1 rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 py-2 text-xs text-[#F3F6FF] disabled:opacity-50"
+          className="min-h-[42px] flex-1 rounded-lg border border-line bg-chrome px-3 py-2 text-xs text-ink disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={!aiConfigured || loading || !input.trim()}
-          aria-label="Send message"
-          className="inline-flex min-h-[42px] items-center gap-1.5 rounded-lg bg-[#9274FF] px-4 py-2 text-xs font-semibold text-[#080B14] disabled:opacity-50"
+          aria-label={compStrings.sendButton}
+          className="inline-flex min-h-[42px] items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-accent-ink hover:bg-accent-hover disabled:opacity-50"
         >
           <Send className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Send</span>
+          <span>{compStrings.sendButton}</span>
         </button>
       </form>
 
       {/* Staff-only 1K / 2K / 4K Lesson Visual Asset Draft Generator */}
       {isStaff && mode === 'editorial_draft' && (
-        <form onSubmit={handleGenerateDiagram} className="mt-4 border-t border-[#222B3D] pt-4 space-y-3">
+        <form onSubmit={handleGenerateDiagram} className="mt-4 border-t border-line pt-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-[#F3F6FF]">
-              <ImageIcon className="h-3.5 w-3.5 text-[#5DE1D2]" aria-hidden="true" />
-              <span>Draft Lesson Diagram Generator (gemini-3-pro-image-preview)</span>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+              <ImageIcon className="h-3.5 w-3.5 text-teal" aria-hidden="true" />
+              <span>{compStrings.generateVisualBtn} (gemini-3-pro-image-preview)</span>
             </div>
-            <label className="flex items-center gap-1.5 text-xs text-[#8994AA]">
-              <span>Resolution:</span>
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              <span>{compStrings.resolutionLabel}</span>
               <select
                 value={imgSize}
                 disabled={!aiConfigured}
                 onChange={(e) => setImgSize(e.target.value as '1K' | '2K' | '4K')}
-                className="rounded-md border border-[#222B3D] bg-[#0B0F19] px-2 py-1 text-xs text-[#F3F6FF] disabled:opacity-50"
+                className="rounded-md border border-line bg-chrome px-2 py-1 text-xs text-ink disabled:opacity-50"
               >
                 <option value="1K">1K</option>
                 <option value="2K">2K</option>
@@ -301,27 +292,27 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
               value={imgPrompt}
               disabled={!aiConfigured}
               onChange={(e) => setImgPrompt(e.target.value)}
-              placeholder="Clean isometric diagram of circular flow of income between households and firms..."
-              className="min-h-[40px] flex-1 rounded-lg border border-[#222B3D] bg-[#0B0F19] px-3 py-1.5 text-xs text-[#F3F6FF] disabled:opacity-50"
+              placeholder={compStrings.placeholderEditorial}
+              className="min-h-[40px] flex-1 rounded-lg border border-line bg-chrome px-3 py-1.5 text-xs text-ink disabled:opacity-50"
             />
             <button
               type="submit"
               disabled={!aiConfigured || imgLoading || imgPrompt.trim().length < 5}
-              className="min-h-[40px] rounded-lg bg-[#5DE1D2] px-3.5 py-2 text-xs font-semibold text-[#080B14] disabled:opacity-50"
+              className="min-h-[40px] rounded-lg bg-teal px-3.5 py-2 text-xs font-semibold text-teal-ink hover:bg-teal-hover disabled:opacity-50"
             >
-              {imgLoading ? 'Generating...' : 'Generate Draft Visual'}
+              {imgLoading ? compStrings.generating : compStrings.generateVisualBtn}
             </button>
           </div>
-          {imgError && <p className="text-xs text-[#FFC96B]">{imgError}</p>}
+          {imgError && <p className="text-xs text-warning">{imgError}</p>}
           {imgResult && (
-            <div className="rounded-lg border border-[#222B3D] bg-[#0B0F19] p-3">
+            <div className="rounded-lg border border-line bg-chrome p-3">
               <img
                 src={imgResult.imageDataUrl}
-                alt="AI-generated draft lesson diagram pending human review"
+                alt={compStrings.generateVisualBtn}
                 referrerPolicy="no-referrer"
                 className="w-full rounded-md object-cover"
               />
-              <p className="mt-2 text-[11px] text-[#8994AA]">{imgResult.provenanceNote}</p>
+              <p className="mt-2 text-[11px] text-muted">{imgResult.provenanceNote}</p>
             </div>
           )}
         </form>
