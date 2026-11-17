@@ -255,6 +255,7 @@ export const CourseShowcase: React.FC<CourseShowcaseProps> = ({
 
   useGSAP(
     () => {
+      if (!sectionRef.current) return;
       const pinWrapperEl = pinWrapperRef.current;
       const trackEl = trackRef.current;
       if (!pinWrapperEl || !trackEl || showcaseCards.length === 0) return;
@@ -352,7 +353,7 @@ export const CourseShowcase: React.FC<CourseShowcaseProps> = ({
   );
 
   if (showcaseCards.length === 0) {
-    return null;
+    return <section ref={sectionRef} aria-hidden="true" className="hidden" />;
   }
 
   return (

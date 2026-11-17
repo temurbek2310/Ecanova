@@ -45,7 +45,7 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
   onSelectCourseId,
 }) => {
   const isUz = locale === 'uz';
-  const matrixRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const effectiveWeekWindow = useMemo(
     () => weekWindow ?? getCurrentWeekWindow(),
@@ -96,8 +96,8 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
   // Tactile GSAP stagger entrance on tab mount & filter changes
   useGSAP(
     () => {
-      const container = matrixRef.current;
-      if (!container) return;
+      if (!containerRef.current) return;
+      const container = containerRef.current;
 
       const rowElements = gsap.utils.toArray<HTMLElement>('[data-matrix-row]', container);
       if (rowElements.length === 0) return;
@@ -126,12 +126,12 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
         }
       );
     },
-    { scope: matrixRef, dependencies: [selectedCourseId, matrixRows.length], revertOnUpdate: true }
+    { scope: containerRef, dependencies: [selectedCourseId, matrixRows.length], revertOnUpdate: true }
   );
 
   return (
     <div
-      ref={matrixRef}
+      ref={containerRef}
       role="tabpanel"
       data-testid="ranking-matrix-panel"
       className="mt-5 space-y-4"

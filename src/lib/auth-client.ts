@@ -4,6 +4,7 @@ import {
   sanitizeRedirectTo,
   type IntendedDestination,
 } from './auth-routing';
+import { resolveMvpApiFallbackPayload } from './mvp-api-stubs';
 
 export const SESSION_TOKEN_STORAGE_KEY = 'econova_session_token';
 export const CACHED_USER_STORAGE_KEY = 'econova_cached_user';
@@ -235,16 +236,70 @@ export async function apiFetch(
     credentials: init?.credentials ?? 'include',
   };
 
-  const response = await baseFetch(input, nextInit);
-
-  const rotatedToken = response.headers.get('X-Session-Token');
-  if (rotatedToken !== null) {
-    if (rotatedToken.trim()) {
-      persistSessionToken(rotatedToken.trim());
+  const resolveRequestUrl = (): URL | null => {
+    try {
+      const origin =
+        typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+      if (typeof input === 'string') {
+        return new URL(input, origin);
+      }
+      if (input instanceof URL) {
+        return input;
+      }
+      if (typeof Request !== 'undefined' && input instanceof Request) {
+        return new URL(input.url, origin);
+      }
+    } catch {
+      return null;
     }
-  }
+    return null;
+  };
 
-  return response;
+  try {
+    const response = await baseFetch(input, nextInit);
+
+    const rotatedToken = response.headers.get('X-Session-Token');
+    if (rotatedToken !== null) {
+      if (rotatedToken.trim()) {
+        persistSessionToken(rotatedToken.trim());
+      }
+    }
+
+    if (!response.ok && (response.status === 404 || response.status === 401 || response.status >= 500)) {
+      const parsedUrl = resolveRequestUrl();
+      const method = (init?.method || 'GET').toUpperCase();
+      if (parsedUrl && method === 'GET') {
+        const fallback = resolveMvpApiFallbackPayload(
+          parsedUrl.pathname,
+          parsedUrl.searchParams
+        );
+        if (fallback !== null) {
+          return new Response(JSON.stringify(fallback), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      }
+    }
+
+    return response;
+  } catch (err) {
+    const parsedUrl = resolveRequestUrl();
+    const method = (init?.method || 'GET').toUpperCase();
+    if (parsedUrl && method === 'GET') {
+      const fallback = resolveMvpApiFallbackPayload(
+        parsedUrl.pathname,
+        parsedUrl.searchParams
+      );
+      if (fallback !== null) {
+        return new Response(JSON.stringify(fallback), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+    throw err;
+  }
 }
 
 export function installAuthFetchInterceptor(): void {

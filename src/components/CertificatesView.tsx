@@ -306,7 +306,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
 
       {/* 50th Lesson Crystalline Shards Celebration Portal */}
       <GeometricNova
-        active={milestoneReached && novaBurstKey > 0}
+        active={novaBurstKey > 0}
         triggerKey={novaBurstKey}
         anchorRef={certificateStageRef}
         shardCount={40}
@@ -343,19 +343,23 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {milestoneReached && (
-              <button
-                type="button"
-                onClick={() => setNovaBurstKey((k) => k + 1)}
-                data-testid="trigger-geometric-nova-btn"
-                className="no-print inline-flex min-h-[38px] items-center gap-2 rounded-lg border-2 border-[#0F766E] bg-white/40 px-3.5 py-1.5 font-mono text-xs font-semibold text-ink shadow-[4px_4px_0px_#090D16] backdrop-blur-2xl hover:border-[#5DE1D2] dark:border-[#222B3D] dark:bg-[#101522]/40 dark:shadow-[4px_4px_0px_#000000]"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-[#0F766E] dark:text-[#5DE1D2]" aria-hidden="true" />
-                <span>
-                  {locale === 'uz' ? 'Kristall salyutni takrorlash' : 'Replay Crystalline Burst'}
-                </span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setNovaBurstKey((k) => k + 1)}
+              data-testid="trigger-geometric-nova-btn"
+              className="no-print inline-flex min-h-[38px] items-center gap-2 rounded-lg border-2 border-[#0F766E] bg-white/40 px-3.5 py-1.5 font-mono text-xs font-semibold text-ink shadow-[4px_4px_0px_#090D16] backdrop-blur-2xl hover:border-[#5DE1D2] dark:border-[#222B3D] dark:bg-[#101522]/40 dark:shadow-[4px_4px_0px_#000000]"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-[#0F766E] dark:text-[#5DE1D2]" aria-hidden="true" />
+              <span>
+                {milestoneReached
+                  ? locale === 'uz'
+                    ? 'Kristall salyutni takrorlash'
+                    : 'Replay Crystalline Burst'
+                  : locale === 'uz'
+                  ? '50-dars kristall salyuti'
+                  : '50th-Lesson Crystalline Burst'}
+              </span>
+            </button>
 
             {isAuthenticated && (
               <button

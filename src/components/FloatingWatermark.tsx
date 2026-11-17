@@ -485,7 +485,6 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
   className = '',
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const resolvedScopeRef = scopeRef ?? containerRef;
   const [motionActive, setMotionActive] = useState(false);
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(() =>
@@ -581,9 +580,10 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
 
   useGSAP(
     () => {
+      if (!containerRef.current) return;
       const containerEl = containerRef.current;
-      const scopeEl = resolvedScopeRef.current ?? containerEl;
-      if (!containerEl || !scopeEl || particles.length === 0) {
+      const scopeEl = scopeRef?.current ?? containerEl.parentElement ?? containerEl;
+      if (!scopeEl || particles.length === 0) {
         setMotionActive(false);
         return;
       }
@@ -896,7 +896,7 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
       };
     },
     {
-      scope: resolvedScopeRef,
+      scope: containerRef,
       dependencies: [
         canonicalTheme,
         seedIndex,

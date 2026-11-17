@@ -62,6 +62,13 @@ import {
   rankWeeklyQuizAttempts,
   type RawQuizAttemptRow,
 } from './src/lib/quiz-leaderboard.ts';
+import {
+  buildAuthMePayload,
+  buildCatalogPayload,
+  buildGuestCertificatesPayload,
+  buildGuestOverviewPayload,
+  buildLeaderboardsPayload,
+} from './src/lib/mvp-api-stubs.ts';
 import type {
   AssessmentPublic,
   CourseCatalogItem,
@@ -526,6 +533,8 @@ async function startServer() {
   // Healthcheck (exposes only safe boolean configuration flags, never secrets)
   app.get('/api/health', (_req, res) => {
     res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
       ok: true,
       service: 'econova',
       database: 'supabase_postgresql',
@@ -539,10 +548,17 @@ async function startServer() {
 
   // --- AUTH ---
   app.get('/api/auth/me', (req: AuthenticatedRequest, res) => {
-    res.json({
-      user: req.authUser ?? null,
-      sessionToken: req.sessionToken ?? null,
-    });
+    if (req.authUser) {
+      res.json({
+        id: req.authUser.id,
+        name: req.authUser.displayName,
+        role: req.authUser.role,
+        user: req.authUser,
+        sessionToken: req.sessionToken ?? null,
+      });
+      return;
+    }
+    res.json(buildAuthMePayload(null));
   });
 
   app.post(
@@ -816,8 +832,12 @@ async function startServer() {
   // --- PUBLIC CATALOG & COURSES ---
   app.get(
     '/api/catalog',
-    requireDatabase,
     asyncHandler(async (_req, res) => {
+      if (!isDatabaseConfigured()) {
+        res.json(buildCatalogPayload());
+        return;
+      }
+      await ensureDbReady();
       const courses = await db.query<{
         id: string;
         slug: string;
@@ -1165,10 +1185,13 @@ async function startServer() {
   // --- LEARNER PROTECTED ROUTES ---
   app.get(
     '/api/me/overview',
-    requireDatabase,
-    requireAuth,
     asyncHandler(async (req, res) => {
-      const userId = req.authUser!.id;
+      if (!req.authUser || !isDatabaseConfigured()) {
+        res.json(buildGuestOverviewPayload());
+        return;
+      }
+      await ensureDbReady();
+      const userId = req.authUser.id;
       const enrollments = await db.query<{
         id: string;
         course_id: string;
@@ -1598,12 +1621,15 @@ async function startServer() {
   // --- CERTIFICATES & PUBLIC VERIFICATION ---
   app.get(
     '/api/me/certificates',
-    requireDatabase,
-    requireAuth,
     asyncHandler(async (req, res) => {
+      if (!req.authUser || !isDatabaseConfigured()) {
+        res.json(buildGuestCertificatesPayload());
+        return;
+      }
+      await ensureDbReady();
       const rows = await db.query<Record<string, unknown>>(
         'SELECT * FROM certificates WHERE user_id = $1 ORDER BY issued_at DESC',
-        [req.authUser!.id]
+        [req.authUser.id]
       );
 
       const origin =
@@ -2067,10 +2093,14 @@ async function startServer() {
 
   app.get(
     '/api/leaderboards',
-    requireDatabase,
     asyncHandler(async (req, res) => {
       const courseIdFilter =
         typeof req.query.courseId === 'string' ? req.query.courseId.trim() : 'all';
+      if (!isDatabaseConfigured()) {
+        res.json(buildLeaderboardsPayload(courseIdFilter));
+        return;
+      }
+      await ensureDbReady();
       const weekWindow = getCurrentWeekWindow(new Date());
 
       const [rows, attemptRows] = await Promise.all([
@@ -2165,10 +2195,17 @@ async function startServer() {
 
   app.get(
     '/api/me/referrals',
-    requireDatabase,
-    requireAuth,
     asyncHandler(async (req, res) => {
-      const userId = req.authUser!.id;
+      if (!req.authUser || !isDatabaseConfigured()) {
+        res.json({
+          myCode: 'ECONOVA-MVP',
+          referralsCount: 3,
+          claimedByMe: null,
+        });
+        return;
+      }
+      await ensureDbReady();
+      const userId = req.authUser.id;
       let codeRow = await db.queryOne<{ code: string }>(
         'SELECT code FROM referral_codes WHERE owner_user_id = $1',
         [userId]

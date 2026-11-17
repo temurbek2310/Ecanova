@@ -79,7 +79,8 @@ export const CommandBar: React.FC<CommandBarProps> = ({
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const islandRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const islandRef = containerRef;
   const paletteBodyRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const hasInteractedRef = useRef(false);
@@ -149,7 +150,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({
 
     const handleOutsideInteraction = (event: MouseEvent | TouchEvent | FocusEvent) => {
       const target = event.target as Node | null;
-      if (islandRef.current && target && !islandRef.current.contains(target)) {
+      if (containerRef.current && target && !containerRef.current.contains(target)) {
         setIsExpanded(false);
       }
     };
@@ -169,9 +170,9 @@ export const CommandBar: React.FC<CommandBarProps> = ({
     if (!isExpanded || typeof window === 'undefined') return;
 
     const handleResize = () => {
-      if (!islandRef.current) return;
+      if (!containerRef.current) return;
       const target = getCommandBarGeometry(true, window.innerWidth, window.innerHeight);
-      gsap.set(islandRef.current, target);
+      gsap.set(containerRef.current, target);
     };
 
     window.addEventListener('resize', handleResize);
@@ -195,8 +196,8 @@ export const CommandBar: React.FC<CommandBarProps> = ({
   // Fluid GSAP morph between compact Dynamic Island pill (116x40) and expanded palette (600x400)
   useGSAP(
     () => {
-      const islandEl = islandRef.current;
-      if (!islandEl) return;
+      if (!containerRef.current) return;
+      const islandEl = containerRef.current;
 
       const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
       const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
@@ -244,7 +245,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({
         });
       }
     },
-    { scope: islandRef, dependencies: [isExpanded] }
+    { scope: containerRef, dependencies: [isExpanded] }
   );
 
   const executeAction = useCallback(
@@ -302,7 +303,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({
 
   return (
     <div
-      ref={islandRef}
+      ref={containerRef}
       data-testid="global-command-bar"
       data-expanded={isExpanded ? 'true' : 'false'}
       role={isExpanded ? 'dialog' : 'region'}

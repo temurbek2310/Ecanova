@@ -95,14 +95,15 @@ export function useContainedArtifactPhysics({
 
   useGSAP(
     () => {
-      const cardEl = cardRef.current;
-
       // Kill any prior tweens cleanly
       driftTweensRef.current.forEach((tw) => tw.kill());
       spinTweensRef.current.forEach((tw) => tw.kill());
       driftTweensRef.current = [];
       spinTweensRef.current = [];
       isComplexActiveRef.current = false;
+
+      if (!cardRef.current) return;
+      const cardEl = cardRef.current;
 
       if (!enabled || !cardEl || particles.length === 0) {
         setIsComplexPhysicsActive(false);
@@ -150,8 +151,8 @@ export function useContainedArtifactPhysics({
             gsap.set(driftEl, { x: 0, y: 0, scale: p.baseScale });
 
             const driftTween = gsap.to(driftEl, {
-              x: `random(${p.xRange[0]}, ${p.xRange[1]})`,
-              y: `random(${p.yRange[0]}, ${p.yRange[1]})`,
+              x: () => gsap.utils.random(p.xRange[0], p.xRange[1]),
+              y: () => gsap.utils.random(p.yRange[0], p.yRange[1]),
               scale: Number((p.baseScale * (idx % 2 === 0 ? 1.1 : 0.9)).toFixed(2)),
               duration: p.durationSec,
               delay: p.delaySec,

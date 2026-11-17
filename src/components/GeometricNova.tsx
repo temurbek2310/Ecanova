@@ -28,8 +28,10 @@ export const GeometricNova: React.FC<GeometricNovaProps> = ({
   shardCount = 36,
   onComplete,
 }) => {
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-  const portalRootRef = useRef<HTMLDivElement | null>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(() =>
+    typeof document !== 'undefined' ? document.body : null
+  );
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const shardRefs = useRef<Array<SVGSVGElement | null>>([]);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
@@ -37,14 +39,15 @@ export const GeometricNova: React.FC<GeometricNovaProps> = ({
   const shards = useMemo(() => buildGeometricShards(shardCount), [shardCount]);
 
   useEffect(() => {
-    if (typeof document !== 'undefined') {
+    if (typeof document !== 'undefined' && !portalTarget) {
       setPortalTarget(document.body);
     }
-  }, []);
+  }, [portalTarget]);
 
   useGSAP(
     () => {
-      if (!active || !portalRootRef.current) return;
+      if (!containerRef.current) return;
+      if (!active) return;
 
       const elements = shardRefs.current.filter((el): el is SVGSVGElement => Boolean(el));
       if (elements.length === 0) return;
@@ -128,61 +131,67 @@ export const GeometricNova: React.FC<GeometricNovaProps> = ({
       });
     },
     {
-      scope: portalRootRef,
-      dependencies: [active, triggerKey, portalTarget, shards.length],
+      scope: containerRef,
+      dependencies: [active, triggerKey, Boolean(portalTarget), shards.length],
       revertOnUpdate: true,
     }
   );
 
-  if (!active || !portalTarget) {
-    return null;
-  }
-
-  return createPortal(
+  const layerContent = (
     <div
-      ref={portalRootRef}
+      ref={containerRef}
       aria-hidden="true"
-      data-testid="geometric-nova-portal"
+      data-testid={active ? 'geometric-nova-portal' : 'geometric-nova-idle'}
       data-trigger-key={String(triggerKey)}
       style={{ perspective: '900px' }}
-      className="no-print pointer-events-none fixed inset-0 z-0 overflow-hidden"
+      className={
+        active
+          ? 'no-print pointer-events-none fixed inset-0 z-0 overflow-hidden'
+          : 'no-print pointer-events-none fixed inset-0 z-0 hidden overflow-hidden'
+      }
     >
-      {shards.map((shard, index) => (
-        <svg
-          key={shard.id}
-          ref={(el) => {
-            shardRefs.current[index] = el;
-          }}
-          data-testid="geometric-nova-shard"
-          data-shape={shard.shapeKind}
-          width={shard.sizePx}
-          height={shard.sizePx}
-          viewBox="0 0 32 32"
-          fill="none"
-          className="absolute will-change-transform"
-          style={{ transformStyle: 'preserve-3d' }}
-        >
-          <polygon
-            points={shard.points}
-            fill={shard.filled ? shard.color : 'none'}
-            fillOpacity={shard.filled ? 0.24 : 0}
-            stroke={shard.color}
-            strokeWidth={shard.strokeWidth}
-            strokeLinejoin="miter"
-          />
-          {shard.shapeKind === 'wireframe-diamond' && (
-            <line
-              x1="16"
-              y1="2"
-              x2="16"
-              y2="30"
+      {active &&
+        shards.map((shard, index) => (
+          <svg
+            key={shard.id}
+            ref={(el) => {
+              shardRefs.current[index] = el;
+            }}
+            data-testid="geometric-nova-shard"
+            data-shape={shard.shapeKind}
+            width={shard.sizePx}
+            height={shard.sizePx}
+            viewBox="0 0 32 32"
+            fill="none"
+            className="absolute will-change-transform"
+            style={{ transformStyle: 'preserve-3d' }}
+          >
+            <polygon
+              points={shard.points}
+              fill={shard.filled ? shard.color : 'none'}
+              fillOpacity={shard.filled ? 0.24 : 0}
               stroke={shard.color}
-              strokeWidth={1.5}
+              strokeWidth={shard.strokeWidth}
+              strokeLinejoin="miter"
             />
-          )}
-        </svg>
-      ))}
-    </div>,
-    portalTarget
+            {shard.shapeKind === 'wireframe-diamond' && (
+              <line
+                x1="16"
+                y1="2"
+                x2="16"
+                y2="30"
+                stroke={shard.color}
+                strokeWidth={1.5}
+              />
+            )}
+          </svg>
+        ))}
+    </div>
   );
+
+  if (portalTarget) {
+    return createPortal(layerContent, portalTarget);
+  }
+
+  return layerContent;
 };
