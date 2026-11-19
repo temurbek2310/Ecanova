@@ -15,10 +15,13 @@ import {
   SkipBack,
   SkipForward,
   Square,
+  Timer,
   Volume2,
   VolumeX,
 } from 'lucide-react';
 import type { GlossaryTermItem, LessonPublic, LocaleCode } from '../shared/types';
+import type { AmbientFocusAudioController } from '../hooks/useAmbientFocusAudio';
+import type { FocusTimerController } from '../hooks/useFocusTimer';
 import {
   buildLessonReadAloudSegments,
   clampSpeechRate,
@@ -26,6 +29,7 @@ import {
 } from '../lib/read-aloud';
 import { buildLessonShareData, shareProgressWithWebApi } from '../lib/share-progress';
 import { apiFetch } from '../lib/auth-client';
+import { FocusTimerPanel } from './FocusTimerPanel';
 import { InteractiveTerminologyText } from './InteractiveTerminologyText';
 import { QuickNotesDrawer } from './QuickNotesDrawer';
 import { InteractiveSimulation } from './simulations/InteractiveSimulation';
@@ -43,6 +47,8 @@ interface LessonPlayerProps {
   onRequireAuth: () => void;
   onNextLesson?: () => void;
   onOpenAssessment?: () => void;
+  focusTimer?: FocusTimerController;
+  ambientAudio?: AmbientFocusAudioController;
 }
 
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({
@@ -58,6 +64,8 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   onRequireAuth,
   onNextLesson,
   onOpenAssessment,
+  focusTimer,
+  ambientAudio,
 }) => {
   const [showCaptions, setShowCaptions] = useState(true);
   const [showTranscript, setShowTranscript] = useState(false);
@@ -87,8 +95,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   // Glossary API terms for Interactive Terminology overlay
   const [apiGlossaryTerms, setApiGlossaryTerms] = useState<GlossaryTermItem[]>([]);
 
-  // Quick Notes slide-out drawer state
+  // Quick Notes slide-out drawer & inline Focus Timer bar state
   const [notesOpen, setNotesOpen] = useState(false);
+  const [focusBarOpen, setFocusBarOpen] = useState(false);
 
   // Request Review modal state (student segment review notification to AdminStudioView)
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -438,6 +447,31 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
               </span>
             </button>
 
+            {focusTimer && ambientAudio && (
+              <button
+                type="button"
+                aria-pressed={focusBarOpen || focusTimer.status === 'running'}
+                onClick={() => setFocusBarOpen((prev) => !prev)}
+                data-testid="lesson-focus-timer-toggle"
+                className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-semibold shadow-brutal-sm transition-colors ${
+                  focusTimer.status === 'running'
+                    ? 'border-black bg-[#5DE1D2] text-black dark:border-[#5DE1D2] dark:bg-[#5DE1D2]/20 dark:text-[#5DE1D2]'
+                    : focusBarOpen
+                    ? 'border-theme-accent bg-theme-base text-theme-accent'
+                    : 'border-theme-border bg-theme-base text-ink hover:border-[#5DE1D2]'
+                }`}
+              >
+                <Timer className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="font-mono tabular-nums">
+                  {focusTimer.status === 'running' || focusTimer.status === 'paused'
+                    ? focusTimer.formattedClock
+                    : locale === 'uz'
+                    ? `Fokus ${focusTimer.durationMinutes}m`
+                    : `Focus ${focusTimer.durationMinutes}m`}
+                </span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setNotesOpen(true)}
@@ -485,6 +519,17 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
         <h2 className="mt-2 text-xl font-semibold text-ink sm:text-2xl">{lesson.title}</h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted">{lesson.summary}</p>
+        {focusTimer &&
+          ambientAudio &&
+          (focusBarOpen || focusTimer.status === 'running' || focusTimer.status === 'paused') && (
+            <FocusTimerPanel
+              locale={locale}
+              timer={focusTimer}
+              audio={ambientAudio}
+              variant="lesson-bar"
+              lessonTitle={lesson.title}
+            />
+          )}
         {shareStatus && (
           <p
             role={shareStatus.kind === 'error' ? 'alert' : 'status'}

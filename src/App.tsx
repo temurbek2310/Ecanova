@@ -24,8 +24,11 @@ import {
   Shield,
   SlidersHorizontal,
   Sun,
+  Timer,
   Trophy,
   User,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import gsap from 'gsap';
@@ -34,6 +37,7 @@ import { AchievementsView } from './components/AchievementsView';
 import { AdminStudioView } from './components/AdminStudioView';
 import { AiCompanionPanel } from './components/AiCompanionPanel';
 import { AssessmentView } from './components/AssessmentView';
+import { HeaderAudioControl } from './components/AudioSettingsPanel';
 import { AuthModal } from './components/AuthModal';
 import { AuthPageView } from './components/AuthPageView';
 import { BusinessSection } from './components/BusinessSection';
@@ -45,6 +49,7 @@ import { CourseShowcase } from './components/CourseShowcase';
 import { DailyStudyGoalCard } from './components/DailyStudyGoalCard';
 import { EconomicsLiquidBackground } from './components/EconomicsLiquidBackground';
 import { EconomicsSection } from './components/EconomicsSection';
+import { FocusTimerPanel } from './components/FocusTimerPanel';
 import { KineticHeroSection } from './components/KineticHeroSection';
 import { LanguageToggle } from './components/LanguageToggle';
 import { LessonPlayer } from './components/LessonPlayer';
@@ -61,7 +66,9 @@ import { StudyProgressChart } from './components/StudyProgressChart';
 import { SyncStatusHUD, dispatchSyncStatusReconcile } from './components/SyncStatusHUD';
 import { WeaknessDetectionCard } from './components/WeaknessDetectionCard';
 import { dispatchGlobalNodeUnlock } from './context/NodeUnlockContext';
+import { useAmbientFocusAudio } from './hooks/useAmbientFocusAudio';
 import { useCourseOfflineCache } from './hooks/useCourseOfflineCache';
+import { useFocusTimer } from './hooks/useFocusTimer';
 import { mapMilestoneToNodeUnlock } from './lib/node-unlock';
 import {
   addRecentSearchQuery,
@@ -186,6 +193,8 @@ export default function App() {
   const [expandedWeaknessIds, setExpandedWeaknessIds] = useState<string[]>([]);
   const [savedWeaknessNoteIds, setSavedWeaknessNoteIds] = useState<string[]>([]);
   const [commandBarExpanded, setCommandBarExpanded] = useState(false);
+  const ambientAudio = useAmbientFocusAudio();
+  const focusTimer = useFocusTimer(ambientAudio);
   const strings = t(locale);
 
   useEffect(() => {
@@ -1360,7 +1369,7 @@ export default function App() {
           data-testid="main-header"
           className={`no-print sticky top-0 ${
             commandBarExpanded ? 'z-[100]' : 'z-40'
-          } grid grid-cols-3 items-center w-full h-16 px-3 sm:px-6`}
+          } grid grid-cols-[1fr_auto_1fr] items-center gap-2 w-full h-16 px-3 sm:px-6`}
         >
           <div
             aria-hidden="true"
@@ -1423,21 +1432,30 @@ export default function App() {
           </div>
 
           <div className="justify-self-end flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Theme Mode Toggle (Icon-only compact on mobile; label on sm+) */}
+            {/* Focus Timer + Ambient Soundscape Hub (Header Popover on sm+; Mobile accesses via Drawer, Lesson Bar & Profile) */}
+            <HeaderAudioControl
+              locale={locale}
+              audio={ambientAudio}
+              timer={focusTimer}
+              className="hidden sm:block"
+            />
+
+            {/* Theme Mode Toggle (Compact icon on mobile/laptop; label on 2xl+) */}
             <button
               type="button"
               onClick={() => handleSelectManualTheme(getNextTheme(theme))}
               aria-label={theme === 'dark' ? strings.theme.switchToLight : strings.theme.switchToDark}
+              title={theme === 'dark' ? strings.theme.switchToLight : strings.theme.switchToDark}
               aria-pressed={theme === 'light'}
               data-testid="theme-mode-toggle"
-              className="inline-flex h-9 w-9 sm:h-auto sm:w-auto sm:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base sm:px-3 sm:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm transition-colors hover:border-theme-accent whitespace-nowrap shrink-0"
+              className="inline-flex h-9 w-9 2xl:h-auto 2xl:w-auto 2xl:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base 2xl:px-3 2xl:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm transition-colors hover:border-theme-accent whitespace-nowrap shrink-0"
             >
               {theme === 'dark' ? (
                 <Sun className="h-3.5 w-3.5 text-warning shrink-0" aria-hidden="true" />
               ) : (
                 <Moon className="h-3.5 w-3.5 text-accent shrink-0" aria-hidden="true" />
               )}
-              <span className="hidden sm:inline">
+              <span className="hidden 2xl:inline">
                 {theme === 'dark' ? strings.theme.lightLabel : strings.theme.darkLabel}
               </span>
             </button>
@@ -1517,6 +1535,57 @@ export default function App() {
               >
                 <MessageSquare className="h-4 w-4 text-teal" aria-hidden="true" />
                 <span>{locale === 'uz' ? 'Yordamchi' : 'Companion'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void ambientAudio.togglePlay()}
+                aria-pressed={ambientAudio.isPlaying}
+                data-testid="mobile-drawer-audio-toggle"
+                className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold ${
+                  ambientAudio.isPlaying
+                    ? 'border-[#5DE1D2] bg-[#5DE1D2]/15 text-ink shadow-brutal-sm'
+                    : 'border-theme-border bg-theme-base text-ink'
+                }`}
+              >
+                {ambientAudio.isPlaying ? (
+                  <Volume2 className="h-4 w-4 text-[#5DE1D2]" aria-hidden="true" />
+                ) : (
+                  <VolumeX className="h-4 w-4 text-muted" aria-hidden="true" />
+                )}
+                <span>
+                  {locale === 'uz'
+                    ? ambientAudio.isPlaying
+                      ? 'Fokus audio: Faol'
+                      : 'Fokus audio'
+                    : ambientAudio.isPlaying
+                    ? 'Focus Audio: On'
+                    : 'Focus Audio'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => focusTimer.toggleStartPause()}
+                aria-pressed={focusTimer.status === 'running'}
+                data-testid="mobile-drawer-timer-toggle"
+                className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold ${
+                  focusTimer.status === 'running'
+                    ? 'border-[#5DE1D2] bg-[#5DE1D2]/15 text-ink shadow-brutal-sm'
+                    : 'border-theme-border bg-theme-base text-ink'
+                }`}
+              >
+                <Timer
+                  className={`h-4 w-4 ${
+                    focusTimer.status === 'running' ? 'text-[#5DE1D2]' : 'text-muted'
+                  }`}
+                  aria-hidden="true"
+                />
+                <span className="font-mono tabular-nums">
+                  {focusTimer.status === 'running' || focusTimer.status === 'paused'
+                    ? focusTimer.formattedClock
+                    : locale === 'uz'
+                    ? `Taymer ${focusTimer.durationMinutes}m`
+                    : `Timer ${focusTimer.durationMinutes}m`}
+                </span>
               </button>
               {user && (
                 <button
@@ -2474,7 +2543,7 @@ export default function App() {
 
                   {/* Syllabus + Active Lesson/Assessment Split */}
                   <div className="grid gap-6 lg:grid-cols-12">
-                    <aside data-print-hide="course-syllabus" className="no-print min-w-0 space-y-2 lg:col-span-4">
+                    <aside data-print-hide="course-syllabus" className="no-print min-w-0 space-y-5 lg:col-span-4">
                       <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-4 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h2 className="text-xs font-semibold text-muted">
@@ -2630,6 +2699,18 @@ export default function App() {
                           )}
                         </div>
                       </div>
+
+                      <FocusTimerPanel
+                        locale={locale}
+                        timer={focusTimer}
+                        audio={ambientAudio}
+                        variant="card"
+                        lessonTitle={
+                          typeof activeLessonIndex === 'number'
+                            ? courseDetail.lessons[activeLessonIndex]?.title
+                            : undefined
+                        }
+                      />
                     </aside>
 
                     <div data-print-content="course-main" className="min-w-0 lg:col-span-8">
@@ -2639,6 +2720,8 @@ export default function App() {
                           courseTitle={courseDetail.edition.title}
                           lesson={courseDetail.lessons[activeLessonIndex]}
                           locale={courseDetail.edition.locale}
+                          focusTimer={focusTimer}
+                          ambientAudio={ambientAudio}
                           isCompleted={
                             activeEnrollment?.completedLessonIds.includes(
                               courseDetail.lessons[activeLessonIndex].id
@@ -2813,6 +2896,7 @@ export default function App() {
               notificationPermission={notificationPermission}
               theme={theme}
               themeSyncWithOs={themeSyncWithOs}
+              ambientAudio={ambientAudio}
               onToggleThemeSyncWithOs={handleToggleThemeSyncWithOs}
               onSelectManualTheme={handleSelectManualTheme}
               onToggleGoalNotifications={handleToggleGoalNotifications}

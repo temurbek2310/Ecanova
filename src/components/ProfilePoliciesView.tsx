@@ -26,6 +26,8 @@ import {
 import type { BrowserNotificationPermission } from '../lib/study-notifications';
 import { buildWeeklyStudyDigest } from '../lib/study-features';
 import type { ThemeMode } from '../lib/theme';
+import type { AmbientFocusAudioController } from '../hooks/useAmbientFocusAudio';
+import { AudioSettingsPanel } from './AudioSettingsPanel';
 
 interface ProfilePoliciesViewProps {
   locale: LocaleCode;
@@ -33,6 +35,7 @@ interface ProfilePoliciesViewProps {
   themeSyncWithOs?: boolean;
   onToggleThemeSyncWithOs?: (nextSyncWithOs: boolean) => void;
   onSelectManualTheme?: (manualTheme: ThemeMode) => void;
+  ambientAudio?: AmbientFocusAudioController;
   user: UserSummary | null;
   courses: CourseCatalogItem[];
   catalogLoading?: boolean;
@@ -71,6 +74,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
   themeSyncWithOs = false,
   onToggleThemeSyncWithOs,
   onSelectManualTheme,
+  ambientAudio,
   user,
   courses,
   catalogLoading = false,
@@ -614,6 +618,13 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {ambientAudio && (
+        <AudioSettingsPanel
+          locale={locale}
+          audio={ambientAudio}
+          variant="section"
+        />
+      )}
       {themeSyncSection}
       {weeklyDigestSection}
       {user && bookmarksSection}
