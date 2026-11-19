@@ -62,6 +62,7 @@ import { ProfilePoliciesView } from './components/ProfilePoliciesView';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { Sidebar } from './components/Sidebar';
 import { SmoothScroll } from './components/SmoothScroll';
+import { LandingPage } from './components/landing/LandingPage';
 import { StudyProgressChart } from './components/StudyProgressChart';
 import { SyncStatusHUD, dispatchSyncStatusReconcile } from './components/SyncStatusHUD';
 import { WeaknessDetectionCard } from './components/WeaknessDetectionCard';
@@ -539,8 +540,10 @@ export default function App() {
 
   const navigateToLogin = useCallback(
     (destinationOverride?: IntendedDestination, mode: 'login' | 'register' = 'login') => {
-      const currentSafeTab: Exclude<NavTab, 'login' | 'register'> =
-        activeTab === 'login' || activeTab === 'register' ? 'overview' : activeTab;
+      const currentSafeTab: Exclude<NavTab, 'login' | 'register' | 'landing'> =
+        activeTab === 'login' || activeTab === 'register' || activeTab === 'landing'
+          ? 'overview'
+          : activeTab;
       const dest: IntendedDestination =
         destinationOverride ?? {
           tab: currentSafeTab,
@@ -894,8 +897,10 @@ export default function App() {
     async (courseId: string) => {
       if (!user) {
         pendingBookmarkCourseIdRef.current = courseId;
-        const currentSafeTab: Exclude<NavTab, 'login' | 'register'> =
-          activeTab === 'login' || activeTab === 'register' ? 'catalog' : activeTab;
+        const currentSafeTab: Exclude<NavTab, 'login' | 'register' | 'landing'> =
+          activeTab === 'login' || activeTab === 'register' || activeTab === 'landing'
+            ? 'catalog'
+            : activeTab;
         navigateToLogin({
           tab: currentSafeTab,
           path: buildPathForTab(currentSafeTab, { courseId: selectedCourseId }),
@@ -1102,13 +1107,13 @@ export default function App() {
           ? resolveDestinationFromPath(options.redirectTo, selectedCourseId)
           : {
               tab:
-                activeTab === 'login' || activeTab === 'register'
+                activeTab === 'login' || activeTab === 'register' || activeTab === 'landing'
                   ? selectedCourseId
                     ? 'course'
                     : 'overview'
                   : activeTab,
               path: buildPathForTab(
-                activeTab === 'login' || activeTab === 'register'
+                activeTab === 'login' || activeTab === 'register' || activeTab === 'landing'
                   ? selectedCourseId
                     ? 'course'
                     : 'overview'
@@ -1339,6 +1344,23 @@ export default function App() {
     });
     return () => window.cancelAnimationFrame(id);
   }, [activeTab, locale, courses.length]);
+
+  // Public marketing landing at `/`: pure #000000 void + ConstellationCanvas only —
+  // no Sidebar, app Header, EconomicsLiquidBackground or dashboard overlays.
+  if (activeTab === 'landing') {
+    return (
+      <SmoothScroll>
+        <LandingPage
+          locale={locale}
+          onToggleLocale={handleLocaleSwitch}
+          onEnterApp={() => navigateToTab('overview')}
+          onSignIn={() =>
+            navigateToLogin({ tab: 'overview', path: buildPathForTab('overview') }, 'login')
+          }
+        />
+      </SmoothScroll>
+    );
+  }
 
   return (
     <SmoothScroll>

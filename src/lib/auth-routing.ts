@@ -1,6 +1,7 @@
 import type { LocaleCode, UserRole } from '../shared/types';
 
 export type AppNavTab =
+  | 'landing'
   | 'overview'
   | 'catalog'
   | 'course'
@@ -13,7 +14,7 @@ export type AppNavTab =
   | 'register';
 
 export interface IntendedDestination {
-  tab: Exclude<AppNavTab, 'login' | 'register'>;
+  tab: Exclude<AppNavTab, 'login' | 'register' | 'landing'>;
   path: string;
   courseId?: string | null;
   lessonIndex?: number | 'assessment';
@@ -34,6 +35,7 @@ export const PROTECTED_ROUTE_PREFIXES: ReadonlyArray<string> = [
 ];
 
 const TAB_TO_PATH: Record<AppNavTab, string> = {
+  landing: '/',
   overview: '/overview',
   catalog: '/catalog',
   course: '/course',
@@ -46,7 +48,7 @@ const TAB_TO_PATH: Record<AppNavTab, string> = {
   register: '/register',
 };
 
-export function isProtectedTab(tab: AppNavTab): boolean {
+export function isProtectedTab(tab: AppNavTab): tab is 'achievements' | 'profile' | 'admin' {
   return PROTECTED_TABS.includes(tab);
 }
 
@@ -123,6 +125,10 @@ export function parseRouteFromLocation(
     return { tab: 'certificates', courseId: null, redirectTo };
   }
 
+  // Public marketing landing lives at the bare root; every app surface has its own path.
+  if (clean === '/') {
+    return { tab: 'landing', courseId: null, redirectTo };
+  }
   if (clean === '/login' || clean === '/signin') {
     return { tab: 'login', courseId: null, redirectTo };
   }
@@ -168,7 +174,9 @@ export function resolveDestinationFromPath(
   const [pathnamePart, searchPart = ''] = safePath.split('?');
   const parsed = parseRouteFromLocation(pathnamePart, searchPart);
   const targetTab =
-    parsed.tab === 'login' || parsed.tab === 'register' ? 'overview' : parsed.tab;
+    parsed.tab === 'login' || parsed.tab === 'register' || parsed.tab === 'landing'
+      ? 'overview'
+      : parsed.tab;
 
   return {
     tab: targetTab,
@@ -186,7 +194,7 @@ export function formatDestinationLabel(
       ? resolveDestinationFromPath(destination)
       : destination ?? { tab: 'overview', path: '/overview' };
 
-  const labelsEn: Record<Exclude<AppNavTab, 'login' | 'register'>, string> = {
+  const labelsEn: Record<Exclude<AppNavTab, 'login' | 'register' | 'landing'>, string> = {
     overview: 'Overview Dashboard',
     catalog: 'Course Catalog',
     course: resolved.courseId ? `Course (${resolved.courseId})` : 'Course Workspace',
@@ -197,7 +205,7 @@ export function formatDestinationLabel(
     admin: 'Editorial Studio',
   };
 
-  const labelsUz: Record<Exclude<AppNavTab, 'login' | 'register'>, string> = {
+  const labelsUz: Record<Exclude<AppNavTab, 'login' | 'register' | 'landing'>, string> = {
     overview: 'Bosh sahifa',
     catalog: 'Kurslar katalogi',
     course: resolved.courseId ? `Kurs (${resolved.courseId})` : 'Kurs oynasi',

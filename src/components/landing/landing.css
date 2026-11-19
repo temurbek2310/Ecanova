@@ -1,0 +1,85 @@
+/*
+ * ECONOVA public landing — "Constellation Floating on Black Velvet" (Dala) tokens.
+ * Everything is scoped to `.econova-landing` so nothing leaks into /overview or /login.
+ * Inter is not loaded by index.html, so it is imported here (200 / 400 / 600 only).
+ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;400;600&display=swap');
+
+.econova-landing {
+  /* Colors */
+  --color-void: #000000; /* pure black canvas only */
+  --color-bone-white: #ffffff;
+  --color-ash-gray: #9a9a9a;
+  --color-silver-mist: #bdbdbd;
+  --color-electric-iris: #8052ff;
+  --color-saffron-spark: #ffb829;
+  --color-deep-verdant: #15846e;
+
+  /* Typography */
+  --font-landing: 'PPNeueMontreal', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  position: relative;
+  background-color: var(--color-void);
+  color: var(--color-bone-white);
+  font-family: var(--font-landing);
+  font-feature-settings: 'ss01' on;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.econova-landing *,
+.econova-landing *::before,
+.econova-landing *::after {
+  box-sizing: border-box;
+}
+
+/* Display */
+.econova-landing .landing-display {
+  font-family: var(--font-landing);
+  font-feature-settings: 'ss01' on;
+  font-size: clamp(48px, 7.5vw, 113px);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+/* Headline LG */
+.econova-landing .landing-headline-lg {
+  font-family: var(--font-landing);
+  font-feature-settings: 'ss01' on;
+  font-size: clamp(40px, 5.5vw, 78px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+/* Headline SM */
+.econova-landing .landing-headline-sm {
+  font-family: var(--font-landing);
+  font-feature-settings: 'ss01' on;
+  font-size: clamp(32px, 3.5vw, 42px);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+}
+
+/* Body */
+.econova-landing .landing-body {
+  font-family: var(--font-landing);
+  font-feature-settings: 'ss01' on;
+  font-size: 18px;
+  font-weight: 200;
+  line-height: 1.5;
+}
+
+/* Nav / Kicker */
+.econova-landing .landing-kicker {
+  font-family: var(--font-landing);
+  font-feature-settings: 'ss01' on;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
