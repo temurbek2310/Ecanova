@@ -8,7 +8,6 @@ import {
   CloudOff,
   Compass,
   Flame,
-  Globe,
   Keyboard,
   LayoutDashboard,
   Loader2,
@@ -46,20 +45,24 @@ import { CourseShowcase } from './components/CourseShowcase';
 import { DailyStudyGoalCard } from './components/DailyStudyGoalCard';
 import { EconomicsLiquidBackground } from './components/EconomicsLiquidBackground';
 import { EconomicsSection } from './components/EconomicsSection';
-import { FloatingWatermark } from './components/FloatingWatermark';
 import { KineticHeroSection } from './components/KineticHeroSection';
+import { LanguageToggle } from './components/LanguageToggle';
 import { LessonPlayer } from './components/LessonPlayer';
 import { MagneticCourseCard } from './components/MagneticCourseCard';
 import { MathematicsSection } from './components/MathematicsSection';
-import { MilestoneCelebration } from './components/MilestoneCelebration';
 import { NeobrutalistSectionDivider } from './components/NeobrutalistSectionDivider';
+import { NodeUnlockOverlay } from './components/NodeUnlockOverlay';
 import { OfflineBanner } from './components/OfflineBanner';
 import { ProfilePoliciesView } from './components/ProfilePoliciesView';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { Sidebar } from './components/Sidebar';
 import { SmoothScroll } from './components/SmoothScroll';
 import { StudyProgressChart } from './components/StudyProgressChart';
+import { SyncStatusHUD, dispatchSyncStatusReconcile } from './components/SyncStatusHUD';
 import { WeaknessDetectionCard } from './components/WeaknessDetectionCard';
+import { dispatchGlobalNodeUnlock } from './context/NodeUnlockContext';
 import { useCourseOfflineCache } from './hooks/useCourseOfflineCache';
+import { mapMilestoneToNodeUnlock } from './lib/node-unlock';
 import {
   addRecentSearchQuery,
   filterCatalogCourses,
@@ -114,7 +117,6 @@ import {
 } from './lib/study-features';
 import {
   getKeyboardShortcutCheatSheet,
-  getShortcutLabelForTab,
   isCheatSheetShortcutEvent,
   isEditableElementTarget,
   resolveNavigationShortcut,
@@ -183,7 +185,7 @@ export default function App() {
   const [weaknessRefreshTick, setWeaknessRefreshTick] = useState(0);
   const [expandedWeaknessIds, setExpandedWeaknessIds] = useState<string[]>([]);
   const [savedWeaknessNoteIds, setSavedWeaknessNoteIds] = useState<string[]>([]);
-  const sidebarRef = useRef<HTMLElement | null>(null);
+  const [commandBarExpanded, setCommandBarExpanded] = useState(false);
   const strings = t(locale);
 
   useEffect(() => {
@@ -473,6 +475,7 @@ export default function App() {
             );
             if (evt) {
               setCelebrationEvent(evt);
+              dispatchGlobalNodeUnlock(mapMilestoneToNodeUnlock(evt, locale));
             }
           }
           prevMilestoneSnapshotRef.current = nextSnapshot;
@@ -758,6 +761,7 @@ export default function App() {
     }
 
     setSyncingSyllabus(true);
+    dispatchSyncStatusReconcile();
     try {
       // Fetch fresh server enrollment state so cross-device completions are pulled cleanly
       const ovRes = await apiFetch('/api/me/overview');
@@ -1329,139 +1333,75 @@ export default function App() {
 
   return (
     <SmoothScroll>
-    <div className="relative min-h-screen overflow-x-clip bg-theme-base bg-canvas text-ink flex flex-col md:flex-row">
-      {/* Economics WebGL Liquid Background (z-0, above base #080B14) */}
+    <div className="relative isolate min-h-screen overflow-x-clip text-ink flex flex-col md:flex-row">
+      {/* Economics WebGL Liquid Background (-z-10, decoupled behind UI shell) */}
       <EconomicsLiquidBackground
         active={activeTab !== 'admin'}
         theme={theme}
       />
 
       {/* Desktop Sidebar */}
-      <aside
-        ref={sidebarRef}
-        aria-label="Primary Sidebar Navigation"
-        className="no-print relative z-20 hidden md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:justify-between md:overflow-x-hidden md:overflow-y-auto border-r-2 border-slate-500 bg-white/40 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 p-4"
-      >
-        <FloatingWatermark
-          theme="sidebar"
-          scopeRef={sidebarRef}
-          parallaxMode="raf"
-          testId="sidebar-floating-watermark"
-        />
-
-        <div className="relative z-10 space-y-6">
-          <div className="px-2 pt-1 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => navigateToTab('overview')}
-              className="inline-flex items-center gap-2 font-display text-xl font-extrabold tracking-tight text-ink whitespace-nowrap"
-            >
-              <span className="inline-block h-3 w-3 rounded-xs border-2 border-theme-border bg-theme-accent" aria-hidden="true" />
-              <span>ECONOVA</span>
-            </button>
-          </div>
-
-          <nav aria-label="Section Navigation" className="space-y-1.5">
-            {navItems.map((item) => {
-              const isActive = activeTab === item.id || (item.id === 'catalog' && activeTab === 'course');
-              const shortcut = getShortcutLabelForTab(item.id);
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => navigateToTab(item.id)}
-                  aria-keyshortcuts={shortcut ? shortcut.toLowerCase() : undefined}
-                  className={`flex w-full min-h-[42px] items-center justify-between gap-2 rounded-lg border-2 px-3 py-2 text-sm font-semibold transition-all whitespace-nowrap ${
-                    isActive
-                      ? 'border-theme-border bg-theme-base text-theme-accent shadow-brutal-sm'
-                      : 'border-transparent text-muted hover:border-theme-border hover:bg-theme-base/60 hover:text-ink'
-                  }`}
-                >
-                  <span className="flex items-center gap-2.5 min-w-0">
-                    {item.icon}
-                    <span className="truncate">{item.label}</span>
-                    {item.id === 'overview' && (
-                      <span
-                        data-testid="nav-streak-flame"
-                        data-glowing={streakFlame.isMilestoneGlowing ? 'true' : 'false'}
-                        title={streakFlame.tooltip}
-                        className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-bold transition-all ${
-                          streakFlame.isMilestoneGlowing
-                            ? 'border-amber-400/70 bg-amber-400/15 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.45)]'
-                            : 'border-theme-border bg-theme-base text-muted'
-                        }`}
-                      >
-                        <Flame
-                          className={`h-3 w-3 shrink-0 ${
-                            streakFlame.isMilestoneGlowing
-                              ? 'fill-amber-400 text-amber-400 animate-pulse'
-                              : 'text-muted'
-                          }`}
-                          aria-hidden="true"
-                        />
-                        <span>{streakFlame.streakDays}d</span>
-                      </span>
-                    )}
-                  </span>
-                  {shortcut && (
-                    <kbd
-                      aria-hidden="true"
-                      className="hidden lg:inline-flex min-w-[20px] items-center justify-center rounded border-2 border-theme-border bg-theme-base px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted"
-                    >
-                      {shortcut}
-                    </kbd>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        <div className="relative z-10 space-y-3 border-t-2 border-theme-border pt-4">
-          <button
-            type="button"
-            onClick={() => setCompanionOpen(true)}
-            className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2 text-xs font-semibold text-ink shadow-brutal-sm hover:border-theme-accent"
-          >
-            <MessageSquare className="h-4 w-4 text-teal" aria-hidden="true" />
-            <span>{locale === 'uz' ? 'O‘quv yordamchisi' : 'Study Companion'}</span>
-          </button>
-
-          <PWAInstallButton label={strings.installApp} />
-        </div>
-      </aside>
+      <Sidebar
+        activeTab={activeTab}
+        locale={locale}
+        navItems={navItems}
+        streakFlame={streakFlame}
+        installAppLabel={strings.installApp}
+        onNavigateTab={navigateToTab}
+        onOpenCompanion={() => setCompanionOpen(true)}
+      />
 
       {/* Main Content Shell */}
-      <div className="relative z-10 flex flex-1 flex-col min-w-0 overflow-x-clip pb-20 md:pb-0">
+      <div className="relative flex flex-1 flex-col min-w-0 overflow-x-clip pb-20 md:pb-0">
         <OfflineBanner message={strings.offlineBanner} />
 
-        {/* Clean 3-Zone Top Bar (Navbar with Integrated Centered Dynamic Island CommandBar) */}
-        <header className="no-print sticky top-0 z-30 flex items-center justify-between w-full h-16 border-b-2 border-slate-500 bg-white/40 px-3 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 sm:px-6">
-          <div className="flex items-center gap-2.5 min-w-0 shrink-0">
+        {/* Clean Responsive Top Bar (3-col grid centering; backdrop isolated on child layer so mobile fixed CommandBar takeover attaches to viewport) */}
+        <header
+          data-testid="main-header"
+          className={`no-print sticky top-0 ${
+            commandBarExpanded ? 'z-[100]' : 'z-40'
+          } grid grid-cols-3 items-center w-full h-16 px-3 sm:px-6`}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 border-b-2 border-slate-500 bg-white/25 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+          />
+
+          <div className="justify-self-start flex items-center gap-2 min-w-0">
             <button
               type="button"
               onClick={() => setMobileMenuOpen((v) => !v)}
               aria-label="Toggle navigation menu"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-theme-border bg-theme-base text-ink shadow-brutal-sm md:hidden"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 border-theme-border bg-theme-base text-ink shadow-brutal-sm md:hidden"
             >
               {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('overview')}
-              className="font-display text-sm sm:text-base font-extrabold tracking-tight text-ink whitespace-nowrap shrink-0 md:hidden"
+              onClick={() => navigateToTab('overview')}
+              aria-label="ECONOVA"
+              data-testid="header-mobile-logo"
+              className="inline-flex items-center gap-1.5 shrink-0 md:hidden"
             >
-              ECONOVA
+              <span
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border-2 border-theme-border bg-[#5DE1D2] font-display text-xs font-black text-black shadow-[2px_2px_0px_#000]"
+                aria-hidden="true"
+              >
+                E
+              </span>
+              <span className="hidden sm:inline font-display text-sm font-extrabold tracking-tight text-ink whitespace-nowrap">
+                ECONOVA
+              </span>
             </button>
-            <span className="hidden text-xs font-semibold text-muted truncate md:inline max-w-[140px] lg:max-w-[200px]">
+            <span className="hidden text-xs font-semibold text-muted truncate md:inline max-w-[180px] lg:max-w-[260px]">
               {activeTab === 'course' && courseDetail
                 ? `${strings.subjects[courseDetail.course.subject]} / ${courseDetail.edition.title}`
                 : navItems.find((n) => n.id === activeTab)?.label || 'ECONOVA'}
             </span>
           </div>
 
-          {/* Centered CommandBar */}
-          <div className="flex-1 flex justify-center px-1 sm:px-2 min-w-0">
+          {/* Dead-Center CommandBar on Desktop & Mobile (Zero CSS transform on wrapper so fixed mobile takeover attaches to viewport) */}
+          <div className="justify-self-center flex items-center justify-center z-50">
             <CommandBar
               locale={locale}
               theme={theme}
@@ -1478,31 +1418,19 @@ export default function App() {
               onSwitchLocale={handleLocaleSwitch}
               onToggleTheme={handleSelectManualTheme}
               onOpenShortcuts={() => setCheatSheetOpen(true)}
+              onExpandedChange={setCommandBarExpanded}
             />
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Keyboard Shortcuts Cheat Sheet Trigger (Shift + ?) */}
-            <button
-              type="button"
-              onClick={() => setCheatSheetOpen(true)}
-              aria-label={locale === 'uz' ? 'Klaviatura yorliqlari (Shift + ?)' : 'Keyboard Shortcuts (Shift + ?)'}
-              title={locale === 'uz' ? 'Klaviatura yorliqlari (Shift + ?)' : 'Keyboard Shortcuts (Shift + ?)'}
-              data-testid="header-shortcuts-cheatsheet-btn"
-              className="hidden sm:inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base px-2.5 py-1.5 text-xs font-semibold text-ink shadow-brutal-sm transition-colors hover:border-theme-accent whitespace-nowrap shrink-0"
-            >
-              <Keyboard className="h-3.5 w-3.5 text-theme-cyan shrink-0" aria-hidden="true" />
-              <kbd className="hidden lg:inline font-mono text-[10px] font-bold text-muted">Shift+?</kbd>
-            </button>
-
-            {/* Theme Mode Toggle (Dark <-> High-Contrast Light, sets Manual Override) */}
+          <div className="justify-self-end flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Theme Mode Toggle (Icon-only compact on mobile; label on sm+) */}
             <button
               type="button"
               onClick={() => handleSelectManualTheme(getNextTheme(theme))}
               aria-label={theme === 'dark' ? strings.theme.switchToLight : strings.theme.switchToDark}
               aria-pressed={theme === 'light'}
               data-testid="theme-mode-toggle"
-              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-ink shadow-brutal-sm transition-colors hover:border-theme-accent whitespace-nowrap shrink-0"
+              className="inline-flex h-9 w-9 sm:h-auto sm:w-auto sm:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base sm:px-3 sm:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm transition-colors hover:border-theme-accent whitespace-nowrap shrink-0"
             >
               {theme === 'dark' ? (
                 <Sun className="h-3.5 w-3.5 text-warning shrink-0" aria-hidden="true" />
@@ -1514,32 +1442,12 @@ export default function App() {
               </span>
             </button>
 
-            {/* Language Edition Toggle (EN / O'Z) */}
-            <div
-              role="group"
-              aria-label="Language Edition Switcher"
-              className="flex items-center rounded-lg border-2 border-theme-border bg-theme-base p-0.5 text-xs shadow-brutal-sm shrink-0"
-            >
-              <Globe className="ml-2 mr-1 hidden h-3.5 w-3.5 text-muted sm:block" aria-hidden="true" />
-              <button
-                type="button"
-                onClick={() => handleLocaleSwitch('en')}
-                className={`min-h-[30px] rounded-md px-2 sm:px-2.5 py-1 font-semibold whitespace-nowrap transition-colors ${
-                  locale === 'en' ? 'bg-theme-panel text-teal' : 'text-muted hover:text-ink'
-                }`}
-              >
-                EN
-              </button>
-              <button
-                type="button"
-                onClick={() => handleLocaleSwitch('uz')}
-                className={`min-h-[30px] rounded-md px-2 sm:px-2.5 py-1 font-semibold whitespace-nowrap transition-colors ${
-                  locale === 'uz' ? 'bg-theme-panel text-teal' : 'text-muted hover:text-ink'
-                }`}
-              >
-                O‘Z
-              </button>
-            </div>
+            {/* Viscous Language Edition Toggle (EN / O'Z — hidden on mobile) */}
+            <LanguageToggle
+              locale={locale}
+              onChange={handleLocaleSwitch}
+              className="hidden md:flex"
+            />
 
             {/* Primary Account Action */}
             {user ? (
@@ -1547,11 +1455,12 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => navigateToTab('profile')}
+                  aria-label={user.displayName}
                   data-testid="header-user-profile-btn"
-                  className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-ink shadow-brutal-sm hover:border-theme-accent"
+                  className="inline-flex h-9 w-9 md:h-auto md:w-auto md:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base md:px-3 md:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm hover:border-theme-accent"
                 >
                   <User className="h-3.5 w-3.5 text-accent shrink-0" aria-hidden="true" />
-                  <span className="max-w-[78px] sm:max-w-[120px] truncate">{user.displayName}</span>
+                  <span className="hidden md:block max-w-[120px] truncate">{user.displayName}</span>
                 </button>
                 <button
                   type="button"
@@ -1568,7 +1477,7 @@ export default function App() {
                 type="button"
                 onClick={() => navigateToLogin()}
                 data-testid="header-signin-btn"
-                className="min-h-[38px] rounded-lg border-2 border-theme-border bg-theme-accent px-3.5 sm:px-4 py-1.5 text-xs font-bold text-theme-accent-ink shadow-brutal-sm transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:bg-accent-hover whitespace-nowrap"
+                className="h-9 sm:min-h-[38px] rounded-lg border-2 border-theme-border bg-theme-accent px-2.5 sm:px-4 py-1.5 text-[11px] sm:text-xs font-bold text-theme-accent-ink shadow-brutal-sm transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:bg-accent-hover whitespace-nowrap"
               >
                 {strings.signIn}
               </button>
@@ -1578,7 +1487,7 @@ export default function App() {
 
         {/* Mobile Drawer Menu */}
         {mobileMenuOpen && (
-          <div className="no-print border-b-2 border-slate-500 bg-white/55 p-4 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/65 md:hidden">
+          <div className="no-print border-b-2 border-slate-500 bg-white/30 p-4 backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30 md:hidden">
             <nav className="grid grid-cols-2 gap-2">
               {navItems.map((item) => (
                 <button
@@ -1623,14 +1532,38 @@ export default function App() {
                 </button>
               )}
             </nav>
-            <div className="mt-3">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <div
+                role="group"
+                aria-label="Mobile Language Edition Switcher"
+                className="inline-flex items-center rounded-lg border-2 border-theme-border bg-theme-base p-0.5 text-xs shadow-brutal-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => handleLocaleSwitch('en')}
+                  className={`min-h-[30px] rounded-md px-2.5 py-1 font-mono font-bold ${
+                    locale === 'en' ? 'bg-[#5DE1D2] text-black' : 'text-muted'
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLocaleSwitch('uz')}
+                  className={`min-h-[30px] rounded-md px-2.5 py-1 font-mono font-bold ${
+                    locale === 'uz' ? 'bg-[#5DE1D2] text-black' : 'text-muted'
+                  }`}
+                >
+                  O‘Z
+                </button>
+              </div>
               <PWAInstallButton label={strings.installApp} />
             </div>
           </div>
         )}
 
         {/* Main Viewport */}
-        <main className="mx-auto w-full max-w-6xl flex-1 overflow-x-clip p-4 sm:p-6 lg:p-8">
+        <main className="relative z-10 mx-auto w-full max-w-6xl flex-1 overflow-x-clip p-4 sm:p-6 lg:p-8">
           {/* NEOBRUTALIST /login AND /register ROUTES */}
           {(activeTab === 'login' || activeTab === 'register') && (
             <AuthPageView
@@ -1789,7 +1722,7 @@ export default function App() {
                 </div>
 
                 {catalogLoading ? (
-                  <div className="rounded-xl border-2 border-slate-500 bg-white/40 p-6 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                  <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                     {strings.overview.loadingCourses}
                   </div>
                 ) : catalogError ? (
@@ -1816,7 +1749,7 @@ export default function App() {
                           testId={`overview-course-card-${course.id}`}
                           subject={course.subject}
                           artifactIndex={idx}
-                          className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+                          className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
                         >
                           <div>
                             <div className="text-xs font-medium text-muted">
@@ -1872,7 +1805,7 @@ export default function App() {
           {/* COURSE CATALOG */}
           {activeTab === 'catalog' && (
             <div className="space-y-6">
-              <header className="rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+              <header className="rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h1 className="text-xl font-semibold text-ink sm:text-2xl">
                     {strings.catalog.title}
@@ -1974,7 +1907,7 @@ export default function App() {
                     {searchDropdownOpen && recentSearches.length > 0 && (
                       <div
                         data-testid="catalog-recent-searches-dropdown"
-                        className="absolute left-0 right-0 top-full z-30 mt-1.5 rounded-xl border-2 border-slate-500 bg-white/75 p-3 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/80"
+                        className="absolute left-0 right-0 top-full z-30 mt-1.5 rounded-xl border-2 border-slate-500 bg-white/30 p-3 shadow-[8px_8px_0px_#000000] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30"
                       >
                         <div className="flex items-center justify-between gap-2 border-b border-theme-border pb-2 text-[11px] font-semibold text-muted">
                           <span>
@@ -2104,7 +2037,7 @@ export default function App() {
               )}
 
               {filteredCourses.length === 0 ? (
-                <div className="relative z-10 isolate mt-8 rounded-xl border-2 border-slate-500 bg-white/40 p-8 text-center text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                <div className="relative z-10 isolate mt-8 rounded-xl border-2 border-slate-500 bg-white/25 p-8 text-center text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                   <p>{strings.catalog.noMatches}</p>
                   {hasActiveCatalogFilters && (
                     <button
@@ -2147,7 +2080,7 @@ export default function App() {
                         testId={`catalog-course-card-${course.id}`}
                         subject={course.subject}
                         artifactIndex={idx}
-                        className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+                        className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
                       >
                         <div>
                           <div className="flex items-start justify-between gap-3">
@@ -2305,9 +2238,6 @@ export default function App() {
           {/* COURSE DETAIL & LESSON WORKSPACE */}
           {activeTab === 'course' && (
             <div data-print-section="course-detail" className="relative space-y-6">
-              {courseDetail?.course.subject === 'Economics' && (
-                <EconomicsLiquidBackground active={true} />
-              )}
               <div data-print-hide="course-nav" className="no-print relative z-10 flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
@@ -2343,17 +2273,17 @@ export default function App() {
               </div>
 
               {courseLoading ? (
-                <div className="relative z-10 rounded-xl border-2 border-slate-500 bg-white/40 p-8 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                <div className="relative z-10 rounded-xl border-2 border-slate-500 bg-white/25 p-8 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                   {strings.courseDetail.loadingEdition}
                 </div>
               ) : courseError || !courseDetail ? (
-                <div className="relative z-10 rounded-xl border-2 border-warning/60 bg-white/40 p-6 text-sm text-warning shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:bg-[#101522]/40">
+                <div className="relative z-10 rounded-xl border-2 border-warning/60 bg-white/25 p-6 text-sm text-warning shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:bg-[#101522]/25">
                   {courseError || strings.editionMissingNote}
                 </div>
               ) : (
                 <div className="relative z-10 space-y-6">
                   {/* Course Metadata & Completion Criteria */}
-                  <section className="rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                  <section className="rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                     {(() => {
                       const detailBookmarked = user
                         ? isCourseBookmarked(user.bookmarkedCourseIds ?? [], courseDetail.course.id)
@@ -2545,7 +2475,7 @@ export default function App() {
                   {/* Syllabus + Active Lesson/Assessment Split */}
                   <div className="grid gap-6 lg:grid-cols-12">
                     <aside data-print-hide="course-syllabus" className="no-print min-w-0 space-y-2 lg:col-span-4">
-                      <div className="rounded-xl border-2 border-slate-500 bg-white/40 p-4 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+                      <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-4 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h2 className="text-xs font-semibold text-muted">
                             {locale === 'uz' ? 'Kurs dasturi' : 'Course Syllabus'}
@@ -2784,6 +2714,7 @@ export default function App() {
             <AchievementsView
               locale={locale}
               isAuthenticated={Boolean(user)}
+              overviewLoaded={sessionLoaded}
               totalXp={totalXp}
               xpToday={xpToday}
               xpLedger={xpLedger}
@@ -2958,7 +2889,7 @@ export default function App() {
       {/* Mobile Fixed Bottom Navigation Bar (4 destinations, 56px height) */}
       <nav
         aria-label="Mobile Bottom Navigation"
-        className="no-print fixed bottom-0 left-0 right-0 z-40 grid h-14 grid-cols-4 border-t-2 border-slate-500 bg-white/50 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/50 md:hidden"
+        className="no-print fixed bottom-0 left-0 right-0 z-30 grid h-14 grid-cols-4 border-t-2 border-slate-500 bg-white/30 backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30 md:hidden"
       >
         {(
           [
@@ -3004,11 +2935,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Subtle Milestone Celebration Confetti & Banner */}
-      <MilestoneCelebration
-        event={celebrationEvent}
-        onDismiss={() => setCelebrationEvent(null)}
-      />
+      {/* Asynchronous Data Reconciliation HUD (Offline-to-Online Sync Terminal) */}
+      <SyncStatusHUD onReconcile={() => loadProtectedData({ allowCelebrate: true })} />
+
+      {/* Competency Node Unlock Overlay (Glass-Brutalism Milestone Celebration) */}
+      <NodeUnlockOverlay />
 
       {/* Auth Modal */}
       {authOpen && (
@@ -3035,7 +2966,7 @@ export default function App() {
           onClick={() => setCheatSheetOpen(false)}
         >
           <div
-            className="w-full max-w-xl rounded-xl border-2 border-slate-500 bg-white/40 p-6 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+            className="w-full max-w-xl rounded-xl border-2 border-slate-500 bg-white/30 p-6 shadow-[8px_8px_0px_#9274FF] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 border-b-2 border-theme-border pb-4">

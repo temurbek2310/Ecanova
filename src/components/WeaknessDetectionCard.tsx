@@ -255,7 +255,7 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
       data-testid="weakness-detection-card"
       data-theme-mode={activeTheme}
       aria-labelledby="weakness-detection-heading"
-      className="relative z-10 overflow-hidden border-2 border-gray-900 bg-white/60 p-5 text-gray-900 shadow-[6px_6px_0px_#111827] backdrop-blur-2xl sm:p-6 dark:border-[#222B3D] dark:bg-[#101522]/40 dark:text-white dark:shadow-[6px_6px_0px_#000000]"
+      className="relative z-10 overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 text-gray-900 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl sm:p-6 dark:border-[#222B3D] dark:bg-[#101522]/25 dark:text-white"
     >
       <FloatingWatermark
         theme="analytics"
@@ -352,7 +352,7 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
           {/* Left: Tactical Recharts Radar HUD */}
           <div
             data-testid="weakness-radar-panel"
-            className="border-2 border-gray-900 bg-white p-4 text-gray-900 shadow-[6px_6px_0px_#111827] lg:col-span-7 dark:border-[#222B3D] dark:bg-[#101522] dark:text-white dark:shadow-[6px_6px_0px_#000000]"
+            className="border-2 border-gray-900 bg-white/30 p-4 text-gray-900 shadow-[6px_6px_0px_#111827] backdrop-blur-xl lg:col-span-7 dark:border-[#222B3D] dark:bg-[#101522]/30 dark:text-white dark:shadow-[6px_6px_0px_#000000]"
           >
             <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-gray-900 pb-3 dark:border-[#222B3D]">
               <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-[#5DE1D2]">
@@ -477,7 +477,7 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
                     <div
                       key={rec.id}
                       data-testid={`weakness-radar-item-${index}`}
-                      className="border-2 border-gray-900 bg-gray-50 p-3.5 text-gray-900 shadow-[6px_6px_0px_#111827] dark:border-[#222B3D] dark:bg-[#101522] dark:text-white dark:shadow-[6px_6px_0px_#000000]"
+                      className="border-2 border-gray-900 bg-white/30 p-3.5 text-gray-900 shadow-[6px_6px_0px_#111827] backdrop-blur-xl dark:border-[#222B3D] dark:bg-[#101522]/30 dark:text-white dark:shadow-[6px_6px_0px_#000000]"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate font-mono text-[10px] font-bold uppercase text-teal-700 dark:text-[#5DE1D2]">
@@ -534,7 +534,7 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
               ) : (
                 <div
                   data-testid="weakness-radar-empty-queue"
-                  className="border-2 border-gray-900 bg-gray-50 p-4 font-mono text-xs text-gray-800 shadow-[6px_6px_0px_#111827] dark:border-[#222B3D] dark:bg-[#101522] dark:text-[#CBD5E1] dark:shadow-[6px_6px_0px_#000000]"
+                  className="border-2 border-gray-900 bg-white/30 p-4 font-mono text-xs text-gray-800 shadow-[6px_6px_0px_#111827] backdrop-blur-xl dark:border-[#222B3D] dark:bg-[#101522]/30 dark:text-[#CBD5E1] dark:shadow-[6px_6px_0px_#000000]"
                 >
                   {isUz
                     ? 'Kurslar kesimidagi tahlil yuklanmoqda…'
@@ -546,7 +546,7 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
             <button
               type="button"
               onClick={() => setViewMode('list')}
-              className="inline-flex min-h-[38px] w-full items-center justify-center gap-2 border-2 border-gray-900 bg-white px-3 py-2 font-mono text-xs font-bold text-gray-900 shadow-[4px_4px_0px_#111827] transition-colors hover:border-[#6D28D9] hover:text-[#6D28D9] dark:border-[#222B3D] dark:bg-[#101522] dark:text-white dark:shadow-[4px_4px_0px_#000000] dark:hover:border-[#9274FF] dark:hover:text-[#9274FF]"
+              className="inline-flex min-h-[38px] w-full items-center justify-center gap-2 border-2 border-gray-900 bg-white/30 px-3 py-2 font-mono text-xs font-bold text-gray-900 shadow-[4px_4px_0px_#111827] backdrop-blur-xl transition-colors hover:border-[#6D28D9] hover:text-[#6D28D9] dark:border-[#222B3D] dark:bg-[#101522]/30 dark:text-white dark:shadow-[4px_4px_0px_#000000] dark:hover:border-[#9274FF] dark:hover:text-[#9274FF]"
             >
               <BarChart3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span>
@@ -561,7 +561,7 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
         /* List View (Fallback): Same data points as blocky rounded-none horizontal progress bars + detailed recommendations */
         <div data-testid="weakness-list-view" className="relative z-10 mt-5 space-y-5">
           {/* Blocky Horizontal Progress Bars */}
-          <div className="border-2 border-gray-900 bg-white p-4 text-gray-900 shadow-[6px_6px_0px_#111827] dark:border-[#222B3D] dark:bg-[#101522] dark:text-white dark:shadow-[6px_6px_0px_#000000]">
+          <div className="border-2 border-gray-900 bg-white/30 p-4 text-gray-900 shadow-[6px_6px_0px_#111827] backdrop-blur-xl dark:border-[#222B3D] dark:bg-[#101522]/30 dark:text-white dark:shadow-[6px_6px_0px_#000000]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-gray-900 pb-3 dark:border-[#222B3D]">
               <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-900 dark:text-white">
                 {isUz
@@ -660,7 +660,7 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
                 <div
                   key={rec.id}
                   data-testid={`weakness-recommendation-${index}`}
-                  className="flex flex-col justify-between border-2 border-gray-900 bg-white p-4 text-gray-900 shadow-[6px_6px_0px_#111827] dark:border-[#222B3D] dark:bg-[#101522] dark:text-white dark:shadow-[6px_6px_0px_#000000]"
+                  className="flex flex-col justify-between border-2 border-gray-900 bg-white/30 p-4 text-gray-900 shadow-[6px_6px_0px_#111827] backdrop-blur-xl dark:border-[#222B3D] dark:bg-[#101522]/30 dark:text-white dark:shadow-[6px_6px_0px_#000000]"
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">

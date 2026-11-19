@@ -113,3 +113,85 @@ export function annotateBadgesForEntrance(
     };
   });
 }
+
+export const BADGE_SLIDE_IN_DEFAULTS = {
+  initialScale: 0.9,
+  unlockScale: 0.86,
+  initialXOffsetPx: -16,
+  unlockXOffsetPx: -24,
+  initialYOffsetPx: 14,
+  durationSec: 0.5,
+  unlockDurationSec: 0.55,
+  staggerSec: 0.08,
+  ease: 'power3.out',
+} as const;
+
+/**
+ * Computes which badge IDs in `currentBadges` were not present in `previousBadgeIds`.
+ * Used by AchievementsView to apply a targeted GSAP Glass-Brutalist animation
+ * whenever a new badge is unlocked.
+ */
+export function resolveNewlyUnlockedBadgeIds(
+  previousBadgeIds: readonly string[],
+  currentBadges: readonly BadgeAward[]
+): string[] {
+  if (!Array.isArray(currentBadges) || currentBadges.length === 0) {
+    return [];
+  }
+  const prevSet = new Set(previousBadgeIds);
+  return currentBadges
+    .filter((badge) => Boolean(badge?.id) && !prevSet.has(badge.id))
+    .map((badge) => badge.id);
+}
+
+export interface BadgeEntranceAnimationPlan {
+  mode: 'none' | 'initial-stagger' | 'unlock-stagger';
+  targetIds: string[];
+  ease: typeof BADGE_SLIDE_IN_DEFAULTS.ease;
+  fromScale: number;
+  staggerSec: number;
+}
+
+/**
+ * Determines whether AchievementsView should run a staggered full-list fade+scale entrance
+ * or target newly unlocked badges exclusively.
+ */
+export function buildBadgeEntranceAnimationPlan(params: {
+  hasHydratedBaseline: boolean;
+  previousBadgeIds: readonly string[];
+  currentBadges: readonly BadgeAward[];
+}): BadgeEntranceAnimationPlan {
+  if (!Array.isArray(params.currentBadges) || params.currentBadges.length === 0) {
+    return {
+      mode: 'none',
+      targetIds: [],
+      ease: BADGE_SLIDE_IN_DEFAULTS.ease,
+      fromScale: BADGE_SLIDE_IN_DEFAULTS.initialScale,
+      staggerSec: BADGE_SLIDE_IN_DEFAULTS.staggerSec,
+    };
+  }
+
+  if (params.hasHydratedBaseline) {
+    const newlyUnlockedIds = resolveNewlyUnlockedBadgeIds(
+      params.previousBadgeIds,
+      params.currentBadges
+    );
+    if (newlyUnlockedIds.length > 0) {
+      return {
+        mode: 'unlock-stagger',
+        targetIds: newlyUnlockedIds,
+        ease: BADGE_SLIDE_IN_DEFAULTS.ease,
+        fromScale: BADGE_SLIDE_IN_DEFAULTS.unlockScale,
+        staggerSec: BADGE_SLIDE_IN_DEFAULTS.staggerSec,
+      };
+    }
+  }
+
+  return {
+    mode: 'initial-stagger',
+    targetIds: params.currentBadges.map((b) => b.id),
+    ease: BADGE_SLIDE_IN_DEFAULTS.ease,
+    fromScale: BADGE_SLIDE_IN_DEFAULTS.initialScale,
+    staggerSec: BADGE_SLIDE_IN_DEFAULTS.staggerSec,
+  };
+}

@@ -71,7 +71,7 @@ export const EconomicsSection: React.FC<EconomicsSectionProps> = ({
       {/* Foreground Glass-Brutalist Economics Content Overlay */}
       <section
         aria-labelledby="economics-section-heading"
-        className="relative z-10 space-y-5 rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+        className="relative z-10 space-y-5 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
       >
         <div className="flex flex-col gap-3 border-b-2 border-slate-500 dark:border-[#222B3D] pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -148,7 +148,7 @@ export const EconomicsSection: React.FC<EconomicsSectionProps> = ({
                   testId={`economics-course-card-${course.id}`}
                   subject={course.subject}
                   artifactIndex={idx}
-                  className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+                  className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-3">

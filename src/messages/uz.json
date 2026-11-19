@@ -80,8 +80,8 @@
     "telemetry": {
       "activeCourses": "Faol kurslar",
       "studyStreak": "O‘quv davomiyligi",
-      "daysUnit": "k",
-      "nonCashXp": "Naqd pulsiz XP",
+      "daysUnit": " kun",
+      "nonCashXp": "Akademik XP",
       "certificates": "Sertifikatlar"
     }
   },
@@ -168,7 +168,7 @@
     "passedAria": "O‘tilgan"
   },
   "achievements": {
-    "nonCashXpTotal": "Jami naqd pulsiz XP",
+    "nonCashXpTotal": "Jami Akademik XP",
     "todayCap": "Bugun: {xpToday} / 300 XP kunlik me’yor",
     "studyStreak": "O‘quv davomiyligi",
     "daysLabel": "kun",
@@ -183,7 +183,7 @@
     "colMilestone": "Bosqich",
     "colRule": "Qoida",
     "colDate": "Sana",
-    "colNonCashXp": "Naqd pulsiz XP"
+    "colNonCashXp": "Akademik XP"
   },
   "assessment": {
     "finalAssessmentBadge": "Yakuniy kurs baholashi · O‘tish chegarasi: {passingScore}%",

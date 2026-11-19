@@ -242,7 +242,7 @@ export const CourseMap: React.FC<CourseMapProps> = ({
     <section
       aria-labelledby="course-map-heading"
       data-testid="course-map-section"
-      className="rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+      className="rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
       <div className="flex flex-col gap-3 border-b-2 border-slate-500 dark:border-[#222B3D] pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>

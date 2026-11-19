@@ -394,7 +394,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   };
 
   return (
-    <article className="space-y-6 rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+    <article className="space-y-6 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
       <header className="border-b border-line pb-4">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
           <span>

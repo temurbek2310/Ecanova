@@ -129,7 +129,7 @@ export const KineticHeroSection: React.FC<KineticHeroSectionProps> = ({
     <section
       ref={heroRef}
       data-testid="kinetic-hero-section"
-      className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/40 p-6 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl sm:p-8 lg:p-10 dark:border-[#222B3D] dark:bg-[#101522]/40"
+      className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-6 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl sm:p-8 lg:p-10 dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
       {/* Subtle Architectural Grid Accent */}
       <div
@@ -140,7 +140,8 @@ export const KineticHeroSection: React.FC<KineticHeroSectionProps> = ({
       <FloatingWatermark
         theme="analytics"
         seedIndex={3}
-        count={4}
+        count={5}
+        layout="hero-right"
         testId="hero-floating-watermark"
       />
 

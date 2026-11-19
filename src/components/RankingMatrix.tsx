@@ -136,7 +136,7 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
     >
       {/* Quantitative Summary Strip */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border-2 border-slate-500 bg-white/40 p-3.5 shadow-[6px_6px_0px_#090D16] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 dark:shadow-[6px_6px_0px_#000000]">
+        <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-3.5 shadow-[6px_6px_0px_#090D16] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25 dark:shadow-[6px_6px_0px_#000000]">
           <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
             <Calendar className="h-3.5 w-3.5 text-theme-cyan" aria-hidden="true" />
             <span>{isUz ? 'Haftalik oyna' : 'Evaluation Window'}</span>
@@ -152,7 +152,7 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
           </div>
         </div>
 
-        <div className="rounded-xl border-2 border-slate-500 bg-white/40 p-3.5 shadow-[6px_6px_0px_#090D16] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 dark:shadow-[6px_6px_0px_#000000]">
+        <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-3.5 shadow-[6px_6px_0px_#090D16] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25 dark:shadow-[6px_6px_0px_#000000]">
           <div className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
             {isUz ? 'Maksimal aniqlik' : 'Peak Accuracy'}
           </div>
@@ -167,7 +167,7 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
           </div>
         </div>
 
-        <div className="rounded-xl border-2 border-slate-500 bg-white/40 p-3.5 shadow-[6px_6px_0px_#090D16] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 dark:shadow-[6px_6px_0px_#000000]">
+        <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-3.5 shadow-[6px_6px_0px_#090D16] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25 dark:shadow-[6px_6px_0px_#000000]">
           <div className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
             {isUz ? 'Kohorta o‘rtacha' : 'Cohort Mean · Pass'}
           </div>
@@ -179,7 +179,7 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
           </div>
         </div>
 
-        <div className="rounded-xl border-2 border-slate-500 bg-white/40 p-3.5 shadow-[6px_6px_0px_#090D16] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 dark:shadow-[6px_6px_0px_#000000]">
+        <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-3.5 shadow-[6px_6px_0px_#090D16] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25 dark:shadow-[6px_6px_0px_#000000]">
           <div className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted">
             {isUz ? 'Matritsa qatorlari' : 'Matrix Records'}
           </div>
@@ -193,7 +193,7 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
       </div>
 
       {/* Course Assessment Filter Bar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-slate-500 bg-white/40 p-3 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-slate-500 bg-white/25 p-3 backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
           <Filter className="h-3.5 w-3.5 text-[#5B21B6] dark:text-[#9274FF]" aria-hidden="true" />
           <span>{isUz ? 'Kurs kesimi:' : 'Assessment Filter:'}</span>
@@ -230,7 +230,7 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
       </div>
 
       {/* High-Density Terminal-Style Quantitative Ranking Matrix */}
-      <div className="overflow-hidden rounded-xl border-2 border-slate-500 bg-white/40 shadow-[8px_8px_0px_#090D16] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 dark:shadow-[8px_8px_0px_#000000]">
+      <div className="overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 shadow-[8px_8px_0px_#090D16] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25 dark:shadow-[8px_8px_0px_#000000]">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-500 bg-white/50 px-4 py-2.5 dark:border-[#222B3D] dark:bg-[#080B14]/60">
           <div className="flex items-center gap-2 font-mono text-xs font-bold text-ink">
             <Terminal className="h-3.5 w-3.5 text-[#0F766E] dark:text-[#5DE1D2]" aria-hidden="true" />

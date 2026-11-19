@@ -23,6 +23,10 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
     const fill = isWatermark ? accentColor : ARTIFACT_SURFACE_FILL;
     const fillOpacity = isWatermark ? 0.14 : 1;
     const stroke = isWatermark ? accentColor : ARTIFACT_BORDER_STROKE;
+    const watermarkSvgClass = isWatermark
+      ? '[&>*]:[stroke-width:1.5px] [&>*]:[vector-effect:non-scaling-stroke]'
+      : '';
+    const svgClass = `${className} overflow-visible ${watermarkSvgClass}`.trim();
 
     switch (kind) {
       case 'icosahedron':
@@ -30,7 +34,7 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
           <svg
             ref={ref}
             viewBox="0 0 120 120"
-            className={`${className} overflow-visible`}
+            className={svgClass}
             aria-hidden="true"
           >
             <polygon
@@ -92,7 +96,7 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
           <svg
             ref={ref}
             viewBox="0 0 120 120"
-            className={`${className} overflow-visible`}
+            className={svgClass}
             aria-hidden="true"
           >
             <rect
@@ -136,7 +140,7 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
           <svg
             ref={ref}
             viewBox="0 0 120 120"
-            className={`${className} overflow-visible`}
+            className={svgClass}
             aria-hidden="true"
           >
             <polygon
@@ -174,7 +178,7 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
           <svg
             ref={ref}
             viewBox="0 0 120 120"
-            className={`${className} overflow-visible`}
+            className={svgClass}
             aria-hidden="true"
           >
             <path
@@ -238,7 +242,7 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
           <svg
             ref={ref}
             viewBox="0 0 120 120"
-            className={`${className} overflow-visible`}
+            className={svgClass}
             aria-hidden="true"
           >
             <rect
@@ -294,7 +298,7 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
           <svg
             ref={ref}
             viewBox="0 0 120 120"
-            className={`${className} overflow-visible`}
+            className={svgClass}
             aria-hidden="true"
           >
             <rect
@@ -346,7 +350,7 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
           <svg
             ref={ref}
             viewBox="0 0 120 120"
-            className={`${className} overflow-visible`}
+            className={svgClass}
             aria-hidden="true"
           >
             <path
@@ -414,7 +418,7 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
           <svg
             ref={ref}
             viewBox="0 0 120 120"
-            className={`${className} overflow-visible`}
+            className={svgClass}
             aria-hidden="true"
           >
             <rect
@@ -452,7 +456,7 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
           <svg
             ref={ref}
             viewBox="0 0 120 120"
-            className={`${className} overflow-visible`}
+            className={svgClass}
             aria-hidden="true"
           >
             <rect
@@ -506,7 +510,7 @@ export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgPr
           <svg
             ref={ref}
             viewBox="0 0 120 120"
-            className={`${className} overflow-visible`}
+            className={svgClass}
             aria-hidden="true"
           >
             <polygon

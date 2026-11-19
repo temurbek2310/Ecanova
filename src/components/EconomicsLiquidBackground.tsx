@@ -1,24 +1,30 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import * as THREE from 'three';
+import { useEconovaGSAP } from '../hooks/useEconovaGSAP';
 import {
   ECONOMICS_LIQUID_FRAGMENT_SHADER,
   ECONOMICS_LIQUID_VERTEX_SHADER,
   resolveActiveEconomicsShaderPalette,
 } from '../lib/economics-shader';
 import {
+  computeBackgroundParallaxOffset,
+  DEFAULT_BG_PARALLAX_MAX_PX,
   DEFAULT_WEBGL_BASE_Z,
   DEFAULT_WEBGL_MIN_Z,
-  getGlobalScrollSnapshot,
-  stepWebGLScrollState,
-  type WebGLScrollState,
+  stepViscousBackgroundScroll,
+  type ViscousBackgroundScrollState,
 } from '../lib/scroll-sync';
 import {
   observeDocumentTheme,
   readActiveDocumentTheme,
   type ThemeMode,
 } from '../lib/theme';
+
+gsap.registerPlugin(ScrollTrigger);
 
 interface UniformSet {
   [uniform: string]: THREE.IUniform;
@@ -42,18 +48,27 @@ interface EconomicsLiquidBackgroundProps {
 }
 
 /**
+ * 80% time-scale reduction for glacial, heavy, meditative shader fluid progression.
+ */
+export const GLACIAL_LIQUID_TIME_MULTIPLIER = 0.2;
+export const GLACIAL_AMBIENT_DURATION_SEC = 24;
+
+/**
  * Fixed Three.js WebGL "Reactive Data Topography" liquid shader background.
- * Syncs with global Lenis scroll progress (`window.scrollY` & scroll velocity):
- * - Maps `scrollY` smoothly onto `PerspectiveCamera.position.z`
- * - Accelerates `uTime` & `uScrollVelocity` distortion during fast scroll, then
- *   smoothly interpolates back to a calm passive idle flow when stopped.
- * - Preserves live theme switching and software-WebGL `afterDraw()` pacing.
+ * - Root container is decoupled (`fixed inset-0 -z-10 pointer-events-none`).
+ * - Scroll reactivity is driven exclusively by GSAP `ScrollTrigger` (`scrub: 1.6`)
+ *   and heavy viscous lerp damping (`stepViscousBackgroundScroll`), eliminating scroll jitter.
+ * - Shader `uTime` runs at 0.2x (80% slower) alongside a 24-second `sine.inOut` GSAP glacial drift.
+ * - Desktop (`min-width: 769px`) applies opposite-direction mouse micro-parallax (`±25px`)
+ *   via `gsap.quickTo()` + `matchMedia`, automatically disabled on mobile (`max-width: 768px`).
  */
 export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps> = ({
   active = true,
   theme,
   className = '',
 }) => {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const parallaxLayerRef = useRef<HTMLDivElement | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
   const uniformsRef = useRef<UniformSet | null>(null);
   const targetColorsRef = useRef<{
@@ -62,19 +77,26 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
     colorC: THREE.Vector3;
   } | null>(null);
   const renderOnceRef = useRef<(() => void) | null>(null);
+  const scrollProxyRef = useRef<{
+    progress: number;
+    scrollY: number;
+    maxScroll: number;
+  }>({
+    progress: 0,
+    scrollY: 0,
+    maxScroll: 2400,
+  });
 
   const [detectedTheme, setDetectedTheme] = useState<ThemeMode>(() =>
     theme ?? readActiveDocumentTheme()
   );
 
-  // Sync with prop if passed
   useEffect(() => {
     if (theme) {
       setDetectedTheme(theme);
     }
   }, [theme]);
 
-  // Listen for dynamic theme changes on <html> (class / data-theme) via MutationObserver
   useEffect(() => {
     if (typeof window === 'undefined') return;
     setDetectedTheme(theme ?? readActiveDocumentTheme());
@@ -83,7 +105,7 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
     });
   }, [theme]);
 
-  // Dynamically interpolate & update WebGL uniforms when active theme changes
+  // Smoothly interpolate WebGL shader palette uniforms when theme toggles
   useEffect(() => {
     const palette = resolveActiveEconomicsShaderPalette(detectedTheme);
     const nextA = new THREE.Vector3(
@@ -108,11 +130,11 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
       colorC: nextC,
     };
 
-    if (mountRef.current) {
-      mountRef.current.setAttribute('data-active-theme', detectedTheme);
-      mountRef.current.setAttribute('data-uniform-color-a', palette.baseSlateHex);
-      mountRef.current.setAttribute('data-uniform-color-b', palette.cyanAccentHex);
-      mountRef.current.setAttribute('data-uniform-color-c', palette.greenAccentHex);
+    if (rootRef.current) {
+      rootRef.current.setAttribute('data-active-theme', detectedTheme);
+      rootRef.current.setAttribute('data-uniform-color-a', palette.baseSlateHex);
+      rootRef.current.setAttribute('data-uniform-color-b', palette.cyanAccentHex);
+      rootRef.current.setAttribute('data-uniform-color-c', palette.greenAccentHex);
     }
 
     const uniforms = uniformsRef.current;
@@ -149,12 +171,136 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
     };
   }, [detectedTheme]);
 
+  // GSAP ScrollTrigger + Glacial 24s Ambient Drift + Global Mouse Micro-Parallax (quickTo, desktop-only)
+  useEconovaGSAP(
+    rootRef,
+    () => {
+      if (!active || typeof window === 'undefined') return;
+      const rootEl = rootRef.current;
+      const parallaxEl = parallaxLayerRef.current;
+      const mountEl = mountRef.current;
+      if (!rootEl || !parallaxEl) return;
+
+      const prefersReducedMotion =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      rootEl.setAttribute('data-time-multiplier', GLACIAL_LIQUID_TIME_MULTIPLIER.toFixed(2));
+      rootEl.setAttribute('data-glacial-duration', String(GLACIAL_AMBIENT_DURATION_SEC));
+
+      // 1. Glacial, barely perceptible 24s sine.inOut ambient flow drift
+      const glacialDriftTween =
+        !prefersReducedMotion && mountEl
+          ? gsap.to(mountEl, {
+              x: 10,
+              y: -8,
+              scale: 1.03,
+              duration: GLACIAL_AMBIENT_DURATION_SEC,
+              delay: -6,
+              repeat: -1,
+              yoyo: true,
+              ease: 'sine.inOut',
+              force3D: true,
+            })
+          : null;
+
+      // 2. Scrubbed ScrollTrigger for viscous, jitter-free scroll progress
+      const scrubTween = !prefersReducedMotion
+        ? gsap.to(scrollProxyRef.current, {
+            progress: 1,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: document.documentElement,
+              start: 'top top',
+              end: 'max',
+              scrub: 1.6,
+              invalidateOnRefresh: true,
+              onUpdate: (self) => {
+                const maxScroll = Math.max(
+                  600,
+                  document.documentElement.scrollHeight - window.innerHeight
+                );
+                scrollProxyRef.current.maxScroll = maxScroll;
+                scrollProxyRef.current.scrollY = self.progress * maxScroll;
+              },
+            },
+          })
+        : null;
+
+      // 3. Global mouse micro-parallax via gsap.quickTo() & matchMedia (disabled on <= 768px mobile)
+      const mm = gsap.matchMedia();
+      mm.add(
+        {
+          isDesktop: '(min-width: 769px)',
+          isMobile: '(max-width: 768px)',
+          reduceMotion: '(prefers-reduced-motion: reduce)',
+        },
+        (context) => {
+          const { isDesktop, reduceMotion } = context.conditions ?? {};
+
+          if (!isDesktop || reduceMotion) {
+            gsap.set(parallaxEl, { x: 0, y: 0, force3D: true });
+            rootEl.setAttribute('data-parallax-mode', reduceMotion ? 'reduced' : 'disabled-mobile');
+            return;
+          }
+
+          rootEl.setAttribute('data-parallax-mode', 'desktop-active');
+
+          const quickX = gsap.quickTo(parallaxEl, 'x', {
+            duration: 1.8,
+            ease: 'sine.inOut',
+          });
+          const quickY = gsap.quickTo(parallaxEl, 'y', {
+            duration: 1.8,
+            ease: 'sine.inOut',
+          });
+
+          const handleMouseMove = (event: MouseEvent) => {
+            const offset = computeBackgroundParallaxOffset({
+              clientX: event.clientX,
+              clientY: event.clientY,
+              viewportWidth: window.innerWidth,
+              viewportHeight: window.innerHeight,
+              maxOffsetPx: DEFAULT_BG_PARALLAX_MAX_PX,
+            });
+            quickX(offset.x);
+            quickY(offset.y);
+          };
+
+          const handlePointerReset = () => {
+            quickX(0);
+            quickY(0);
+          };
+
+          window.addEventListener('mousemove', handleMouseMove, { passive: true });
+          window.addEventListener('blur', handlePointerReset);
+          document.addEventListener('mouseleave', handlePointerReset);
+
+          return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('blur', handlePointerReset);
+            document.removeEventListener('mouseleave', handlePointerReset);
+          };
+        }
+      );
+
+      return () => {
+        glacialDriftTween?.kill();
+        scrubTween?.scrollTrigger?.kill();
+        scrubTween?.kill();
+        mm.revert();
+      };
+    },
+    { dependencies: [active] }
+  );
+
+  // Isolated Three.js WebGL shader lifecycle
   useEffect(() => {
     if (!active || typeof window === 'undefined') return;
+    const rootEl = rootRef.current;
     const container = mountRef.current;
-    if (!container) return;
+    if (!rootEl || !container) return;
 
-    // Detect software WebGL (SwiftShader / llvmpipe / Basic Render) per Three.js skill guidelines
     const isSoftwareGl = (() => {
       try {
         const probeCanvas = document.createElement('canvas');
@@ -214,12 +360,12 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
     const initialPalette = resolveActiveEconomicsShaderPalette(initialTheme);
     const { baseSlateRgb, cyanAccentRgb, greenAccentRgb } = initialPalette;
 
-    container.setAttribute('data-active-theme', initialTheme);
-    container.setAttribute('data-uniform-color-a', initialPalette.baseSlateHex);
-    container.setAttribute('data-uniform-color-b', initialPalette.cyanAccentHex);
-    container.setAttribute('data-uniform-color-c', initialPalette.greenAccentHex);
-    container.setAttribute('data-camera-z', DEFAULT_WEBGL_BASE_Z.toFixed(3));
-    container.setAttribute('data-scroll-boost', '0.000');
+    rootEl.setAttribute('data-active-theme', initialTheme);
+    rootEl.setAttribute('data-uniform-color-a', initialPalette.baseSlateHex);
+    rootEl.setAttribute('data-uniform-color-b', initialPalette.cyanAccentHex);
+    rootEl.setAttribute('data-uniform-color-c', initialPalette.greenAccentHex);
+    rootEl.setAttribute('data-camera-z', DEFAULT_WEBGL_BASE_Z.toFixed(3));
+    rootEl.setAttribute('data-scroll-boost', '0.000');
 
     const vecA = new THREE.Vector3(baseSlateRgb.r, baseSlateRgb.g, baseSlateRgb.b);
     const vecB = new THREE.Vector3(cyanAccentRgb.r, cyanAccentRgb.g, cyanAccentRgb.b);
@@ -248,7 +394,6 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
     };
     uniformsRef.current = uniforms;
 
-    // Oversized topographical plane so perspective camera Z scrubbing never exposes viewport edges
     const geometry = new THREE.PlaneGeometry(14, 14);
     const material = new THREE.ShaderMaterial({
       vertexShader: ECONOMICS_LIQUID_VERTEX_SHADER,
@@ -282,11 +427,11 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    let scrollState: WebGLScrollState = {
+    let viscousState: ViscousBackgroundScrollState = {
+      scrollY: 0,
+      scrollProgress: 0,
+      velocitySmooth: 0,
       cameraZ: DEFAULT_WEBGL_BASE_Z,
-      scrollY: window.scrollY || 0,
-      scrollBoost: 0,
-      timeSpeedMultiplier: 1.0,
       accumulatedTime: 0,
     };
 
@@ -329,44 +474,40 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
       const dtSeconds = Math.max(0.001, (nowMs - lastTickMs) * 0.001);
       lastTickMs = nowMs;
 
-      const snapshot = getGlobalScrollSnapshot();
-      const activeScrollY = snapshot.scrollY || window.scrollY || 0;
-      const maxScroll = Math.max(
-        600,
-        snapshot.limit || document.documentElement.scrollHeight - window.innerHeight
-      );
+      const scrubbed = scrollProxyRef.current;
 
       if (!prefersReducedMotion) {
-        scrollState = stepWebGLScrollState(
-          scrollState,
+        viscousState = stepViscousBackgroundScroll(
+          viscousState,
           {
-            scrollY: activeScrollY,
-            maxScroll,
-            velocity: snapshot.velocity,
+            scrubbedProgress: scrubbed.progress,
+            scrubbedScrollY: scrubbed.scrollY,
+            maxScroll: scrubbed.maxScroll,
             baseZ: DEFAULT_WEBGL_BASE_Z,
             minZ: DEFAULT_WEBGL_MIN_Z,
           },
           dtSeconds
         );
       } else {
-        scrollState = {
+        viscousState = {
+          scrollY: 0,
+          scrollProgress: 0,
+          velocitySmooth: 0,
           cameraZ: DEFAULT_WEBGL_BASE_Z,
-          scrollY: activeScrollY,
-          scrollBoost: 0,
-          timeSpeedMultiplier: 1.0,
           accumulatedTime: 0,
         };
       }
 
-      camera.position.z = scrollState.cameraZ;
-      uniforms.uTime.value = scrollState.accumulatedTime;
-      uniforms.uScrollY.value = scrollState.scrollY;
-      uniforms.uScrollVelocity.value = scrollState.scrollBoost;
-      uniforms.uPointer.value.lerp(targetPointer, 0.06);
+      camera.position.z = viscousState.cameraZ;
+      uniforms.uTime.value = viscousState.accumulatedTime * GLACIAL_LIQUID_TIME_MULTIPLIER;
+      uniforms.uScrollY.value = viscousState.scrollY;
+      uniforms.uScrollVelocity.value = viscousState.velocitySmooth;
+      uniforms.uPointer.value.lerp(targetPointer, 0.008);
 
-      container.setAttribute('data-camera-z', scrollState.cameraZ.toFixed(3));
-      container.setAttribute('data-scroll-boost', scrollState.scrollBoost.toFixed(3));
-      container.setAttribute('data-scroll-y', Math.round(scrollState.scrollY).toString());
+      rootEl.setAttribute('data-camera-z', viscousState.cameraZ.toFixed(3));
+      rootEl.setAttribute('data-scroll-boost', viscousState.velocitySmooth.toFixed(3));
+      rootEl.setAttribute('data-scroll-y', Math.round(viscousState.scrollY).toString());
+      rootEl.setAttribute('data-utime', uniforms.uTime.value.toFixed(3));
 
       if (targetColorsRef.current) {
         uniforms.u_colorA.value.lerp(targetColorsRef.current.colorA, 0.12);
@@ -411,11 +552,20 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
 
   return (
     <div
-      ref={mountRef}
+      ref={rootRef}
       aria-hidden="true"
       data-testid="economics-liquid-bg"
       data-active-theme={detectedTheme}
-      className={`no-print pointer-events-none fixed inset-0 z-0 overflow-hidden bg-theme-base ${className}`}
-    />
+      className={`no-print fixed inset-0 -z-10 pointer-events-none overflow-hidden bg-theme-base ${className}`}
+    >
+      {/* Oversized parallax layer (-inset-[44px]) prevents edge clipping during ±25px quickTo + glacial drift */}
+      <div
+        ref={parallaxLayerRef}
+        data-testid="economics-liquid-parallax"
+        className="absolute -inset-[44px] will-change-transform"
+      >
+        <div ref={mountRef} className="h-full w-full will-change-transform" />
+      </div>
+    </div>
   );
 };

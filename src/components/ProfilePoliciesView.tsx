@@ -263,7 +263,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
   const bookmarksSection = (
     <section
       aria-labelledby="bookmarked-courses-title"
-      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
       data-testid="profile-bookmarks-section"
     >
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line pb-3">
@@ -362,7 +362,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
     <section
       aria-labelledby="weekly-study-digest-title"
       data-testid="weekly-study-digest-section"
-      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
       <div className="flex flex-wrap items-start justify-between gap-2 border-b-2 border-theme-border pb-3">
         <div>
@@ -505,7 +505,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
     <section
       aria-labelledby="profile-theme-sync-title"
       data-testid="profile-theme-sync-section"
-      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
       <div className="flex flex-wrap items-start justify-between gap-2 border-b-2 border-theme-border pb-3">
         <div>
@@ -619,7 +619,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
       {user && bookmarksSection}
 
       {user ? (
-        <form onSubmit={handleSave} className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+        <form onSubmit={handleSave} className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
           <div className="border-b border-line pb-3">
             <h1 className="text-xl font-semibold text-ink">{strings.profile.title}</h1>
             <p className="mt-1 text-xs text-muted">
@@ -726,7 +726,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           </div>
         </form>
       ) : (
-        <section className="rounded-xl border-2 border-slate-500 bg-white/40 p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+        <section className="rounded-xl border-2 border-slate-500 bg-white/25 p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
           <h1 className="text-xl font-semibold text-ink">{strings.profile.guestTitle}</h1>
           <p className="mt-2 text-sm text-muted">
             {strings.profile.guestSubtitle}
@@ -746,7 +746,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
       {/* Study Goal Push Notifications */}
       <section
         aria-labelledby="study-goal-notifications-title"
-        className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+        className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
         data-testid="study-goal-notifications-section"
       >
         <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line pb-3">
@@ -859,7 +859,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
       {/* Offline Cache Manager */}
       <section
         aria-labelledby="offline-cache-manager-title"
-        className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+        className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
       >
         <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line pb-3">
           <div>
@@ -942,7 +942,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
       </section>
 
       {/* Policies, Privacy, Age Safeguards & Disclosures */}
-      <section className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+      <section className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
         <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
           <Shield className="h-4 w-4 text-teal" aria-hidden="true" />
           <span>{strings.profile.policiesTitle}</span>

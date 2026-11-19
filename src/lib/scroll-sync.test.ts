@@ -2,12 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildShowcaseCardItems,
+  computeBackgroundParallaxOffset,
   computeScrollDistortionBoost,
   computeShowcaseCardTiltDeg,
   computeWebGLCameraZ,
   DEFAULT_WEBGL_BASE_Z,
   DEFAULT_WEBGL_MIN_Z,
+  stepViscousBackgroundScroll,
   stepWebGLScrollState,
+  type ViscousBackgroundScrollState,
   type WebGLScrollState,
 } from './scroll-sync';
 import type { CourseCatalogItem } from '../shared/types';
@@ -151,4 +154,69 @@ test('buildShowcaseCardItems generates 6 horizontal showcase cards from 3 course
   assert.equal(cards[3]?.isModuleSpotlight, true);
   assert.equal(cards[3]?.lessonIndex, 1);
   assert.equal(cards[3]?.title, 'Elasticity');
+});
+
+test('computeBackgroundParallaxOffset maps pointer [-1,1] to opposite ±25px range cleanly', () => {
+  const topLeft = computeBackgroundParallaxOffset({
+    clientX: 0,
+    clientY: 0,
+    viewportWidth: 1440,
+    viewportHeight: 900,
+    maxOffsetPx: 25,
+  });
+  assert.equal(topLeft.normalizedX, -1);
+  assert.equal(topLeft.normalizedY, -1);
+  assert.equal(topLeft.x, 25);
+  assert.equal(topLeft.y, 25);
+
+  const center = computeBackgroundParallaxOffset({
+    clientX: 720,
+    clientY: 450,
+    viewportWidth: 1440,
+    viewportHeight: 900,
+    maxOffsetPx: 25,
+  });
+  assert.equal(center.x, 0);
+  assert.equal(center.y, 0);
+
+  const bottomRightClamped = computeBackgroundParallaxOffset({
+    clientX: 2000,
+    clientY: 1200,
+    viewportWidth: 1440,
+    viewportHeight: 900,
+    maxOffsetPx: 25,
+  });
+  assert.equal(bottomRightClamped.x, -25);
+  assert.equal(bottomRightClamped.y, -25);
+});
+
+test('stepViscousBackgroundScroll damps scroll jumps heavily without velocity spikes', () => {
+  let state: ViscousBackgroundScrollState = {
+    scrollY: 0,
+    scrollProgress: 0,
+    velocitySmooth: 0,
+    cameraZ: DEFAULT_WEBGL_BASE_Z,
+    accumulatedTime: 0,
+  };
+
+  // Simulate sudden large jump to 1500px scrubbed by ScrollTrigger
+  state = stepViscousBackgroundScroll(
+    state,
+    { scrubbedProgress: 0.75, scrubbedScrollY: 1500, maxScroll: 2000 },
+    0.016
+  );
+
+  // Heavy viscous damping moves only a fraction per frame and constrains velocity <= 0.32
+  assert.ok(state.scrollY > 0 && state.scrollY < 150);
+  assert.ok(state.velocitySmooth <= 0.32);
+
+  for (let i = 0; i < 200; i += 1) {
+    state = stepViscousBackgroundScroll(
+      state,
+      { scrubbedProgress: 0.75, scrubbedScrollY: 1500, maxScroll: 2000 },
+      0.032
+    );
+  }
+  assert.ok(Math.abs(state.scrollY - 1500) < 1);
+  assert.equal(state.velocitySmooth, 0);
 });

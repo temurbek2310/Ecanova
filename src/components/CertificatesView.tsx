@@ -202,7 +202,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
 
   return (
     <div className="space-y-8">
-      <section data-print-hide="verify-lookup" data-print-hide-when-modal="true" className="no-print rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+      <section data-print-hide="verify-lookup" data-print-hide-when-modal="true" className="no-print rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
         <div className="border-b border-line pb-4">
           <h1 className="text-xl font-semibold text-ink sm:text-2xl">
             {locale === 'uz' ? 'Kurs sertifikatlari va tekshiruv' : 'Course Certificates & Public Verification'}
@@ -347,7 +347,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
               type="button"
               onClick={() => setNovaBurstKey((k) => k + 1)}
               data-testid="trigger-geometric-nova-btn"
-              className="no-print inline-flex min-h-[38px] items-center gap-2 rounded-lg border-2 border-[#0F766E] bg-white/40 px-3.5 py-1.5 font-mono text-xs font-semibold text-ink shadow-[4px_4px_0px_#090D16] backdrop-blur-2xl hover:border-[#5DE1D2] dark:border-[#222B3D] dark:bg-[#101522]/40 dark:shadow-[4px_4px_0px_#000000]"
+              className="no-print inline-flex min-h-[38px] items-center gap-2 rounded-lg border-2 border-[#0F766E] bg-white/25 px-3.5 py-1.5 font-mono text-xs font-semibold text-ink shadow-[4px_4px_0px_#090D16] backdrop-blur-2xl hover:border-[#5DE1D2] dark:border-[#222B3D] dark:bg-[#101522]/25 dark:shadow-[4px_4px_0px_#000000]"
             >
               <Sparkles className="h-3.5 w-3.5 text-[#0F766E] dark:text-[#5DE1D2]" aria-hidden="true" />
               <span>
@@ -391,7 +391,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
         )}
 
         {!isAuthenticated ? (
-          <div className="rounded-xl border-2 border-slate-500 bg-white/40 p-5 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+          <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-5 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
             <p>
               {locale === 'uz'
                 ? 'Yakunlagan kurslaringiz sertifikatlarini ko‘rish va ulashishni boshqarish uchun hisobingizga kiring.'
@@ -406,7 +406,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
             </button>
           </div>
         ) : certificates.length === 0 ? (
-          <div className="rounded-xl border-2 border-slate-500 bg-white/40 p-6 text-center text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+          <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-center text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
             <Award className="mx-auto h-8 w-8 text-muted/60" aria-hidden="true" />
             <p className="mt-2 font-medium text-ink">
               {locale === 'uz' ? 'Hali sertifikatlar berilmagan' : 'No certificates issued yet'}
@@ -423,7 +423,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
               <div
                 key={cert.id}
                 data-print-card="certificate"
-                className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+                className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 text-xs text-muted">

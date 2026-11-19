@@ -94,7 +94,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
 
   return (
     <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+      <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
         <FloatingWatermark
           theme="gamification"
           seedIndex={0}
@@ -289,7 +289,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
       </section>
 
       {/* Referrals */}
-      <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+      <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
         <FloatingWatermark
           theme="gamification"
           seedIndex={1}

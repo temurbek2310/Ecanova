@@ -78,7 +78,7 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
   return (
     <section
       aria-labelledby="daily-study-goal-title"
-      className="relative flex flex-col justify-between overflow-hidden rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl sm:p-6 dark:border-[#222B3D] dark:bg-[#101522]/40"
+      className="relative flex flex-col justify-between overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl sm:p-6 dark:border-[#222B3D] dark:bg-[#101522]/25"
       data-testid="daily-study-goal-card"
     >
       <FloatingWatermark

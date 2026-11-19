@@ -135,7 +135,7 @@ export const BusinessBentoCard: React.FC<BusinessBentoCardProps> = ({
         onMouseEnter={handleMouseEnter}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        className={`relative flex h-full flex-col justify-between overflow-hidden rounded-xl border-2 bg-white/65 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl will-change-transform transition-colors dark:bg-[#101522]/60 ${
+        className={`relative flex h-full flex-col justify-between overflow-hidden rounded-xl border-2 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl will-change-transform transition-colors dark:bg-[#101522]/25 ${
           isHovered
             ? 'border-theme-accent'
             : 'border-slate-500 dark:border-[#222B3D]'

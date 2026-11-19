@@ -132,7 +132,7 @@ const ShowcaseArtifactCard: React.FC<ShowcaseArtifactCardProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseMove={handleArtifactPointerMove}
       onMouseLeave={handleMouseLeave}
-      className="relative overflow-hidden will-change-transform flex w-[290px] sm:w-[370px] lg:w-[420px] shrink-0 flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/50 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/45"
+      className="relative overflow-hidden will-change-transform flex w-[290px] sm:w-[370px] lg:w-[420px] shrink-0 flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
       {/* Multi-particle Constellation Layer (z-0, bounded drift behind text) */}
       <ArtifactConstellation
@@ -367,7 +367,7 @@ export const CourseShowcase: React.FC<CourseShowcaseProps> = ({
         ref={pinWrapperRef}
         data-testid="course-showcase-pin-wrapper"
         data-scroll-moving="false"
-        className="overflow-hidden rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+        className="overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
       >
         <div className="flex flex-col gap-3 border-b-2 border-slate-500 dark:border-[#222B3D] pb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>

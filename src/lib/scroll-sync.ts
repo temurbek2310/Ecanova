@@ -201,6 +201,104 @@ export function stepWebGLScrollState(
   };
 }
 
+export const DEFAULT_BG_PARALLAX_MAX_PX = 25;
+
+export interface ViscousBackgroundScrollState {
+  scrollY: number;
+  scrollProgress: number;
+  velocitySmooth: number;
+  cameraZ: number;
+  accumulatedTime: number;
+}
+
+/**
+ * Maps viewport pointer coordinates to normalized [-1, 1] space and returns an
+ * opposite-direction micro-parallax offset within [-maxOffsetPx, maxOffsetPx].
+ */
+export function computeBackgroundParallaxOffset(params: {
+  clientX: number;
+  clientY: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  maxOffsetPx?: number;
+}): { x: number; y: number; normalizedX: number; normalizedY: number } {
+  const maxOffset = Math.max(0, params.maxOffsetPx ?? DEFAULT_BG_PARALLAX_MAX_PX);
+  const w = Math.max(1, Number.isFinite(params.viewportWidth) ? params.viewportWidth : 1);
+  const h = Math.max(1, Number.isFinite(params.viewportHeight) ? params.viewportHeight : 1);
+  const rawX = Number.isFinite(params.clientX) ? params.clientX : w / 2;
+  const rawY = Number.isFinite(params.clientY) ? params.clientY : h / 2;
+
+  const normalizedX = Math.max(-1, Math.min(1, (rawX / w) * 2 - 1));
+  const normalizedY = Math.max(-1, Math.min(1, (rawY / h) * 2 - 1));
+
+  // Move opposite to cursor for deep-space micro-parallax
+  const x = Number((-normalizedX * maxOffset).toFixed(2));
+  const y = Number((-normalizedY * maxOffset).toFixed(2));
+
+  return {
+    x: Object.is(x, -0) ? 0 : x,
+    y: Object.is(y, -0) ? 0 : y,
+    normalizedX: Number(normalizedX.toFixed(4)),
+    normalizedY: Number(normalizedY.toFixed(4)),
+  };
+}
+
+/**
+ * Heavy, viscous lerp damping for GSAP ScrollTrigger-scrubbed background physics.
+ * Eliminates high-frequency scroll jitter by constraining velocity impulse and smoothing camera Z.
+ */
+export function stepViscousBackgroundScroll(
+  prev: ViscousBackgroundScrollState,
+  input: {
+    scrubbedProgress: number;
+    scrubbedScrollY: number;
+    maxScroll?: number;
+    baseZ?: number;
+    minZ?: number;
+  },
+  dtSeconds: number
+): ViscousBackgroundScrollState {
+  const dt = Math.max(0.001, Math.min(0.05, Number.isFinite(dtSeconds) ? dtSeconds : 0.016));
+  const targetProgress = Math.max(
+    0,
+    Math.min(1, Number.isFinite(input.scrubbedProgress) ? input.scrubbedProgress : 0)
+  );
+  const targetScrollY = Math.max(0, Number.isFinite(input.scrubbedScrollY) ? input.scrubbedScrollY : 0);
+
+  // Heavy viscous damping coefficients so scroll transitions glide smoothly
+  const posAlpha = 1 - Math.exp(-3.5 * dt);
+  const delta = Math.abs(targetScrollY - prev.scrollY);
+  const nextScrollY =
+    delta < 0.01 ? targetScrollY : prev.scrollY + (targetScrollY - prev.scrollY) * posAlpha;
+  const nextProgress = prev.scrollProgress + (targetProgress - prev.scrollProgress) * posAlpha;
+
+  const targetVel = delta < 0.05 ? 0 : Math.min(0.32, delta * 0.0022);
+  const velAlpha = 1 - Math.exp(-2.8 * dt);
+  const nextVel = prev.velocitySmooth + (targetVel - prev.velocitySmooth) * velAlpha;
+  const cleanVel = nextVel < 0.001 && targetVel === 0 ? 0 : nextVel;
+
+  const baseZ = input.baseZ ?? DEFAULT_WEBGL_BASE_Z;
+  const minZ = input.minZ ?? DEFAULT_WEBGL_MIN_Z;
+  const targetCameraZ = computeWebGLCameraZ({
+    scrollY: nextScrollY,
+    maxScroll: input.maxScroll,
+    baseZ,
+    minZ,
+  });
+  const nextCameraZ = prev.cameraZ + (targetCameraZ - prev.cameraZ) * posAlpha;
+
+  // Calm steady shader time progression (gentle max +0.35x drift instead of violent 5x jumps)
+  const nextAccumulatedTime = prev.accumulatedTime + dt * (1.0 + cleanVel * 1.1);
+
+  return {
+    scrollY: Number(nextScrollY.toFixed(3)),
+    scrollProgress: Number(nextProgress.toFixed(5)),
+    velocitySmooth: Number(cleanVel.toFixed(4)),
+    cameraZ: Number(nextCameraZ.toFixed(5)),
+    accumulatedTime: Number(nextAccumulatedTime.toFixed(5)),
+  };
+}
+
 /**
  * Computes staggered tactile tilt angle (in degrees) for horizontal CourseShowcase cards
  * during active ScrollTrigger scrubbing. Forward scroll produces negative tilt (e.g. ~ -2deg)

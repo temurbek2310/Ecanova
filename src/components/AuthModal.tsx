@@ -220,7 +220,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       aria-labelledby="auth-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
     >
-      <div className="w-full max-w-md rounded-2xl border-2 border-slate-500 bg-white/40 p-6 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40">
+      <div className="w-full max-w-md rounded-2xl border-2 border-slate-500 bg-white/30 p-6 shadow-[8px_8px_0px_#9274FF] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id="auth-modal-title" className="text-lg font-extrabold text-ink">
@@ -272,7 +272,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 type="button"
                 disabled={loading || googleLoading}
                 onClick={() => void handleSandbox('learner')}
-                className="min-h-[38px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#101522]/70 px-3 py-1.5 text-xs font-bold text-theme-cyan shadow-brutal-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-cyan"
+                className="min-h-[38px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/30 dark:bg-[#101522]/30 px-3 py-1.5 text-xs font-bold text-theme-cyan shadow-brutal-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-cyan"
               >
                 {authStrings.sandboxLearner} (Dilnoza)
               </button>
@@ -280,7 +280,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 type="button"
                 disabled={loading || googleLoading}
                 onClick={() => void handleSandbox('staff')}
-                className="min-h-[38px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#101522]/70 px-3 py-1.5 text-xs font-bold text-theme-accent shadow-brutal-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-accent"
+                className="min-h-[38px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/30 dark:bg-[#101522]/30 px-3 py-1.5 text-xs font-bold text-theme-accent shadow-brutal-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-accent"
               >
                 {authStrings.sandboxStaff}
               </button>

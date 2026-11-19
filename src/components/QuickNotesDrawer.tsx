@@ -265,7 +265,7 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
       data-testid="quick-notes-drawer"
       className="no-print fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-xs"
     >
-      <div className="flex h-full w-full max-w-md flex-col justify-between border-l-2 border-slate-500 bg-white/60 p-5 text-ink shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/65">
+      <div className="flex h-full w-full max-w-md flex-col justify-between border-l-2 border-slate-500 bg-white/30 p-5 text-ink shadow-[8px_8px_0px_#9274FF] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30">
         <div className="flex flex-1 flex-col min-h-0 space-y-4">
           <header className="flex items-start justify-between gap-3 border-b-2 border-theme-border pb-3">
             <div>

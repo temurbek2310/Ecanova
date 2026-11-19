@@ -51,9 +51,10 @@ test('FLOATING_WATERMARK_DICTIONARY provides distinct domain-strict glyphs per c
 test('buildFloatingWatermarkParticles builds 3-5 staggered subtle particles with energetic bounds', () => {
   const sidebarParticles = buildFloatingWatermarkParticles({ theme: 'sidebar' });
   assert.equal(sidebarParticles.length, 4);
-  assert.ok(sidebarParticles.every((p) => p.opacityClass === 'opacity-10' || p.opacityClass === 'opacity-15'));
-  assert.ok(sidebarParticles.every((p) => p.durationSec >= 3 && p.durationSec <= 6));
-  assert.ok(sidebarParticles.every((p) => p.xRange[0] >= -16 && p.xRange[1] <= 16));
+  assert.ok(sidebarParticles.every((p) => p.opacityClass === 'opacity-20' || p.opacityClass === 'opacity-25'));
+  assert.ok(sidebarParticles.every((p) => p.durationSec >= 2.5 && p.durationSec <= 4.5));
+  assert.ok(sidebarParticles.every((p) => p.xRange[0] === -40 && p.xRange[1] === 40));
+  assert.ok(sidebarParticles.every((p) => p.yRange[0] === -35 && p.yRange[1] === 35));
   assert.ok(new Set(sidebarParticles.map((p) => p.delaySec)).size >= 3);
 
   const analyticsParticles = buildFloatingWatermarkParticles({
@@ -64,6 +65,15 @@ test('buildFloatingWatermarkParticles builds 3-5 staggered subtle particles with
   assert.equal(analyticsParticles.length, 5);
   assert.ok(analyticsParticles.some((p) => p.continuousSpin360));
   assert.ok(analyticsParticles.every((p) => p.baseScale >= 0.5 && p.baseScale <= 1.2));
+
+  const heroRightParticles = buildFloatingWatermarkParticles({
+    theme: 'analytics',
+    seedIndex: 3,
+    count: 5,
+    layout: 'hero-right',
+  });
+  assert.equal(heroRightParticles.length, 5);
+  assert.ok(heroRightParticles.every((p) => p.leftPercent >= 58 && p.leftPercent <= 90));
 
   const gamificationParticles = buildFloatingWatermarkParticles({
     theme: 'gamification',
@@ -77,7 +87,7 @@ test('buildFloatingWatermarkParticles builds 3-5 staggered subtle particles with
   );
 });
 
-test('shouldEnableWatermarkMotion disables continuous GSAP loops on <= 768px mobile or reduced motion', () => {
+test('shouldEnableWatermarkMotion runs unconditionally across all viewport widths and pauses only for reduced motion', () => {
   assert.equal(
     shouldEnableWatermarkMotion({
       viewportWidth: 1440,
@@ -91,18 +101,34 @@ test('shouldEnableWatermarkMotion disables continuous GSAP loops on <= 768px mob
     shouldEnableWatermarkMotion({
       viewportWidth: 768,
       prefersReducedMotion: false,
-      hardwareConcurrency: 8,
+      hardwareConcurrency: 2,
     }),
-    false
+    true
   );
 
   assert.equal(
     shouldEnableWatermarkMotion({
-      viewportWidth: 390,
+      viewportWidth: 480,
+      prefersReducedMotion: false,
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldEnableWatermarkMotion({
+      viewportWidth: 479,
+      prefersReducedMotion: false,
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldEnableWatermarkMotion({
+      viewportWidth: 320,
       prefersReducedMotion: false,
       hardwareConcurrency: 8,
     }),
-    false
+    true
   );
 
   assert.equal(
@@ -110,15 +136,6 @@ test('shouldEnableWatermarkMotion disables continuous GSAP loops on <= 768px mob
       viewportWidth: 1280,
       prefersReducedMotion: true,
       hardwareConcurrency: 8,
-    }),
-    false
-  );
-
-  assert.equal(
-    shouldEnableWatermarkMotion({
-      viewportWidth: 1280,
-      prefersReducedMotion: false,
-      hardwareConcurrency: 2,
     }),
     false
   );
@@ -258,20 +275,20 @@ test('computeResponsiveParticleCount adjusts particle count cleanly based on con
   );
 });
 
-test('shouldPauseWatermarkOnMobile pauses sidebar watermark on < 768px viewports or when hidden', () => {
+test('shouldPauseWatermarkOnMobile does not pause based on viewport width and only pauses when hidden', () => {
   assert.equal(
     shouldPauseWatermarkOnMobile({
       theme: 'sidebar',
       viewportWidth: 390,
     }),
-    true
+    false
   );
   assert.equal(
     shouldPauseWatermarkOnMobile({
       theme: 'sidebar',
       viewportWidth: 767,
     }),
-    true
+    false
   );
   assert.equal(
     shouldPauseWatermarkOnMobile({
@@ -299,7 +316,7 @@ test('shouldPauseWatermarkOnMobile pauses sidebar watermark on < 768px viewports
   assert.equal(
     shouldPauseWatermarkOnMobile({
       theme: 'analytics',
-      viewportWidth: 390,
+      viewportWidth: 320,
       isElementHidden: false,
     }),
     false

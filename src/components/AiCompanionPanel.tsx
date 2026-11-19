@@ -125,7 +125,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
 
   return (
     <div
-      className={`flex flex-col rounded-xl border-2 border-slate-500 bg-white/50 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/55 ${
+      className={`flex flex-col rounded-xl border-2 border-slate-500 bg-white/30 shadow-[8px_8px_0px_#9274FF] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30 ${
         embedded ? 'p-5' : 'h-full max-h-[82vh] p-5'
       }`}
     >

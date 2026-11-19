@@ -8,6 +8,7 @@ import {
   Clock,
   Compass,
   Globe,
+  Keyboard,
   LayoutDashboard,
   Moon,
   Search,
@@ -128,6 +129,7 @@ export interface CommandBarProps {
   onSwitchLocale: (nextLocale: LocaleCode) => void;
   onToggleTheme: (nextTheme: ThemeMode) => void;
   onOpenShortcuts?: () => void;
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 function renderActionIcon(action: CommandBarActionItem, isActive: boolean = false): React.ReactNode {
@@ -169,8 +171,13 @@ export const CommandBar: React.FC<CommandBarProps> = ({
   onSwitchLocale,
   onToggleTheme,
   onOpenShortcuts,
+  onExpandedChange,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    onExpandedChange?.(isExpanded);
+  }, [isExpanded, onExpandedChange]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -387,6 +394,15 @@ export const CommandBar: React.FC<CommandBarProps> = ({
     };
   }, [isExpanded]);
 
+  // Compute horizontal delta from wrapper center to viewport center so expanded overlay never clips on asymmetric mobile headers
+  const computeExpandedCenterOffsetX = useCallback((viewportWidth: number): number => {
+    if (!wrapperRef.current) return 0;
+    const rect = wrapperRef.current.getBoundingClientRect();
+    const wrapperCenterX = rect.left + rect.width / 2;
+    const viewportCenterX = viewportWidth / 2;
+    return Math.round(viewportCenterX - wrapperCenterX);
+  }, []);
+
   // Keep expanded geometry responsive if the viewport resizes while open
   useEffect(() => {
     if (!isExpanded || typeof window === 'undefined') return;
@@ -394,12 +410,21 @@ export const CommandBar: React.FC<CommandBarProps> = ({
     const handleResize = () => {
       if (!containerRef.current) return;
       const target = getCommandBarGeometry(true, window.innerWidth, window.innerHeight);
-      gsap.set(containerRef.current, target);
+      if (window.innerWidth < 768) {
+        gsap.set(containerRef.current, {
+          clearProps: 'width,x,xPercent,transform',
+          height: target.height,
+          borderRadius: target.borderRadius,
+        });
+        return;
+      }
+      const centerOffsetX = computeExpandedCenterOffsetX(window.innerWidth);
+      gsap.set(containerRef.current, { ...target, xPercent: -50, x: centerOffsetX });
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [isExpanded]);
+  }, [computeExpandedCenterOffsetX, isExpanded]);
 
   // Auto-focus search input on expand and clear query on collapse
   useEffect(() => {
@@ -415,58 +440,157 @@ export const CommandBar: React.FC<CommandBarProps> = ({
     return undefined;
   }, [isExpanded]);
 
-  // Fluid GSAP morph between compact Dynamic Island pill and expanded palette
+  // Fluid GSAP morph between compact Dynamic Island pill and expanded palette / mobile takeover
   useEconovaGSAP(
     containerRef,
     () => {
-      const islandEl = containerRef.current!;
-
-      const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
-      const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
-      const target = getCommandBarGeometry(isExpanded, viewportWidth, viewportHeight);
+      const islandEl = containerRef.current;
+      if (!islandEl) return;
 
       const prefersReducedMotion =
         typeof window !== 'undefined' &&
         typeof window.matchMedia === 'function' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-      if (!hasInteractedRef.current || prefersReducedMotion) {
-        gsap.set(islandEl, target);
-        if (paletteBodyRef.current && isExpanded) {
-          gsap.set(paletteBodyRef.current, { opacity: 1, y: 0 });
-        }
-        return;
-      }
+      const mm = gsap.matchMedia();
 
-      const tl = gsap.timeline({ defaults: { overwrite: 'auto' } });
+      // Mobile (< 768px): compact circular idle pill OR full-width fixed viewport takeover
+      mm.add('(max-width: 767px)', () => {
+        const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 390;
+        const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 844;
 
-      if (isExpanded) {
-        tl.to(islandEl, {
-          width: target.width,
-          height: target.height,
-          borderRadius: target.borderRadius,
-          duration: 0.5,
-          ease: 'elastic.out(1, 0.75)',
-        });
+        if (isExpanded) {
+          const target = getCommandBarGeometry(true, viewportWidth, viewportHeight);
+          // Clear inline width/x/xPercent so `fixed top-4 left-4 right-4 w-auto z-[100]` governs full width
+          gsap.set(islandEl, { clearProps: 'width,x,xPercent,transform' });
 
-        if (paletteBodyRef.current) {
+          if (!hasInteractedRef.current || prefersReducedMotion) {
+            gsap.set(islandEl, {
+              height: target.height,
+              borderRadius: target.borderRadius,
+              y: 0,
+              autoAlpha: 1,
+            });
+            if (paletteBodyRef.current) {
+              gsap.set(paletteBodyRef.current, { opacity: 1, y: 0 });
+            }
+            return;
+          }
+
+          const tl = gsap.timeline({ defaults: { overwrite: 'auto' } });
           tl.fromTo(
-            paletteBodyRef.current,
-            { opacity: 0, y: -8 },
-            { opacity: 1, y: 0, duration: 0.22, ease: 'power2.out' },
-            0.06
+            islandEl,
+            { height: 48, borderRadius: 16, y: -10, autoAlpha: 0.9 },
+            {
+              height: target.height,
+              borderRadius: target.borderRadius,
+              y: 0,
+              autoAlpha: 1,
+              duration: 0.36,
+              ease: 'power3.out',
+            }
           );
+
+          if (paletteBodyRef.current) {
+            tl.fromTo(
+              paletteBodyRef.current,
+              { opacity: 0, y: -6 },
+              { opacity: 1, y: 0, duration: 0.22, ease: 'power2.out' },
+              0.08
+            );
+          }
+          return;
         }
-      } else {
-        const compactTarget = getCommandBarGeometry(false, viewportWidth, viewportHeight);
-        tl.to(islandEl, {
-          width: compactTarget.width,
-          height: compactTarget.height,
-          borderRadius: compactTarget.borderRadius,
-          duration: 0.3,
+
+        const compactMobile = COMMAND_BAR_MOBILE_COMPACT_GEOMETRY;
+        if (!hasInteractedRef.current || prefersReducedMotion) {
+          gsap.set(islandEl, {
+            width: compactMobile.width,
+            height: compactMobile.height,
+            borderRadius: compactMobile.borderRadius,
+            xPercent: 0,
+            x: 0,
+            y: 0,
+            autoAlpha: 1,
+          });
+          return;
+        }
+
+        gsap.to(islandEl, {
+          width: compactMobile.width,
+          height: compactMobile.height,
+          borderRadius: compactMobile.borderRadius,
+          xPercent: 0,
+          x: 0,
+          y: 0,
+          duration: 0.28,
           ease: 'power3.out',
+          overwrite: 'auto',
         });
-      }
+      });
+
+      // Desktop (>= 768px): centered 120x40 idle pill <-> elastic centered spotlight overlay
+      mm.add('(min-width: 768px)', () => {
+        const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
+        const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+        const target = getCommandBarGeometry(isExpanded, viewportWidth, viewportHeight);
+        const centerOffsetX = isExpanded ? computeExpandedCenterOffsetX(viewportWidth) : 0;
+        const targetXPercent = isExpanded ? -50 : 0;
+
+        if (!hasInteractedRef.current || prefersReducedMotion) {
+          gsap.set(islandEl, {
+            ...target,
+            xPercent: targetXPercent,
+            x: centerOffsetX,
+            y: 0,
+            autoAlpha: 1,
+          });
+          if (paletteBodyRef.current && isExpanded) {
+            gsap.set(paletteBodyRef.current, { opacity: 1, y: 0 });
+          }
+          return;
+        }
+
+        const tl = gsap.timeline({ defaults: { overwrite: 'auto' } });
+
+        if (isExpanded) {
+          gsap.set(islandEl, { xPercent: -50, x: centerOffsetX, y: 0 });
+          tl.to(islandEl, {
+            width: target.width,
+            height: target.height,
+            borderRadius: target.borderRadius,
+            xPercent: -50,
+            x: centerOffsetX,
+            duration: 0.5,
+            ease: 'elastic.out(1, 0.75)',
+          });
+
+          if (paletteBodyRef.current) {
+            tl.fromTo(
+              paletteBodyRef.current,
+              { opacity: 0, y: -8 },
+              { opacity: 1, y: 0, duration: 0.22, ease: 'power2.out' },
+              0.06
+            );
+          }
+        } else {
+          const compactTarget = getCommandBarGeometry(false, viewportWidth, viewportHeight);
+          tl.to(islandEl, {
+            width: compactTarget.width,
+            height: compactTarget.height,
+            borderRadius: compactTarget.borderRadius,
+            xPercent: 0,
+            x: 0,
+            y: 0,
+            duration: 0.3,
+            ease: 'power3.out',
+          });
+        }
+      });
+
+      return () => {
+        mm.revert();
+      };
     },
     { dependencies: [isExpanded] }
   );
@@ -555,15 +679,15 @@ export const CommandBar: React.FC<CommandBarProps> = ({
     <div
       ref={wrapperRef}
       data-command-bar-wrapper="true"
-      className="relative flex items-center justify-center h-10 w-10 md:w-[120px] shrink-0"
+      className="pointer-events-auto relative flex items-center justify-center h-10 w-10 md:w-[120px] shrink-0"
     >
-      {/* Semi-transparent backdrop overlay when expanded */}
+      {/* Full-viewport backdrop inside header's z-[100] stacking context so CommandBar stays crisp above it */}
       {isExpanded && (
         <div
           data-testid="command-bar-backdrop"
           aria-hidden="true"
           onClick={() => setIsExpanded(false)}
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs transition-opacity"
+          className="pointer-events-auto fixed inset-0 z-[55] bg-[#080B14]/60 backdrop-blur-sm transition-opacity"
         />
       )}
 
@@ -576,10 +700,10 @@ export const CommandBar: React.FC<CommandBarProps> = ({
         aria-modal={isExpanded ? 'true' : undefined}
         aria-label={isUz ? 'Tezkor buyruqlar paneli' : 'Global Command Bar'}
         style={initialIslandStyle}
-        className={`no-print overflow-hidden border-2 border-gray-900 bg-white/85 text-gray-900 shadow-[8px_8px_0px_#111827] backdrop-blur-2xl will-change-[width,height,border-radius] dark:border-[#222B3D] dark:bg-[#101522]/40 dark:text-white dark:shadow-[8px_8px_0px_#000000] ${
+        className={`no-print overflow-hidden border-2 border-gray-900 text-gray-900 shadow-[8px_8px_0px_#111827] backdrop-blur-2xl will-change-[width,height,border-radius] dark:border-[#222B3D] dark:text-white dark:shadow-[8px_8px_0px_#000000] ${
           isExpanded
-            ? 'absolute top-0 left-1/2 -translate-x-1/2 z-50 shadow-[12px_12px_0px_#000000]'
-            : 'relative z-10'
+            ? 'fixed top-4 left-4 right-4 w-auto z-[100] md:absolute md:top-0 md:left-1/2 md:right-auto md:z-[100] bg-white/95 dark:bg-[#101522]/95 shadow-[12px_12px_0px_#000000]'
+            : 'relative z-10 rounded-full bg-white/25 dark:bg-[#101522]/25'
         }`}
       >
         {!isExpanded ? (
@@ -591,7 +715,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({
               setIsExpanded(true);
             }}
             aria-label={isUz ? 'Buyruqlar panelini ochish (⌘ K)' : 'Open Command Bar (⌘ K)'}
-            className="flex h-full w-full items-center justify-center gap-2 px-2.5 sm:px-3 font-mono text-xs font-bold text-gray-900 hover:text-[#5B21B6] dark:text-gray-200 dark:hover:text-white"
+            className="flex h-full w-full items-center justify-center gap-2 rounded-full px-0 md:px-3 font-mono text-xs font-bold text-gray-900 hover:text-[#5B21B6] dark:text-gray-200 dark:hover:text-white"
           >
             <Search
               className="h-4 w-4 shrink-0 text-[#5B21B6] dark:text-[#5DE1D2]"
@@ -924,9 +1048,26 @@ export const CommandBar: React.FC<CommandBarProps> = ({
             </div>
 
             {/* Palette Keyboard Legend Footer */}
-            <div className="flex h-9 shrink-0 items-center justify-between border-t-2 border-gray-900 px-4 font-mono text-[10px] font-bold text-gray-600 dark:border-[#222B3D] dark:text-gray-400">
-              <span>ECONOVA // SPOTLIGHT SEARCH</span>
-              <span>↑↓ Navigate · ↵ Select · Esc Close</span>
+            <div className="flex min-h-9 shrink-0 items-center justify-between gap-2 border-t-2 border-gray-900 px-4 py-1.5 font-mono text-[10px] font-bold text-gray-600 dark:border-[#222B3D] dark:text-gray-400">
+              <span className="truncate">ECONOVA // SPOTLIGHT SEARCH</span>
+              <div className="flex shrink-0 items-center gap-3">
+                <span className="hidden sm:inline">↑↓ Navigate · ↵ Select · Esc</span>
+                <span className="sm:hidden">↵ Select · Esc</span>
+                {onOpenShortcuts && (
+                  <button
+                    type="button"
+                    data-testid="command-bar-shortcuts-btn"
+                    onClick={() => {
+                      setIsExpanded(false);
+                      onOpenShortcuts();
+                    }}
+                    className="inline-flex items-center gap-1 rounded border border-gray-900/30 bg-black/5 px-1.5 py-0.5 text-[10px] font-bold text-gray-800 transition-colors hover:border-[#5DE1D2] hover:text-black dark:border-[#222B3D] dark:bg-white/5 dark:text-gray-300 dark:hover:border-[#5DE1D2] dark:hover:text-[#5DE1D2]"
+                  >
+                    <Keyboard className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    <span>Shift+?</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

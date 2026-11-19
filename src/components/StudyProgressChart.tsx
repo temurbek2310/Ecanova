@@ -79,7 +79,7 @@ export const StudyProgressChart: React.FC<StudyProgressChartProps> = ({
   return (
     <section
       aria-labelledby="study-progress-chart-title"
-      className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl sm:p-6 dark:border-[#222B3D] dark:bg-[#101522]/40"
+      className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl sm:p-6 dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
       <FloatingWatermark
         theme="analytics"
@@ -87,34 +87,50 @@ export const StudyProgressChart: React.FC<StudyProgressChartProps> = ({
         testId="study-progress-floating-watermark"
       />
 
-      <div className="relative z-10 flex flex-col gap-3 border-b-2 border-slate-400/70 pb-4 sm:flex-row sm:items-start sm:justify-between dark:border-[#222B3D]">
-        <div>
-          <h2
-            id="study-progress-chart-title"
-            className="flex items-center gap-2 text-base font-semibold text-ink"
-          >
-            <TrendingUp className="h-4 w-4 text-teal" aria-hidden="true" />
-            <span>{strings.overviewChart.title}</span>
-          </h2>
-          <p className="mt-1 text-xs text-muted">{strings.overviewChart.subtitle}</p>
-        </div>
+      <div className="relative z-10 flex flex-col gap-3 border-b-2 border-slate-400/70 pb-4 dark:border-[#222B3D]">
+        <div className="flex flex-col gap-2.5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0">
+            <h2
+              id="study-progress-chart-title"
+              className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base font-semibold text-ink"
+            >
+              <TrendingUp className="h-4 w-4 shrink-0 text-teal" aria-hidden="true" />
+              {(() => {
+                const rawTitle = strings.overviewChart.title;
+                const parenIdx = rawTitle.indexOf('(');
+                if (parenIdx <= 0) {
+                  return <span>{rawTitle}</span>;
+                }
+                const prefix = rawTitle.slice(0, parenIdx).trimEnd();
+                const suffix = rawTitle.slice(parenIdx);
+                return (
+                  <span className="leading-snug">
+                    {prefix}{' '}
+                    <span className="whitespace-nowrap">{suffix}</span>
+                  </span>
+                );
+              })()}
+            </h2>
+            <p className="mt-1 text-xs text-muted">{strings.overviewChart.subtitle}</p>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-4 text-xs">
-          <div>
-            <span className="text-muted">{strings.overviewChart.weeklyTotal}: </span>
-            <span className="font-mono font-semibold tabular-nums text-accent">
-              {summary.totalWeekXp} XP
-            </span>
-          </div>
-          <div>
-            <span className="text-muted">{strings.overviewChart.activeDays}: </span>
-            <span className="font-mono font-semibold tabular-nums text-teal">
-              {summary.activeDaysCount} / 7
-            </span>
-          </div>
-          <div>
-            <span className="text-muted">{strings.overviewChart.dailyCap}: </span>
-            <span className="font-mono tabular-nums text-ink">{DAILY_XP_CAP} XP</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs shrink-0">
+            <div className="whitespace-nowrap">
+              <span className="text-muted">{strings.overviewChart.weeklyTotal}: </span>
+              <span className="font-mono font-semibold tabular-nums text-accent">
+                {summary.totalWeekXp} XP
+              </span>
+            </div>
+            <div className="whitespace-nowrap">
+              <span className="text-muted">{strings.overviewChart.activeDays}: </span>
+              <span className="font-mono font-semibold tabular-nums text-teal">
+                {summary.activeDaysCount} / 7
+              </span>
+            </div>
+            <div className="whitespace-nowrap">
+              <span className="text-muted">{strings.overviewChart.dailyCap}: </span>
+              <span className="font-mono tabular-nums text-ink">{DAILY_XP_CAP} XP</span>
+            </div>
           </div>
         </div>
       </div>

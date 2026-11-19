@@ -51,6 +51,8 @@ export interface WatermarkThemeConfig {
   maxCursorPullPx: number;
 }
 
+export type FloatingWatermarkLayout = 'standard' | 'hero-right';
+
 export interface FloatingWatermarkParticle {
   id: string;
   theme: CanonicalWatermarkTheme;
@@ -60,7 +62,7 @@ export interface FloatingWatermarkParticle {
   leftPercent: number;
   topPercent: number;
   baseScale: number;
-  opacityClass: 'opacity-10' | 'opacity-15';
+  opacityClass: 'opacity-20' | 'opacity-25';
   durationSec: number;
   delaySec: number;
   xRange: readonly [number, number];
@@ -86,11 +88,11 @@ export const FLOATING_WATERMARK_DICTIONARY: Record<
       PRIMARY_ARTIFACT_ACCENT_COLORS.green,
       AMBER_ACCENT,
     ],
-    ease: 'power2.inOut',
+    ease: 'sine.inOut',
     defaultCount: 4,
-    xRange: [-16, 16],
-    yRange: [-28, 28],
-    maxCursorPullPx: 18,
+    xRange: [-40, 40],
+    yRange: [-35, 35],
+    maxCursorPullPx: 22,
   },
   gamification: {
     theme: 'gamification',
@@ -106,11 +108,11 @@ export const FLOATING_WATERMARK_DICTIONARY: Record<
       PRIMARY_ARTIFACT_ACCENT_COLORS.cyan,
       PRIMARY_ARTIFACT_ACCENT_COLORS.green,
     ],
-    ease: 'expo.inOut',
+    ease: 'sine.inOut',
     defaultCount: 4,
-    xRange: [-24, 24],
-    yRange: [-28, 28],
-    maxCursorPullPx: 24,
+    xRange: [-40, 40],
+    yRange: [-35, 35],
+    maxCursorPullPx: 26,
   },
   analytics: {
     theme: 'analytics',
@@ -128,9 +130,9 @@ export const FLOATING_WATERMARK_DICTIONARY: Record<
     ],
     ease: 'sine.inOut',
     defaultCount: 4,
-    xRange: [-24, 24],
-    yRange: [-26, 26],
-    maxCursorPullPx: 22,
+    xRange: [-40, 40],
+    yRange: [-35, 35],
+    maxCursorPullPx: 26,
   },
   'course-mathematics': {
     theme: 'course-mathematics',
@@ -138,9 +140,9 @@ export const FLOATING_WATERMARK_DICTIONARY: Record<
     accents: SUBJECT_WATERMARK_ACCENTS.Mathematics,
     ease: 'power1.inOut',
     defaultCount: 4,
-    xRange: [-25, 25],
-    yRange: [-30, 30],
-    maxCursorPullPx: 26,
+    xRange: [-40, 40],
+    yRange: [-35, 35],
+    maxCursorPullPx: 28,
   },
   'course-economics': {
     theme: 'course-economics',
@@ -148,19 +150,19 @@ export const FLOATING_WATERMARK_DICTIONARY: Record<
     accents: SUBJECT_WATERMARK_ACCENTS.Economics,
     ease: 'sine.inOut',
     defaultCount: 4,
-    xRange: [-25, 25],
-    yRange: [-30, 30],
+    xRange: [-40, 40],
+    yRange: [-35, 35],
     maxCursorPullPx: 28,
   },
   'course-business': {
     theme: 'course-business',
     glyphs: SUBJECT_WATERMARK_KINDS.Business,
     accents: SUBJECT_WATERMARK_ACCENTS.Business,
-    ease: 'expo.inOut',
+    ease: 'power2.inOut',
     defaultCount: 5,
-    xRange: [-25, 25],
-    yRange: [-30, 30],
-    maxCursorPullPx: 24,
+    xRange: [-40, 40],
+    yRange: [-35, 35],
+    maxCursorPullPx: 26,
   },
 };
 
@@ -266,14 +268,27 @@ const STANDARD_POCKETS: ReadonlyArray<{
   leftPercent: number;
   topPercent: number;
   baseScale: number;
-  opacityClass: 'opacity-10' | 'opacity-15';
   gravityWeight: number;
 }> = [
-  { leftPercent: 84, topPercent: 72, baseScale: 1.08, opacityClass: 'opacity-15', gravityWeight: 1.15 },
-  { leftPercent: 54, topPercent: 78, baseScale: 0.72, opacityClass: 'opacity-10', gravityWeight: 0.85 },
-  { leftPercent: 86, topPercent: 22, baseScale: 0.64, opacityClass: 'opacity-15', gravityWeight: 0.95 },
-  { leftPercent: 18, topPercent: 74, baseScale: 0.84, opacityClass: 'opacity-10', gravityWeight: 0.78 },
-  { leftPercent: 68, topPercent: 42, baseScale: 0.56, opacityClass: 'opacity-10', gravityWeight: 1.2 },
+  { leftPercent: 84, topPercent: 70, baseScale: 1.08, gravityWeight: 1.15 },
+  { leftPercent: 56, topPercent: 78, baseScale: 0.78, gravityWeight: 0.85 },
+  { leftPercent: 86, topPercent: 22, baseScale: 0.72, gravityWeight: 0.95 },
+  { leftPercent: 18, topPercent: 74, baseScale: 0.86, gravityWeight: 0.8 },
+  { leftPercent: 68, topPercent: 42, baseScale: 0.68, gravityWeight: 1.2 },
+];
+
+// Hero section concentrates kinetic artifacts in the open right-side negative space
+const HERO_RIGHT_CLUSTER_POCKETS: ReadonlyArray<{
+  leftPercent: number;
+  topPercent: number;
+  baseScale: number;
+  gravityWeight: number;
+}> = [
+  { leftPercent: 66, topPercent: 18, baseScale: 0.88, gravityWeight: 1.0 },
+  { leftPercent: 86, topPercent: 20, baseScale: 1.06, gravityWeight: 1.15 },
+  { leftPercent: 75, topPercent: 48, baseScale: 0.8, gravityWeight: 0.95 },
+  { leftPercent: 88, topPercent: 68, baseScale: 1.12, gravityWeight: 1.2 },
+  { leftPercent: 64, topPercent: 78, baseScale: 0.94, gravityWeight: 0.9 },
 ];
 
 // Sidebar is tall & narrow (w-64 x 100vh), so distribute pockets vertically across negative space
@@ -281,17 +296,24 @@ const SIDEBAR_POCKETS: ReadonlyArray<{
   leftPercent: number;
   topPercent: number;
   baseScale: number;
-  opacityClass: 'opacity-10' | 'opacity-15';
   gravityWeight: number;
 }> = [
-  { leftPercent: 78, topPercent: 18, baseScale: 0.74, opacityClass: 'opacity-15', gravityWeight: 0.9 },
-  { leftPercent: 26, topPercent: 44, baseScale: 0.68, opacityClass: 'opacity-10', gravityWeight: 0.85 },
-  { leftPercent: 76, topPercent: 66, baseScale: 0.92, opacityClass: 'opacity-15', gravityWeight: 1.1 },
-  { leftPercent: 32, topPercent: 86, baseScale: 0.78, opacityClass: 'opacity-10', gravityWeight: 0.95 },
-  { leftPercent: 66, topPercent: 35, baseScale: 0.58, opacityClass: 'opacity-10', gravityWeight: 1.05 },
+  { leftPercent: 78, topPercent: 18, baseScale: 0.78, gravityWeight: 0.9 },
+  { leftPercent: 26, topPercent: 44, baseScale: 0.74, gravityWeight: 0.85 },
+  { leftPercent: 76, topPercent: 66, baseScale: 0.94, gravityWeight: 1.1 },
+  { leftPercent: 32, topPercent: 86, baseScale: 0.82, gravityWeight: 0.95 },
+  { leftPercent: 66, topPercent: 35, baseScale: 0.68, gravityWeight: 1.05 },
 ];
 
-const ENERGETIC_DURATIONS_SEC = [3.3, 4.5, 3.8, 5.2, 4.1] as const;
+const ENERGETIC_DURATIONS_SEC = [2.5, 3.1, 3.6, 4.1, 4.5] as const;
+
+function resolveOpacityClass(accentColor: string): 'opacity-20' | 'opacity-25' {
+  const upper = accentColor.toUpperCase();
+  if (upper === '#5DE1D2' || upper === '#9274FF') {
+    return 'opacity-25';
+  }
+  return 'opacity-20';
+}
 
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -348,6 +370,7 @@ export function buildFloatingWatermarkParticles(params: {
   seedIndex?: number;
   count?: number;
   containerWidth?: number;
+  layout?: FloatingWatermarkLayout;
 }): FloatingWatermarkParticle[] {
   const canonical = resolveFloatingWatermarkTheme(params.theme);
   const config = FLOATING_WATERMARK_DICTIONARY[canonical];
@@ -365,7 +388,12 @@ export function buildFloatingWatermarkParticles(params: {
         explicitCount: params.count,
       })
     : clamp(Math.floor(params.count ?? config.defaultCount), 3, 5);
-  const pockets = canonical === 'sidebar' ? SIDEBAR_POCKETS : STANDARD_POCKETS;
+  const pockets =
+    canonical === 'sidebar'
+      ? SIDEBAR_POCKETS
+      : params.layout === 'hero-right'
+      ? HERO_RIGHT_CLUSTER_POCKETS
+      : STANDARD_POCKETS;
 
   const particles: FloatingWatermarkParticle[] = [];
 
@@ -376,10 +404,11 @@ export function buildFloatingWatermarkParticles(params: {
     const durationSec =
       ENERGETIC_DURATIONS_SEC[(safeSeed + i) % ENERGETIC_DURATIONS_SEC.length];
     const delaySec =
-      Math.round(((i * 0.28 + (safeSeed % 3) * 0.14) % 1.15) * 100) / 100;
+      Math.round(((i * 0.22 + (safeSeed % 3) * 0.12) % 0.9) * 100) / 100;
 
     const jitterLeft = ((safeSeed * 5 + i * 7) % 7) - 3;
     const jitterTop = ((safeSeed * 7 + i * 5) % 7) - 3;
+    const minLeft = params.layout === 'hero-right' ? 58 : 12;
 
     particles.push({
       id: `${canonical}-p${i}-${glyph}`,
@@ -387,16 +416,16 @@ export function buildFloatingWatermarkParticles(params: {
       index: i,
       glyph,
       accentColor,
-      leftPercent: clamp(pocket.leftPercent + jitterLeft, 12, 88),
+      leftPercent: clamp(pocket.leftPercent + jitterLeft, minLeft, 90),
       topPercent: clamp(pocket.topPercent + jitterTop, 10, 88),
       baseScale: pocket.baseScale,
-      opacityClass: pocket.opacityClass,
+      opacityClass: resolveOpacityClass(accentColor),
       durationSec,
       delaySec,
       xRange: config.xRange,
       yRange: config.yRange,
       continuousSpin360: SPIN_ENABLED_GLYPHS.has(glyph),
-      spinDurationSec: 7.2 + (i % 3) * 2.1,
+      spinDurationSec: 6.4 + (i % 3) * 1.8,
       spinDirection: i % 2 === 0 ? 1 : -1,
       gravityWeight: pocket.gravityWeight,
     });
@@ -416,46 +445,28 @@ export function detectPrefersReducedMotion(): boolean {
 }
 
 /**
- * Computes responsive mobile/reduced-motion guard matching GSAP `matchMedia` `(max-width: 768px)`
- * so watermarks remain static or minimal on mobile and reduced-motion devices.
+ * Evaluates whether watermark motion is enabled.
+ * Runs unconditionally across all viewport widths (including 320px–480px mobile),
+ * only disabling when OS/browser `prefers-reduced-motion: reduce` is enabled.
  */
 export function shouldEnableWatermarkMotion(params: {
   viewportWidth: number;
   prefersReducedMotion: boolean;
   hardwareConcurrency?: number;
 }): boolean {
-  if (params.prefersReducedMotion) return false;
-  if (!Number.isFinite(params.viewportWidth) || params.viewportWidth <= 768) {
-    return false;
-  }
-  if (
-    typeof params.hardwareConcurrency === 'number' &&
-    Number.isFinite(params.hardwareConcurrency) &&
-    params.hardwareConcurrency > 0 &&
-    params.hardwareConcurrency <= 2
-  ) {
-    return false;
-  }
-  return true;
+  return !params.prefersReducedMotion;
 }
 
 /**
- * Evaluates whether a watermark instance (specifically the Sidebar) should pause
- * its internal animation loops when hidden on mobile viewports (< 768px) or when
- * the container has display:none / is unrendered to conserve battery and memory.
+ * Evaluates whether a watermark instance should pause its internal loop when
+ * explicitly hidden (e.g. display:none), without gating by viewport width.
  */
 export function shouldPauseWatermarkOnMobile(params: {
   theme: CanonicalWatermarkTheme;
   viewportWidth: number;
   isElementHidden?: boolean;
 }): boolean {
-  if (params.theme === 'sidebar' && params.viewportWidth < 768) {
-    return true;
-  }
-  if (params.isElementHidden) {
-    return true;
-  }
-  return false;
+  return Boolean(params.isElementHidden);
 }
 
 export interface WatermarkScrollTriggerConfig {

@@ -273,7 +273,7 @@ export const BusinessSection: React.FC<BusinessSectionProps> = ({
       ref={sectionRef}
       aria-labelledby="business-section-heading"
       data-testid="business-section"
-      className="relative z-10 isolate overflow-hidden min-h-[760px] lg:min-h-[980px] rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+      className="relative z-10 isolate overflow-hidden min-h-[760px] lg:min-h-[980px] rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
       <div className="space-y-6">
         {/* Section Header */}
@@ -384,7 +384,7 @@ export const BusinessSection: React.FC<BusinessSectionProps> = ({
                   testId={`business-course-card-${course.id}`}
                   subject={course.subject}
                   artifactIndex={idx}
-                  className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+                  className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-3">

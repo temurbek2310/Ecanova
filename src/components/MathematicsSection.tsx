@@ -195,7 +195,7 @@ export const MathematicsSection: React.FC<MathematicsSectionProps> = ({
       aria-labelledby="mathematics-section-heading"
       data-testid="mathematics-section"
       data-active-theme={activeTheme}
-      className="relative z-10 overflow-hidden rounded-xl border-2 border-slate-500 bg-white/40 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+      className="relative z-10 overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
       {/* Tactile CSS Grain / Chalk Dust Overlay (programmatically switches mix-blend-screen vs mix-blend-multiply) */}
       <div
@@ -308,7 +308,7 @@ export const MathematicsSection: React.FC<MathematicsSectionProps> = ({
                   <span className="font-display text-xs font-bold text-ink">
                     {bp.title}
                   </span>
-                  <span className="rounded border border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#101522]/70 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-theme-cyan">
+                  <span className="rounded border border-slate-500 dark:border-[#222B3D] bg-white/30 dark:bg-[#101522]/30 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-theme-cyan">
                     {bp.formulaLatex}
                   </span>
                 </div>
@@ -387,7 +387,7 @@ export const MathematicsSection: React.FC<MathematicsSectionProps> = ({
                   testId={`mathematics-course-card-${course.id}`}
                   subject={course.subject}
                   artifactIndex={idx}
-                  className="relative flex flex-col justify-between overflow-hidden rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40"
+                  className="relative flex flex-col justify-between overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
                 >
                   <div
                     aria-hidden="true"

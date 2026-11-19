@@ -184,7 +184,7 @@
   }
 
   .glass-brutal-panel {
-    background-color: rgba(255, 255, 255, 0.4);
+    background-color: rgba(255, 255, 255, 0.25);
     backdrop-filter: blur(40px);
     -webkit-backdrop-filter: blur(40px);
     border: 2px solid var(--econova-line);
@@ -193,7 +193,7 @@
 
   :root.dark .glass-brutal-panel,
   [data-theme="dark"] .glass-brutal-panel {
-    background-color: rgba(16, 21, 34, 0.4);
+    background-color: rgba(16, 21, 34, 0.25);
     border-color: #222B3D;
     box-shadow: 8px 8px 0px 0px #000000;
   }

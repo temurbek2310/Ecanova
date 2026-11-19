@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  BADGE_SLIDE_IN_DEFAULTS,
   annotateBadgesForEntrance,
+  buildBadgeEntranceAnimationPlan,
   buildBadgePopVariants,
   computeBadgeStaggerDelay,
+  resolveNewlyUnlockedBadgeIds,
 } from './badge-entrance';
 import {
   buildAutoSubmitAnswersPayload,
@@ -79,6 +82,61 @@ test('annotateBadgesForEntrance annotates stagger delays and recent awards', () 
   assert.equal(annotated[0].staggerDelaySec, 0.03);
   assert.equal(annotated[1].isRecentAward, false);
   assert.equal(annotated[1].staggerDelaySec, 0.095);
+});
+
+test('resolveNewlyUnlockedBadgeIds and buildBadgeEntranceAnimationPlan target staggered power3.out fade+scale transitions', () => {
+  const initialBadges: BadgeAward[] = [
+    {
+      id: 'badge-1',
+      badgeKey: 'FIRST_LESSON',
+      title: 'First Lesson Complete',
+      criteria: 'Complete your first required lesson.',
+      awardedAt: '2026-11-17T08:00:00Z',
+    },
+  ];
+  const updatedBadges: BadgeAward[] = [
+    ...initialBadges,
+    {
+      id: 'badge-2',
+      badgeKey: 'MACRO_MASTER',
+      title: 'Macro Stabilization Master',
+      criteria: 'Pass the Macro Stabilization assessment.',
+      awardedAt: '2026-11-18T08:00:00Z',
+    },
+  ];
+
+  assert.deepEqual(resolveNewlyUnlockedBadgeIds(['badge-1'], initialBadges), []);
+  assert.deepEqual(resolveNewlyUnlockedBadgeIds(['badge-1'], updatedBadges), ['badge-2']);
+  assert.deepEqual(resolveNewlyUnlockedBadgeIds([], updatedBadges), ['badge-1', 'badge-2']);
+  assert.equal(BADGE_SLIDE_IN_DEFAULTS.ease, 'power3.out');
+  assert.ok(BADGE_SLIDE_IN_DEFAULTS.initialScale < 1 && BADGE_SLIDE_IN_DEFAULTS.initialScale > 0.8);
+  assert.ok(BADGE_SLIDE_IN_DEFAULTS.unlockScale < 1);
+  assert.ok(BADGE_SLIDE_IN_DEFAULTS.staggerSec > 0);
+
+  const initialPlan = buildBadgeEntranceAnimationPlan({
+    hasHydratedBaseline: false,
+    previousBadgeIds: [],
+    currentBadges: updatedBadges,
+  });
+  assert.equal(initialPlan.mode, 'initial-stagger');
+  assert.deepEqual(initialPlan.targetIds, ['badge-1', 'badge-2']);
+  assert.equal(initialPlan.ease, 'power3.out');
+
+  const unlockPlan = buildBadgeEntranceAnimationPlan({
+    hasHydratedBaseline: true,
+    previousBadgeIds: ['badge-1'],
+    currentBadges: updatedBadges,
+  });
+  assert.equal(unlockPlan.mode, 'unlock-stagger');
+  assert.deepEqual(unlockPlan.targetIds, ['badge-2']);
+  assert.equal(unlockPlan.ease, 'power3.out');
+
+  const emptyPlan = buildBadgeEntranceAnimationPlan({
+    hasHydratedBaseline: false,
+    previousBadgeIds: [],
+    currentBadges: [],
+  });
+  assert.equal(emptyPlan.mode, 'none');
 });
 
 test('buildQuestionSlideState and computeQuestionSlideDelay produce directional sequential slide states', () => {

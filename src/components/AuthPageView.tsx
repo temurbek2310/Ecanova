@@ -285,7 +285,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
 
       <div className="grid gap-6 lg:grid-cols-12">
         {/* Left Tactical Architecture & Destination Panel */}
-        <div className="flex flex-col justify-between rounded-2xl border-2 border-slate-500 bg-white/40 p-6 sm:p-8 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 lg:col-span-5">
+        <div className="flex flex-col justify-between rounded-2xl border-2 border-slate-500 bg-white/25 p-6 sm:p-8 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25 lg:col-span-5">
           <div className="space-y-4">
             <div className="inline-flex items-center gap-2 rounded-md border-2 border-slate-500 dark:border-[#222B3D] bg-white/55 dark:bg-[#080B14]/60 px-2.5 py-1 font-mono text-[10px] font-bold tracking-wider uppercase text-theme-cyan shadow-brutal-sm backdrop-blur-md">
               <Sparkles className="h-3 w-3 text-theme-accent" aria-hidden="true" />
@@ -312,7 +312,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
                 <span className="text-sm font-bold text-theme-accent">
                   {destinationLabel}
                 </span>
-                <code className="rounded border border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#101522]/70 px-2 py-0.5 font-mono text-[11px] text-theme-cyan">
+                <code className="rounded border border-slate-500 dark:border-[#222B3D] bg-white/30 dark:bg-[#101522]/30 px-2 py-0.5 font-mono text-[11px] text-theme-cyan">
                   {destinationPath}
                 </code>
               </div>
@@ -340,7 +340,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
         </div>
 
         {/* Right Neobrutalist Auth Form Card */}
-        <div className="rounded-2xl border-2 border-slate-500 bg-white/40 p-6 sm:p-8 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 lg:col-span-7">
+        <div className="rounded-2xl border-2 border-slate-500 bg-white/25 p-6 sm:p-8 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25 lg:col-span-7">
           {/* Mode Switcher Tabs (/login vs /register) */}
           <div className="grid grid-cols-2 gap-2 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/50 dark:bg-[#080B14]/60 p-1.5 shadow-brutal-sm backdrop-blur-md">
             <button
@@ -538,7 +538,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
                   disabled={loading || googleLoading}
                   onClick={() => void handleSandbox('learner')}
                   data-testid="sandbox-learner-btn"
-                  className="min-h-[40px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#101522]/70 px-3 py-1.5 text-xs font-bold text-theme-cyan shadow-brutal-sm transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-cyan"
+                  className="min-h-[40px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/30 dark:bg-[#101522]/30 px-3 py-1.5 text-xs font-bold text-theme-cyan shadow-brutal-sm transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-cyan"
                 >
                   {authStrings.sandboxLearner} (Dilnoza)
                 </button>
@@ -547,7 +547,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
                   disabled={loading || googleLoading}
                   onClick={() => void handleSandbox('staff')}
                   data-testid="sandbox-staff-btn"
-                  className="min-h-[40px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#101522]/70 px-3 py-1.5 text-xs font-bold text-theme-accent shadow-brutal-sm transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-accent"
+                  className="min-h-[40px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/30 dark:bg-[#101522]/30 px-3 py-1.5 text-xs font-bold text-theme-accent shadow-brutal-sm transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-accent"
                 >
                   {authStrings.sandboxStaff}
                 </button>
