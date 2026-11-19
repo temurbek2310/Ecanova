@@ -49,6 +49,49 @@
   box-sizing: border-box;
 }
 
+/*
+ * Horizontal gutter — one stepped cadence shared by the navbar and every section container
+ * (compact phone → moderate tablet / laptop → roomier wide desktop), tuned to the 1400px track so
+ * content is never squeezed inward. Horizontal padding only; vertical spacing stays in the markup.
+ */
+.econova-landing {
+  --lp-gutter: 20px;
+}
+@media (min-width: 40rem) {
+  .econova-landing {
+    --lp-gutter: 24px;
+  }
+}
+@media (min-width: 64rem) {
+  .econova-landing {
+    --lp-gutter: 32px;
+  }
+}
+@media (min-width: 80rem) {
+  .econova-landing {
+    --lp-gutter: 40px;
+  }
+}
+@media (min-width: 96rem) {
+  .econova-landing {
+    --lp-gutter: 48px;
+  }
+}
+.econova-landing .lp-gutter {
+  padding-left: var(--lp-gutter);
+  padding-right: var(--lp-gutter);
+}
+/*
+ * Chapter-rail clearance (sections only, not the navbar): while the fixed 00–05 rail shows
+ * (≥1360px, ~82px from the viewport's right edge) the right padding grows just enough to keep
+ * content 100px clear of that edge, and falls back to the gutter once the side margin alone clears it.
+ */
+@media (min-width: 85rem) {
+  .econova-landing .lp-gutter--rail {
+    padding-right: max(var(--lp-gutter), calc(100px - max(0px, (100vw - 1400px) / 2)));
+  }
+}
+
 .econova-landing ::selection {
   background: var(--lp-economics);
   color: var(--lp-canvas);

@@ -58,7 +58,7 @@ interface FooterColumn {
 }
 
 interface LandingCopy {
-  nav: { tracks: string; architecture: string; signIn: string; launch: string };
+  nav: { tracks: string; architecture: string; start: string; signIn: string; launch: string };
   hero: {
     badge: string;
     /** Each line: plain lead + accented tail. */
@@ -94,7 +94,7 @@ interface LandingCopy {
 
 const COPY: Record<LocaleCode, LandingCopy> = {
   en: {
-    nav: { tracks: 'Tracks', architecture: 'Architecture', signIn: 'Sign In', launch: 'Launch App' },
+    nav: { tracks: 'Tracks', architecture: 'Architecture', start: 'Get Started', signIn: 'Sign In', launch: 'Launch App' },
     hero: {
       badge: '[ BILINGUAL ACADEMIC ENGINE :: O‘Z / EN ]',
       lines: [
@@ -198,7 +198,13 @@ const COPY: Record<LocaleCode, LandingCopy> = {
     rail: { label: 'Sections', items: ['Intro', 'Economics', 'Mathematics', 'Business', 'Architecture', 'Get started'] },
   },
   uz: {
-    nav: { tracks: 'Yo‘nalishlar', architecture: 'Arxitektura', signIn: 'Hisobga kirish', launch: 'Ilovani ochish' },
+    nav: {
+      tracks: 'Yo‘nalishlar',
+      architecture: 'Arxitektura',
+      start: 'Boshlash',
+      signIn: 'Hisobga kirish',
+      launch: 'Ilovani ochish',
+    },
     hero: {
       badge: '[ IKKI TILLI AKADEMIK TIZIM :: O‘Z / EN ]',
       lines: [
@@ -336,14 +342,11 @@ const NAV_OFFSET = 64;
 /* ------------------------------------------------------------------ */
 
 /**
- * Section container: tight reference-like edges (16px phone · 24px tablet · 32px laptop+) on a wider
- * 1400px track. While the fixed 00–05 chapter rail is shown (≥1360px, ~82px from the right edge) the
- * right padding grows just enough to keep 100px clear of the viewport edge, then falls back to 32px
- * once the side margin alone clears the rail. (85rem = 1360px; a rem variant so Tailwind v4 orders it
- * after `lg:px-8` — a px `min-[…]` variant sorts before the rem breakpoints and would lose.)
+ * Section container on a 1400px track. Horizontal padding lives in landing.css: `.lp-gutter` is the
+ * stepped cadence shared with the navbar (20 · 24 · 32 · 40 · 48px), `.lp-gutter--rail` adds right
+ * clearance from the fixed 00–05 chapter rail while it is shown.
  */
-const GUTTER =
-  'relative z-10 mx-auto w-full max-w-[1400px] px-4 sm:px-6 lg:px-8 min-[85rem]:pr-[max(2rem,calc(100px_-_max(0px,(100vw_-_1400px)/2)))]';
+const GUTTER = 'lp-gutter lp-gutter--rail relative z-10 mx-auto w-full max-w-[1400px]';
 
 type AnchorLikeProps = {
   href?: string;
@@ -791,18 +794,22 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
       <header className="lp-nav sticky top-0 z-30">
         <nav
           aria-label="Primary"
-          className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr] lg:px-8"
+          className="lp-gutter mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr]"
         >
           <div className="flex items-center">
             <Logo onClick={toTop} compact />
           </div>
 
-          <div className="hidden items-center gap-1 md:flex">
+          {/* Centre links from lg up: below 1024px the right-hand controls (longest in O‘Z) need the room. */}
+          <div className="hidden items-center gap-1 lg:flex">
             <a {...anchorProps('tracks')} className="lp-nav__link inline-flex">
               {copy.nav.tracks}
             </a>
             <a {...anchorProps('architecture')} className="lp-nav__link inline-flex">
               {copy.nav.architecture}
+            </a>
+            <a {...anchorProps('get-started')} className="lp-nav__link inline-flex">
+              {copy.nav.start}
             </a>
           </div>
 
@@ -902,16 +909,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
         </section>
 
         {/* ---------------- Core disciplines ---------------- */}
-        <section id="tracks" data-anchor="tracks" className="pt-16 md:pt-24">
-          <div className={GUTTER}>
-            <div>
-              <Badge tone="#9274FF">{copy.tracks.badge}</Badge>
-            </div>
-            <h2 className="lp-heading-lg mt-5 max-w-[720px]">
-              {copy.tracks.headline}
-            </h2>
-          </div>
-
+        <section id="tracks" data-anchor="tracks" className="scroll-mt-16">
           {chapters.map(({ anchor, chapter, accent, right }, i) => (
             <article
               key={anchor}
@@ -919,8 +917,24 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
               data-anchor={anchor}
               data-chapter={i + 1}
               data-track={right ? 'right' : 'left'}
-              className="flex min-h-[88vh] items-center py-16 md:py-20"
+              /* First article: +4rem top (the navbar height) so its content centres in the visible area
+                 below the fixed navbar rather than the full viewport. */
+              className={`flex min-h-[88vh] items-center ${i === 0 ? 'pb-16 pt-32 md:pb-20 md:pt-36' : 'py-16 md:py-20'}`}
             >
+              <div className="w-full">
+              {/* Section header lives inside the Economics article, above its card: the formation
+                  settles when this article is centred, so header + card centre together and the
+                  heading clears the fixed navbar instead of sitting underneath it. */}
+              {i === 0 && (
+                <div className={`${GUTTER} mb-10 md:mb-12`}>
+                  <div>
+                    <Badge tone="#9274FF">{copy.tracks.badge}</Badge>
+                  </div>
+                  <h2 className="lp-heading-lg mt-5 max-w-[720px]">
+                    {copy.tracks.headline}
+                  </h2>
+                </div>
+              )}
               <div data-track-grid className={`${GUTTER} grid md:grid-cols-2 md:gap-16`}>
                 {/* The open column belongs to the morphing 3D course icon behind the page.
                     Layers so transforms never collide: parallax (scrub) → reveal (entrance) →
@@ -951,6 +965,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
                   </div>
                   </div>
                 </div>
+              </div>
               </div>
             </article>
           ))}

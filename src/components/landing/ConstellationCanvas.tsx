@@ -100,16 +100,21 @@ const JITTER = 0.015;
  * Damped pointer tracking (desktop fine pointers, never under reduced motion): exponential follow
  * rate (1/s), k = 1 − e^(−rate·dt), frame-rate independent.
  */
-const MOUSE_RATE = 6.5;
+const MOUSE_RATE = 6.0;
 /**
- * Spatial camera parallax (world units at the viewport edge). The camera glides toward the cursor
- * while staying locked on the z = 0 focal plane, so true perspective does the layering: near-lens
- * bokeh (z > 0) sweeps opposite the cursor, the five formations (z = 0) stay anchored and reveal
- * their volume, deep stars (z < 0) drift softly. The DOM copy is a camera-fixed HUD and never moves.
- * At camZ ≈ 14 this is a ≈ 4° orbit, so off-centre formations drift < 3 % — never out of frame.
+ * Pointer response (the DOM copy is a camera-fixed HUD and never moves):
+ * - Camera: position stays on its scroll path; only a gentle damped turn toward the cursor
+ *   (radians at the viewport edge) — yaw = −CAM_YAW·mouseX, pitch = +CAM_PITCH·mouseY (y-up).
+ * - Ambient pyramids: shifted opposite the cursor (world units at the viewport edge), scaled per
+ *   particle by a random 0.6–1.4 factor; perspective adds the depth falloff (near bokeh sweeps far
+ *   more on screen than deep stars).
+ * - The five formations take no pointer translation — idle motion, scroll morph and the local
+ *   cursor swirl only.
  */
-const CAM_PARALLAX_X = 0.95;
-const CAM_PARALLAX_Y = 0.55;
+const CAM_YAW = 0.075;
+const CAM_PITCH = 0.05;
+const MOUSE_AMB_FG = 0.5;
+const MOUSE_AMB_DEEP = 0.35;
 /** Cursor repulsion (world units). */
 const REPEL_RADIUS = 1.4;
 const REPEL_MAX = 0.35;
@@ -1011,6 +1016,7 @@ uniform mat3 uCoreM;
 uniform float uPx; // device pixel ratio
 uniform float uMaxPoint; // GPU point-size limit, device px
 uniform vec2 uAmbHalf; // ambient half-extent per unit depth: (tan·aspect, tan)
+uniform vec2 uMouse; // damped pointer, NDC y-down (0 on touch / reduced motion) — ambient drift only
 uniform vec3 uRayO; // cursor ray (world)
 uniform vec3 uRayD;
 uniform float uRepel; // 0..1 cursor influence
@@ -1160,8 +1166,11 @@ void main() {
   // Scroll lift, wrapped in a window ~1.25× the visible height at that depth (wrap happens off-screen).
   float fh = uAmbHalf.y * fd * 1.25 + 0.5;
   fxy.y = mod(fxy.y + uScroll * FG_SCROLL + fh, 2.0 * fh) - fh;
-  // Pointer parallax comes purely from the camera's spatial glide (CPU-side): world xy stays fixed
-  // here, so the projection matrix alone separates near bokeh, focal formations and deep stars.
+  // Pointer drift, ambient layers only (formations stay anchored): shift away from the cursor by a
+  // per-particle factor; a constant world shift reads larger on screen the nearer the pyramid is.
+  vec2 mouseShift = vec2(-uMouse.x, uMouse.y) * mix(0.6, 1.4, r2); // NDC y-down → world y-up
+  fxy += mouseShift * ${glslFloat(MOUSE_AMB_FG)};
+  deep.xy += mouseShift * ${glslFloat(MOUSE_AMB_DEEP)};
   vec3 fore = vec3(fxy, cameraPosition.z - fd);
   vec3 w = mix(q, mix(deep, fore, fg), amb);
 
@@ -1426,6 +1435,7 @@ function createParticles(mobile: boolean, pixelRatio: number, maxPoint: number):
       uPx: { value: pixelRatio },
       uMaxPoint: { value: maxPoint },
       uAmbHalf: { value: new THREE.Vector2(1, 1) },
+      uMouse: { value: new THREE.Vector2() },
       uRayO: { value: new THREE.Vector3(0, 0, REF_CAM_Z) },
       uRayD: { value: new THREE.Vector3(0, 0, -1) },
       uRepel: { value: 0 },
@@ -1530,7 +1540,7 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
 
     // Mouse parallax + cursor repulsion — fine pointers only, never on touch.
     const pointer = { x: 0, y: 0 };
-    // Camera glide toward the cursor: `target*` follows the pointer (reset to 0 when it leaves the
+    // Camera turn + ambient drift: `target*` follows the pointer (reset to 0 when it leaves the
     // viewport), `current*` eases toward it every frame. NDC in [-1, 1], y down.
     const mouse = { targetX: 0, targetY: 0, currentX: 0, currentY: 0 };
     const cursor = { x: 0, y: 0, vx: 0, vy: 0 }; // spring-follower of `pointer` (NDC, y down)
@@ -1677,6 +1687,7 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
         mouse.currentX = 0;
         mouse.currentY = 0;
       }
+      (u.uMouse.value as THREE.Vector2).set(mouse.currentX, mouse.currentY);
       // Scroll parallax for the near-lens foreground (static under reduced motion).
       u.uScroll.value = reduced ? 0 : smoothed;
 
@@ -1714,17 +1725,13 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
           rotX += HERO_LEAD.pitch * lead;
         }
       }
-      // Camera: scroll-driven base path (sway + dolly) plus a spatial glide toward the cursor. It stays
-      // locked on the z = 0 focal plane, so the formations remain anchored while perspective sweeps
-      // the near bokeh opposite the cursor and drifts the deep stars softly (NDC y-down → world y-up).
-      const baseCamX = Math.sin(smoothed * Math.PI * 2) * 0.5;
-      const baseCamY = 0;
-      camera.position.set(
-        baseCamX + mouse.currentX * CAM_PARALLAX_X,
-        baseCamY - mouse.currentY * CAM_PARALLAX_Y,
-        camZ,
-      );
+      // Camera: position stays on the scroll-driven base path (sway + dolly), aimed at the origin; the
+      // pointer adds only a gentle damped turn toward the cursor (local yaw, then pitch). mouse.currentY
+      // is NDC y-down, so it is flipped to y-up for the pitch.
+      camera.position.set(Math.sin(smoothed * Math.PI * 2) * 0.5, 0, camZ);
       camera.lookAt(0, 0, 0);
+      camera.rotateY(-CAM_YAW * mouse.currentX);
+      camera.rotateX(CAM_PITCH * -mouse.currentY);
       camera.updateMatrixWorld();
 
       // Cursor: slightly under-damped spring toward the pointer (sub-stepped for stability), then a world ray.
