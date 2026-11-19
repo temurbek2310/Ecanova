@@ -1,28 +1,43 @@
 /*
- * ECONOVA public landing — "Constellation Floating on Black Velvet" (Dala) tokens.
+ * ECONOVA public landing — Glass-Brutalism, 1-to-1 with the /overview dashboard.
+ * Frosted #101522 panels, 2px white/15 borders, hard #000 offset shadows, crisp radii.
+ * Plus Jakarta Sans (display) · DM Sans (UI/body) · JetBrains Mono (badges, indices, tags).
  * Everything is scoped to `.econova-landing` so nothing leaks into /overview or /login.
- * Inter is not loaded by index.html, so it is imported here (200 / 400 / 600 only).
  */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=JetBrains+Mono:wght@500;700&display=swap');
 
 .econova-landing {
-  /* Colors */
-  --color-void: #000000; /* pure black canvas only */
-  --color-bone-white: #ffffff;
-  --color-ash-gray: #9a9a9a;
-  --color-silver-mist: #bdbdbd;
-  --color-electric-iris: #8052ff;
-  --color-saffron-spark: #ffb829;
-  --color-deep-verdant: #15846e;
+  /* Surfaces */
+  --lp-canvas: #080b14;
+  --lp-surface: rgba(16, 21, 34, 0.6); /* #101522 / 60 */
+  --lp-border: rgba(255, 255, 255, 0.15);
+  --lp-border-soft: rgba(255, 255, 255, 0.1);
+  --lp-shadow: #000000;
 
-  /* Typography */
-  --font-landing: 'PPNeueMontreal', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Ink */
+  --lp-ink: #f4f7fa;
+  --lp-muted: #b6c2da;
+
+  /* Brand accents (strict 1-to-1 with /overview) */
+  --lp-economics: #5de1d2;
+  --lp-mathematics: #9274ff;
+  --lp-business: #6fe0a1;
+  --lp-highlight: #f5b942;
+
+  /* Shape */
+  --lp-radius-card: 12px;
+  --lp-radius-control: 6px;
+  --lp-radius-tag: 4px;
+
+  --lp-font-display: var(--font-display, 'Plus Jakarta Sans', system-ui, sans-serif);
+  --lp-font-body: var(--font-body, 'DM Sans', system-ui, sans-serif);
+  --lp-font-mono: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
 
   position: relative;
-  background-color: var(--color-void);
-  color: var(--color-bone-white);
-  font-family: var(--font-landing);
-  font-feature-settings: 'ss01' on;
+  /* The fixed ConstellationCanvas paints the canvas colour; panels stay frosted above it. */
+  background-color: var(--lp-canvas);
+  color: var(--lp-ink);
+  font-family: var(--lp-font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -34,52 +49,751 @@
   box-sizing: border-box;
 }
 
-/* Display */
-.econova-landing .landing-display {
-  font-family: var(--font-landing);
-  font-feature-settings: 'ss01' on;
-  font-size: clamp(48px, 7.5vw, 113px);
-  font-weight: 400;
-  line-height: 1.05;
-  letter-spacing: -0.04em;
+.econova-landing ::selection {
+  background: var(--lp-economics);
+  color: var(--lp-canvas);
 }
 
-/* Headline LG */
-.econova-landing .landing-headline-lg {
-  font-family: var(--font-landing);
-  font-feature-settings: 'ss01' on;
-  font-size: clamp(40px, 5.5vw, 78px);
-  font-weight: 400;
-  line-height: 1.1;
-  letter-spacing: -0.04em;
+.econova-landing :focus-visible {
+  outline: 2px solid var(--lp-economics);
+  outline-offset: 3px;
 }
 
-/* Headline SM */
-.econova-landing .landing-headline-sm {
-  font-family: var(--font-landing);
-  font-feature-settings: 'ss01' on;
-  font-size: clamp(32px, 3.5vw, 42px);
-  font-weight: 400;
-  line-height: 1.2;
-  letter-spacing: -0.04em;
-}
+/* ------------------------------------------------------------------ */
+/* Type                                                                */
+/* ------------------------------------------------------------------ */
 
-/* Body */
-.econova-landing .landing-body {
-  font-family: var(--font-landing);
-  font-feature-settings: 'ss01' on;
-  font-size: 18px;
-  font-weight: 200;
-  line-height: 1.5;
-}
-
-/* Nav / Kicker */
-.econova-landing .landing-kicker {
-  font-family: var(--font-landing);
-  font-feature-settings: 'ss01' on;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.2;
+.econova-landing .lp-display {
+  font-family: var(--lp-font-display);
+  font-size: clamp(40px, 6.2vw, 92px);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.03em;
   text-transform: uppercase;
-  letter-spacing: 0.025em;
+  color: var(--lp-ink);
+  overflow-wrap: break-word;
+}
+
+.econova-landing .lp-heading-lg {
+  font-family: var(--lp-font-display);
+  font-size: clamp(34px, 4.4vw, 60px);
+  font-weight: 800;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  color: var(--lp-ink);
+  overflow-wrap: break-word;
+}
+
+.econova-landing .lp-heading {
+  font-family: var(--lp-font-display);
+  font-size: clamp(26px, 2.6vw, 38px);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--lp-ink);
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.econova-landing .lp-closing {
+  font-family: var(--lp-font-display);
+  font-size: clamp(36px, 5.4vw, 76px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--lp-ink);
+  overflow-wrap: break-word;
+}
+
+/* Overflow mask for the hero line snap; padding keeps descenders from clipping. */
+.econova-landing .lp-mask {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+
+.econova-landing .lp-lead {
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--lp-muted);
+}
+@media (min-width: 768px) {
+  .econova-landing .lp-lead {
+    font-size: 19px;
+  }
+}
+
+.econova-landing .lp-body {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--lp-muted);
+}
+
+/* Monospace section index / module tag: `01 // ECONOMICS` */
+.econova-landing .lp-index {
+  font-family: var(--lp-font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lp-accent, var(--lp-ink));
+}
+.econova-landing .lp-index--muted {
+  color: var(--lp-muted);
+  font-weight: 500;
+}
+
+/* `[ BADGE ]` */
+.econova-landing .lp-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 7px 12px;
+  border: 2px solid color-mix(in srgb, var(--lp-accent, #ffffff) 45%, transparent);
+  border-radius: var(--lp-radius-tag);
+  background: color-mix(in srgb, var(--lp-accent, #ffffff) 10%, rgba(16, 21, 34, 0.7));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 3px 3px 0 0 var(--lp-shadow);
+  font-family: var(--lp-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--lp-accent, var(--lp-ink));
+}
+
+/* ------------------------------------------------------------------ */
+/* Glass-Brutalist surfaces                                            */
+/* ------------------------------------------------------------------ */
+
+.econova-landing .lp-panel {
+  position: relative;
+  background-color: var(--lp-surface);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 2px solid var(--lp-border);
+  border-radius: var(--lp-radius-card);
+  box-shadow: 8px 8px 0 0 var(--lp-shadow);
+}
+
+.econova-landing .lp-panel--md {
+  box-shadow: 6px 6px 0 0 var(--lp-shadow);
+}
+
+/* Discipline card: accent top strip + accent-tinted border */
+.econova-landing .lp-track {
+  overflow: hidden;
+  max-width: 600px;
+  padding: 36px 24px 28px;
+  border-color: color-mix(in srgb, var(--lp-accent) 40%, var(--lp-border));
+}
+/* Real element (not ::before) so GSAP can self-draw it with scaleX. */
+.econova-landing .lp-track__strip {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 6px;
+  background-color: var(--lp-accent);
+  border-bottom: 2px solid #000000;
+  transform-origin: left center;
+}
+
+/* Tactile lift / press. The panel is the innermost layer, so this CSS transform never
+   competes with the GSAP parallax / reveal transforms on its wrappers. */
+.econova-landing .lp-track {
+  transition:
+    transform 150ms ease-out,
+    box-shadow 150ms ease-out;
+}
+@media (hover: hover) {
+  .econova-landing .lp-track:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 10px 10px 0 0 var(--lp-shadow);
+  }
+}
+.econova-landing .lp-track:active:not(:has(.lp-btn:active)) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 0 var(--lp-shadow);
+}
+@media (min-width: 768px) {
+  .econova-landing .lp-track {
+    padding: 44px 36px 36px;
+  }
+}
+
+/* Monospace topic pill */
+.econova-landing .lp-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1.5px solid color-mix(in srgb, var(--lp-accent, #ffffff) 50%, transparent);
+  border-radius: var(--lp-radius-tag);
+  background: color-mix(in srgb, var(--lp-accent, #ffffff) 10%, transparent);
+  font-family: var(--lp-font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: var(--lp-ink);
+}
+
+/* Architecture bento tile */
+.econova-landing .lp-tile {
+  display: flex;
+  min-height: 260px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 24px;
+}
+@media (min-width: 768px) {
+  .econova-landing .lp-tile {
+    padding: 32px;
+  }
+}
+
+.econova-landing .lp-tile__icon {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #000000;
+  border-radius: 8px;
+  background-color: var(--lp-accent);
+  color: var(--lp-canvas);
+  box-shadow: 3px 3px 0 0 var(--lp-shadow);
+}
+
+.econova-landing .lp-tile__title {
+  font-family: var(--lp-font-display);
+  font-size: clamp(21px, 1.8vw, 26px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--lp-ink);
+  overflow-wrap: break-word;
+}
+
+/* Final callout */
+.econova-landing .lp-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 32px 24px;
+  border-color: rgba(93, 225, 210, 0.4);
+  box-shadow: 10px 10px 0 0 var(--lp-shadow);
+}
+@media (min-width: 768px) {
+  .econova-landing .lp-cta {
+    padding: 56px;
+  }
+}
+@media (min-width: 1024px) {
+  .econova-landing .lp-cta {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+}
+
+/* Hero proof bar */
+.econova-landing .lp-proof {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 22px;
+  font-family: var(--lp-font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lp-muted);
+}
+.econova-landing .lp-proof li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.econova-landing .lp-proof__dot {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid #000000;
+}
+
+/* ------------------------------------------------------------------ */
+/* Neobrutalist buttons                                                */
+/* ------------------------------------------------------------------ */
+
+.econova-landing .lp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  border: 2px solid #000000;
+  border-radius: var(--lp-radius-control);
+  box-shadow: 4px 4px 0 0 var(--lp-shadow);
+  font-family: var(--lp-font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 150ms ease-out,
+    box-shadow 150ms ease-out,
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease;
+}
+@media (hover: hover) {
+  .econova-landing .lp-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 8px 8px 0 0 var(--lp-shadow);
+  }
+  .econova-landing .lp-btn--sm:hover {
+    box-shadow: 6px 6px 0 0 var(--lp-shadow);
+  }
+}
+.econova-landing .lp-btn:active,
+.econova-landing .lp-btn--sm:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 0 var(--lp-shadow);
+}
+
+.econova-landing .lp-btn--sm {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 12px;
+  box-shadow: 3px 3px 0 0 var(--lp-shadow);
+}
+
+.econova-landing .lp-btn--primary {
+  background-color: var(--lp-economics);
+  color: var(--lp-canvas);
+}
+.econova-landing .lp-btn--primary:hover {
+  background-color: #7cebe0;
+}
+
+.econova-landing .lp-btn--violet {
+  background-color: var(--lp-mathematics);
+  color: var(--lp-canvas);
+}
+.econova-landing .lp-btn--violet:hover {
+  background-color: #a68dff;
+}
+
+.econova-landing .lp-btn--glass {
+  border-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(16, 21, 34, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--lp-ink);
+}
+.econova-landing .lp-btn--glass:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  background-color: rgba(20, 27, 43, 0.85);
+}
+
+.econova-landing .lp-btn__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Chrome: navbar, logo, locale switch, footer                         */
+/* ------------------------------------------------------------------ */
+
+.econova-landing .lp-nav {
+  background-color: rgba(8, 11, 20, 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 2px solid var(--lp-border-soft);
+}
+
+/* 2px scroll telemetry line, sitting on the navbar's bottom border. Scrubbed by GSAP. */
+.econova-landing .lp-progress {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  height: 2px;
+  background-image: linear-gradient(90deg, var(--lp-economics), var(--lp-mathematics), var(--lp-business));
+  transform: scaleX(0);
+  transform-origin: left center;
+  pointer-events: none;
+}
+
+/* Fixed right-edge chapter rail. No `display` (Tailwind's `hidden min-[1360px]:flex` owns it). */
+.econova-landing .lp-rail {
+  position: fixed;
+  top: 50%;
+  right: 10px; /* + the items' 8px side padding = the same 18px visual inset */
+  z-index: 20;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  transform: translateY(-50%);
+}
+.econova-landing .lp-rail__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 6px 8px; /* generous hit area (py-1.5 px-2) */
+  font-family: var(--lp-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  color: rgba(182, 194, 218, 0.45);
+  text-decoration: none;
+  outline: none;
+  transition:
+    color 220ms ease,
+    opacity 220ms ease;
+}
+.econova-landing .lp-rail__item:hover,
+.econova-landing .lp-rail__item:focus-visible {
+  color: var(--lp-ink);
+}
+.econova-landing .lp-rail__item.is-active {
+  color: var(--lp-accent);
+}
+/* Editorial focus: while the rail is hovered (or keyboard-focused), inactive siblings recede. */
+.econova-landing .lp-rail:hover .lp-rail__item:not(:hover):not(.is-active),
+.econova-landing .lp-rail:has(.lp-rail__item:focus-visible) .lp-rail__item:not(:focus-visible):not(:hover):not(.is-active) {
+  opacity: 0.55;
+}
+/* Tick + number: right-anchored magnification, GPU-composited transform only (no layout shift). */
+.econova-landing .lp-rail__mag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform-origin: right center;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.econova-landing .lp-rail__item:hover .lp-rail__mag,
+.econova-landing .lp-rail__item:focus-visible .lp-rail__mag {
+  transform: scale(1.3);
+}
+.econova-landing .lp-rail__item:focus-visible .lp-rail__mag {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+.econova-landing .lp-rail__tick {
+  width: 24px;
+  height: 2px;
+  background-color: currentColor;
+  transform: scaleX(0.3); /* ≈7px idle */
+  transform-origin: right center;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.econova-landing .lp-rail__item.is-active .lp-rail__tick {
+  transform: scaleX(0.8); /* ≈19px active */
+}
+.econova-landing .lp-rail__item:hover .lp-rail__tick,
+.econova-landing .lp-rail__item:focus-visible .lp-rail__tick {
+  transform: scaleX(1); /* full 24px dash */
+}
+.econova-landing .lp-rail__label {
+  position: absolute;
+  right: calc(100% + 10px);
+  padding: 5px 8px;
+  border: 2px solid var(--lp-border);
+  border-radius: var(--lp-radius-tag);
+  background-color: rgba(16, 21, 34, 0.9);
+  box-shadow: 3px 3px 0 0 var(--lp-shadow);
+  color: var(--lp-ink);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(6px);
+  pointer-events: none;
+  transition:
+    opacity 150ms ease-out,
+    transform 150ms ease-out;
+}
+.econova-landing .lp-rail__item:hover .lp-rail__label,
+.econova-landing .lp-rail__item:focus-visible .lp-rail__label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* No `display` here: unlayered CSS would override Tailwind's `hidden sm:inline-flex`. */
+.econova-landing .lp-nav__link {
+  align-items: center;
+  padding: 8px 12px;
+  border: 2px solid transparent;
+  border-radius: var(--lp-radius-control);
+  font-family: var(--lp-font-body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--lp-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.econova-landing .lp-nav__link:hover {
+  border-color: var(--lp-border);
+  background-color: rgba(16, 21, 34, 0.7);
+  color: var(--lp-ink);
+}
+
+.econova-landing .lp-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--lp-font-display);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--lp-ink);
+  text-decoration: none;
+}
+.econova-landing .lp-logo__mark {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #000000;
+  border-radius: 8px;
+  background-color: var(--lp-mathematics);
+  color: var(--lp-canvas);
+  box-shadow: 3px 3px 0 0 var(--lp-shadow);
+}
+.econova-landing .lp-logo__mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.econova-landing .lp-locale {
+  display: inline-flex;
+  overflow: hidden;
+  border: 2px solid var(--lp-border);
+  border-radius: var(--lp-radius-control);
+  background-color: rgba(16, 21, 34, 0.7);
+}
+.econova-landing .lp-locale button {
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
+  font-family: var(--lp-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: var(--lp-muted);
+  cursor: pointer;
+}
+.econova-landing .lp-locale button + button {
+  border-left: 2px solid var(--lp-border);
+}
+.econova-landing .lp-locale button:hover {
+  color: var(--lp-ink);
+}
+.econova-landing .lp-locale button[aria-pressed='true'] {
+  background-color: var(--lp-economics);
+  color: var(--lp-canvas);
+}
+
+/*
+ * Glass-Brutalist footer. The frosted surface, top border, pill and button boxes come from
+ * Tailwind utilities in the markup — these rules never set background / border / color on those
+ * same elements, so the (unlayered) stylesheet can't override the (layered) utilities.
+ */
+.econova-landing .lp-footer__accent {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background-image: linear-gradient(90deg, var(--lp-economics), var(--lp-mathematics), var(--lp-business));
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.econova-landing .lp-footer__title {
+  font-family: var(--lp-font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8a94a6;
+}
+
+.econova-landing .lp-footer__status {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--lp-radius-tag);
+  font-family: var(--lp-font-mono);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  color: var(--lp-ink);
+}
+
+/* Live dot: the halo is a scaled pseudo-element (transform + opacity only). */
+.econova-landing .lp-pulse {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 9999px;
+  background-color: var(--lp-business);
+}
+.econova-landing .lp-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: var(--lp-business);
+  animation: lp-pulse 1.8s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+@keyframes lp-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  80%,
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+
+/* Inline (not flex) so the arrow / ⌘K hint follow the last word when a label wraps. */
+.econova-landing .lp-footer__link {
+  display: inline;
+  font-family: var(--lp-font-body);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--lp-muted);
+  text-decoration: none;
+  transition: color 200ms ease;
+}
+.econova-landing .lp-footer__link:hover,
+.econova-landing .lp-footer__link:focus-visible {
+  color: var(--lp-ink);
+}
+
+.econova-landing .lp-footer__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 9px;
+  vertical-align: 0.12em;
+  border: 1.5px solid #000000;
+  background-color: var(--lp-accent);
+  opacity: 0.35;
+  transform: scale(0.7);
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease-out,
+    box-shadow 200ms ease;
+}
+.econova-landing .lp-footer__link:hover .lp-footer__dot,
+.econova-landing .lp-footer__link:focus-visible .lp-footer__dot {
+  opacity: 1;
+  transform: scale(1);
+  box-shadow: 0 0 10px var(--lp-accent);
+}
+
+.econova-landing .lp-footer__arrow {
+  display: inline-block;
+  margin-left: 6px;
+  font-family: var(--lp-font-mono);
+  font-size: 13px;
+  opacity: 0.4;
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease-out;
+}
+.econova-landing .lp-footer__link:hover .lp-footer__arrow,
+.econova-landing .lp-footer__link:focus-visible .lp-footer__arrow {
+  opacity: 1;
+  transform: translateX(4px);
+}
+.econova-landing .lp-footer__link:hover .lp-footer__arrow--out,
+.econova-landing .lp-footer__link:focus-visible .lp-footer__arrow--out {
+  transform: translate(3px, -3px);
+}
+
+.econova-landing .lp-footer__kbd {
+  margin-left: 8px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-tag);
+  background-color: rgba(16, 21, 34, 0.8);
+  font-family: var(--lp-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--lp-ink);
+}
+
+/* Edge-to-edge display wordmark; the negative bottom margin tucks the utility bar over its base. */
+.econova-landing .lp-footer__wordmark {
+  margin: 56px 0 -0.17em;
+  overflow: hidden;
+  font-family: var(--lp-font-display);
+  font-size: 18.6vw;
+  font-weight: 800;
+  line-height: 0.82;
+  letter-spacing: -0.045em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.econova-landing .lp-footer__top {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--lp-radius-control);
+  font-family: var(--lp-font-mono);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lp-ink);
+  cursor: pointer;
+}
+
+/*
+ * Camera-fixed HUD: all DOM copy (typography, cards, navbar, chapter rail) stays locked to the
+ * viewport. Pointer parallax lives solely in ConstellationCanvas.tsx, where the Three.js camera glides
+ * toward the cursor and true perspective separates the near / focal / far layers.
+ */
+
+@media (prefers-reduced-motion: reduce) {
+  .econova-landing .lp-pulse::after {
+    animation: none;
+    opacity: 0;
+  }
+  .econova-landing .lp-footer__dot,
+  .econova-landing .lp-footer__arrow {
+    transition: none;
+  }
+  /* Chapter rail: no magnification or dash motion — the colour highlight alone marks hover / focus. */
+  .econova-landing .lp-rail__item:hover .lp-rail__mag,
+  .econova-landing .lp-rail__item:focus-visible .lp-rail__mag {
+    transform: none;
+  }
+  .econova-landing .lp-rail__mag,
+  .econova-landing .lp-rail__tick {
+    transition: none;
+  }
 }
