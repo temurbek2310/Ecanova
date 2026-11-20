@@ -13,24 +13,31 @@ export function isSessionSecretConfigured(): boolean {
   return Boolean(secret && secret !== 'CHANGE_ME_FOR_PRODUCTION' && secret.length >= 16);
 }
 
+/**
+ * Throws when the server would sign sessions without a real secret in production.
+ * Called once at startup so a misconfigured deploy fails fast instead of issuing
+ * tokens signed with a throwaway key.
+ */
+export function assertSessionSecretForProduction(): void {
+  if (process.env.NODE_ENV === 'production' && !isSessionSecretConfigured()) {
+    throw new Error(
+      '[ECONOVA] SESSION_SECRET must be set (16+ random characters) when NODE_ENV=production.'
+    );
+  }
+}
+
 function getSessionSecret(): string {
   if (isSessionSecretConfigured()) {
     return process.env.SESSION_SECRET!.trim();
   }
   if (!cachedFallbackSecret) {
-    const seed =
-      process.env.SUPABASE_DB_URL ||
-      process.env.DATABASE_URL ||
-      process.env.APP_URL ||
-      'econova-persistent-session-secret-v1';
-    cachedFallbackSecret = crypto
-      .createHash('sha256')
-      .update(`econova-hmac:${seed}`)
-      .digest('hex');
+    // Random per-process key: never derivable from source or configuration.
+    // Sessions do not survive a restart and are not shared across instances.
+    cachedFallbackSecret = crypto.randomBytes(32).toString('hex');
     if (!warnedMissingSecret && process.env.NODE_ENV !== 'test') {
       warnedMissingSecret = true;
       console.warn(
-        '[ECONOVA] SESSION_SECRET is unset; using deterministic HMAC secret derived from environment configuration.'
+        '[ECONOVA] SESSION_SECRET is unset; using a random per-process secret. Sessions reset on restart.'
       );
     }
   }
@@ -139,26 +146,22 @@ export function setSessionCookie(
 ): string {
   const exp = Date.now() + SESSION_TTL_MS;
   const token = signSessionToken({ userId, exp, role });
-  const secure = isSecureRequest(req);
-  const sameSite: 'none' | 'lax' = secure ? 'none' : 'lax';
-
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
-    sameSite,
-    secure,
+    sameSite: 'lax',
+    secure: isSecureRequest(req),
     path: '/',
     maxAge: SESSION_TTL_MS,
   });
-  res.setHeader('X-Session-Token', token);
   return token;
 }
 
 export function clearSessionCookie(res: Response, req?: Request): void {
   const secure = isSecureRequest(req);
-  const sameSite: 'none' | 'lax' = secure ? 'none' : 'lax';
-  res.clearCookie(COOKIE_NAME, { path: '/', sameSite, secure });
-  res.clearCookie(CLIENT_COOKIE_NAME, { path: '/', sameSite, secure });
-  res.setHeader('X-Session-Token', '');
+  res.clearCookie(COOKIE_NAME, { path: '/', sameSite: 'lax', secure });
+  // Legacy JS-readable cookie from earlier builds; cleared so stale tokens disappear.
+  res.clearCookie(CLIENT_COOKIE_NAME, { path: '/', sameSite: 'lax', secure });
+  res.clearCookie(CLIENT_COOKIE_NAME, { path: '/', sameSite: 'none', secure: true });
 }
 
 export function extractSessionTokenFromRequest(req: Request): string | null {
@@ -167,12 +170,8 @@ export function extractSessionTokenFromRequest(req: Request): string | null {
     const bearer = authHeader.slice(7).trim();
     if (bearer) return bearer;
   }
-  const customHeader = req.headers['x-econova-session'];
-  if (typeof customHeader === 'string' && customHeader.trim()) {
-    return customHeader.trim();
-  }
   const cookies = parseCookies(req.headers.cookie);
-  return cookies[COOKIE_NAME] || cookies[CLIENT_COOKIE_NAME] || null;
+  return cookies[COOKIE_NAME] || null;
 }
 
 export async function loadUserSummaryById(userId: string): Promise<UserSummary | null> {
@@ -255,6 +254,74 @@ export async function loadUserSummaryById(userId: string): Promise<UserSummary |
   };
 }
 
+// --- Login / registration throttling ---
+
+const AUTH_RATE_WINDOW_MS = 1000 * 60 * 15;
+/** Failures allowed per window for one email (targets password guessing on one account). */
+const AUTH_MAX_FAILURES_PER_EMAIL = 10;
+/** Failures allowed per window from one IP (high enough for a shared school/campus NAT). */
+const AUTH_MAX_FAILURES_PER_IP = 100;
+const authFailureBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function clientIp(req: Request): string {
+  return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+function throttleKeys(req: Request, scope: string, email?: string) {
+  const keys: Array<{ key: string; max: number }> = [
+    { key: `${scope}:ip:${clientIp(req)}`, max: AUTH_MAX_FAILURES_PER_IP },
+  ];
+  if (email) keys.push({ key: `${scope}:email:${email}`, max: AUTH_MAX_FAILURES_PER_EMAIL });
+  return keys;
+}
+
+/**
+ * Returns seconds to wait when this IP or email has too many recent failures,
+ * otherwise null. In-memory and per-process: use a shared store (e.g. Redis)
+ * before running more than one instance.
+ */
+export function getAuthThrottleRetryAfter(
+  req: Request,
+  scope: string,
+  email?: string
+): number | null {
+  const now = Date.now();
+  let retryAfter: number | null = null;
+  for (const { key, max } of throttleKeys(req, scope, email)) {
+    const bucket = authFailureBuckets.get(key);
+    if (bucket && bucket.resetAt > now && bucket.count >= max) {
+      retryAfter = Math.max(retryAfter ?? 0, Math.ceil((bucket.resetAt - now) / 1000));
+    }
+  }
+  return retryAfter;
+}
+
+export function recordAuthFailure(req: Request, scope: string, email?: string): void {
+  const now = Date.now();
+  if (authFailureBuckets.size > 10_000) {
+    for (const [key, bucket] of authFailureBuckets) {
+      if (bucket.resetAt <= now) authFailureBuckets.delete(key);
+    }
+  }
+  for (const { key } of throttleKeys(req, scope, email)) {
+    const bucket = authFailureBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      authFailureBuckets.set(key, { count: 1, resetAt: now + AUTH_RATE_WINDOW_MS });
+    } else {
+      bucket.count += 1;
+    }
+  }
+}
+
+/** Clears the per-email counter after a successful sign-in (the IP counter is kept). */
+export function clearAuthFailuresForEmail(scope: string, email: string): void {
+  authFailureBuckets.delete(`${scope}:email:${email}`);
+}
+
+export function __resetAuthThrottleForTests(): void {
+  authFailureBuckets.clear();
+}
+
 export interface AuthenticatedRequest extends Request {
   authUser?: UserSummary;
   sessionToken?: string;
@@ -282,7 +349,6 @@ export async function attachOptionalAuth(
             req.sessionToken = setSessionCookie(res, user.id, req, user.role);
           } else {
             req.sessionToken = raw;
-            res.setHeader('X-Session-Token', raw);
           }
         }
       }
@@ -349,50 +415,92 @@ export function getGoogleOAuthRedirectUri(req: Request, clientOrigin?: string): 
   return `${proto}://${host}/auth/callback`;
 }
 
+export const OAUTH_NONCE_COOKIE_NAME = 'econova_oauth_nonce';
+const OAUTH_STATE_TTL_MS = 1000 * 60 * 15; // 15 minutes
+
+export function createOAuthNonce(): string {
+  return crypto.randomBytes(16).toString('base64url');
+}
+
+/** Short-lived HttpOnly cookie that binds the OAuth `state` to the browser that started sign-in. */
+export function setOAuthNonceCookie(res: Response, nonce: string, req?: Request): void {
+  res.cookie(OAUTH_NONCE_COOKIE_NAME, nonce, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isSecureRequest(req),
+    path: '/',
+    maxAge: OAUTH_STATE_TTL_MS,
+  });
+}
+
+export function clearOAuthNonceCookie(res: Response, req?: Request): void {
+  res.clearCookie(OAUTH_NONCE_COOKIE_NAME, {
+    path: '/',
+    sameSite: 'lax',
+    secure: isSecureRequest(req),
+  });
+}
+
 export function buildGoogleOAuthState(payload: {
   redirectTo: string;
   locale: LocaleCode;
+  nonce: string;
 }): string {
   const secret = getSessionSecret();
   const data = {
     redirectTo: sanitizeRedirectTo(payload.redirectTo, '/overview'),
     locale: payload.locale === 'uz' ? 'uz' : 'en',
-    exp: Date.now() + 1000 * 60 * 15, // 15 minutes
+    nonce: payload.nonce,
+    exp: Date.now() + OAUTH_STATE_TTL_MS,
   };
   const encoded = Buffer.from(JSON.stringify(data), 'utf8').toString('base64url');
   const sig = crypto.createHmac('sha256', secret).update(encoded).digest('base64url');
   return `${encoded}.${sig}`;
 }
 
+/**
+ * Verifies the signed OAuth `state` and that its nonce matches the browser's
+ * nonce cookie. Returns null when anything is missing, forged, expired or
+ * started in a different browser.
+ */
 export function verifyGoogleOAuthState(
-  stateToken: string | undefined
-): { redirectTo: string; locale: LocaleCode } {
-  const fallback = { redirectTo: '/overview', locale: 'en' as LocaleCode };
-  if (!stateToken || typeof stateToken !== 'string') return fallback;
+  stateToken: string | undefined,
+  expectedNonce: string | undefined
+): { redirectTo: string; locale: LocaleCode } | null {
+  if (!stateToken || typeof stateToken !== 'string') return null;
+  if (!expectedNonce || typeof expectedNonce !== 'string') return null;
   const parts = stateToken.split('.');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return fallback;
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
   const secret = getSessionSecret();
   const expected = crypto.createHmac('sha256', secret).update(parts[0]).digest('base64url');
   const sigBuf = Buffer.from(parts[1]);
   const expectedBuf = Buffer.from(expected);
   if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
-    return fallback;
+    return null;
   }
   try {
     const parsed = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')) as {
       redirectTo?: string;
       locale?: LocaleCode;
+      nonce?: string;
       exp?: number;
     };
-    if (typeof parsed.exp === 'number' && Date.now() > parsed.exp) {
-      return fallback;
+    if (typeof parsed.exp !== 'number' || Date.now() > parsed.exp) return null;
+    if (typeof parsed.nonce !== 'string') return null;
+    const nonceBuf = Buffer.from(parsed.nonce);
+    const expectedNonceBuf = Buffer.from(expectedNonce);
+    if (
+      nonceBuf.length !== expectedNonceBuf.length ||
+      !crypto.timingSafeEqual(nonceBuf, expectedNonceBuf)
+    ) {
+      return null;
     }
     return {
       redirectTo: sanitizeRedirectTo(parsed.redirectTo, '/overview'),
       locale: parsed.locale === 'uz' ? 'uz' : 'en',
     };
   } catch {
-    return fallback;
+    return null;
   }
 }
 
@@ -401,17 +509,18 @@ export function buildGoogleOAuthAuthorizeUrl(params: {
   redirectUri: string;
   redirectTo: string;
   locale: LocaleCode;
+  nonce: string;
 }): string {
   const state = buildGoogleOAuthState({
     redirectTo: params.redirectTo,
     locale: params.locale,
+    nonce: params.nonce,
   });
   const query = new URLSearchParams({
     client_id: params.clientId,
     redirect_uri: params.redirectUri,
     response_type: 'code',
     scope: 'openid email profile',
-    access_type: 'offline',
     prompt: 'select_account',
     state,
   });

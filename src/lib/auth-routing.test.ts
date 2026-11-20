@@ -27,7 +27,8 @@ test('isProtectedTab and isProtectedPathname identify protected areas accurately
   assert.equal(isProtectedPathname('/achievements'), true);
   assert.equal(isProtectedPathname('/dashboard'), true);
   assert.equal(isProtectedPathname('/admin'), true);
-  assert.equal(isProtectedPathname('/course/econ-101/assessment'), true);
+  assert.equal(isProtectedPathname('/course/econ-101/assessment'), false);
+  assert.equal(isProtectedPathname('/course/econ-101'), false);
   assert.equal(isProtectedPathname('/catalog'), false);
   assert.equal(isProtectedPathname('/overview'), false);
 });

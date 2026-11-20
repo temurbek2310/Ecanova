@@ -1,4 +1,4 @@
-import type { UserSummary } from '../shared/types';
+import type { LocaleCode, UserSummary } from '../shared/types';
 import {
   resolveDestinationFromPath,
   sanitizeRedirectTo,
@@ -6,13 +6,20 @@ import {
 } from './auth-routing';
 import { resolveMvpApiFallbackPayload } from './mvp-api-stubs';
 
-export const SESSION_TOKEN_STORAGE_KEY = 'econova_session_token';
+/**
+ * Session model: the server keeps the session in an HttpOnly `econova_session`
+ * cookie that page scripts cannot read. The client never stores or sends the
+ * raw token; it only caches a copy of the user profile for display, and that
+ * copy is always re-checked against /api/auth/me before it is trusted.
+ */
 export const CACHED_USER_STORAGE_KEY = 'econova_cached_user';
 export const INTENDED_DESTINATION_STORAGE_KEY = 'econova_intended_destination';
-export const CLIENT_SESSION_COOKIE_NAME = 'econova_client_session';
 
-let inMemorySessionToken: string | null = null;
-let fetchInterceptorInstalled = false;
+/** Storage key and cookie used by earlier builds that kept the token in JS-readable storage. */
+const LEGACY_SESSION_TOKEN_STORAGE_KEY = 'econova_session_token';
+const LEGACY_CLIENT_SESSION_COOKIE_NAME = 'econova_client_session';
+
+let legacyCleanupDone = false;
 let nativeFetchRef: typeof fetch | null = null;
 
 function getNativeFetch(): typeof fetch {
@@ -26,60 +33,20 @@ function getNativeFetch(): typeof fetch {
   return globalThis.fetch.bind(globalThis);
 }
 
-export function getStoredSessionToken(): string | null {
-  if (inMemorySessionToken) {
-    return inMemorySessionToken;
-  }
-  if (typeof window === 'undefined') {
-    return null;
-  }
-  try {
-    const fromStorage = window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY);
-    if (fromStorage && fromStorage.trim()) {
-      inMemorySessionToken = fromStorage.trim();
-      return inMemorySessionToken;
-    }
-  } catch {
-    // Ignore storage restriction
-  }
-  try {
-    const match = document.cookie.match(
-      new RegExp(`(?:^|;\\s*)${CLIENT_SESSION_COOKIE_NAME}=([^;]+)`)
-    );
-    if (match?.[1]) {
-      inMemorySessionToken = decodeURIComponent(match[1]);
-      return inMemorySessionToken;
-    }
-  } catch {
-    // Ignore cookie error
-  }
-  return null;
-}
-
-export function persistSessionToken(token: string | null | undefined): void {
-  const clean = typeof token === 'string' && token.trim() ? token.trim() : null;
-  inMemorySessionToken = clean;
+/** Removes session tokens that earlier builds left in localStorage or a readable cookie. */
+export function purgeLegacySessionToken(): void {
   if (typeof window === 'undefined') {
     return;
   }
   try {
-    if (clean) {
-      window.localStorage.setItem(SESSION_TOKEN_STORAGE_KEY, clean);
-    } else {
-      window.localStorage.removeItem(SESSION_TOKEN_STORAGE_KEY);
-    }
+    window.localStorage.removeItem(LEGACY_SESSION_TOKEN_STORAGE_KEY);
   } catch {
-    // Ignore storage error
+    // Ignore storage restriction
   }
   try {
-    const isSecure = window.location.protocol === 'https:';
-    const sameSite = isSecure ? 'None; Secure' : 'Lax';
-    if (clean) {
-      document.cookie = `${CLIENT_SESSION_COOKIE_NAME}=${encodeURIComponent(
-        clean
-      )}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=${sameSite}`;
-    } else {
-      document.cookie = `${CLIENT_SESSION_COOKIE_NAME}=; path=/; max-age=0; SameSite=${sameSite}`;
+    document.cookie = `${LEGACY_CLIENT_SESSION_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
+    if (window.location.protocol === 'https:') {
+      document.cookie = `${LEGACY_CLIENT_SESSION_COOKIE_NAME}=; path=/; max-age=0; SameSite=None; Secure`;
     }
   } catch {
     // Ignore cookie error
@@ -119,7 +86,7 @@ export function persistCachedUserSummary(user: UserSummary | null): void {
 }
 
 export function clearClientSessionState(): void {
-  persistSessionToken(null);
+  purgeLegacySessionToken();
   persistCachedUserSummary(null);
 }
 
@@ -202,9 +169,11 @@ function isSameOriginApiUrl(input: RequestInfo | URL): boolean {
 }
 
 /**
- * Authenticated fetch wrapper that attaches the active session token via
- * Authorization: Bearer and X-Econova-Session headers and rotates the local
- * session token when the server returns an updated X-Session-Token header.
+ * Same-origin fetch wrapper: sends the HttpOnly session cookie and, for a small
+ * set of public read-only endpoints, serves bundled offline data when the
+ * server is unreachable or erroring. Auth and learner endpoints (/api/auth/*,
+ * /api/me/*) never get substitute data, and 401/403 responses are always
+ * passed through so the UI sees the real signed-out state.
  */
 export async function apiFetch(
   input: RequestInfo | URL,
@@ -215,98 +184,140 @@ export async function apiFetch(
     return baseFetch(input, init);
   }
 
-  const token = getStoredSessionToken();
-  const headers = new Headers(
-    init?.headers ||
-      (typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined)
-  );
-
-  if (token) {
-    if (!headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    if (!headers.has('X-Econova-Session')) {
-      headers.set('X-Econova-Session', token);
-    }
-  }
-
   const nextInit: RequestInit = {
     ...init,
-    headers,
-    credentials: init?.credentials ?? 'include',
+    credentials: init?.credentials ?? 'same-origin',
   };
 
-  const resolveRequestUrl = (): URL | null => {
+  const method = (
+    init?.method ||
+    (typeof Request !== 'undefined' && input instanceof Request ? input.method : 'GET')
+  ).toUpperCase();
+
+  const offlineFallback = (): Response | null => {
+    if (method !== 'GET') return null;
+    let parsedUrl: URL;
     try {
       const origin =
         typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-      if (typeof input === 'string') {
-        return new URL(input, origin);
-      }
-      if (input instanceof URL) {
-        return input;
-      }
-      if (typeof Request !== 'undefined' && input instanceof Request) {
-        return new URL(input.url, origin);
-      }
+      parsedUrl =
+        input instanceof URL
+          ? input
+          : new URL(
+              typeof Request !== 'undefined' && input instanceof Request ? input.url : String(input),
+              origin
+            );
     } catch {
       return null;
     }
-    return null;
+    const fallback = resolveMvpApiFallbackPayload(parsedUrl.pathname, parsedUrl.searchParams);
+    if (fallback === null) return null;
+    return new Response(JSON.stringify(fallback), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'X-Econova-Offline-Fallback': '1' },
+    });
   };
 
   try {
     const response = await baseFetch(input, nextInit);
-
-    const rotatedToken = response.headers.get('X-Session-Token');
-    if (rotatedToken !== null) {
-      if (rotatedToken.trim()) {
-        persistSessionToken(rotatedToken.trim());
-      }
+    if (response.status === 404 || response.status >= 500) {
+      return offlineFallback() ?? response;
     }
-
-    if (!response.ok && (response.status === 404 || response.status === 401 || response.status >= 500)) {
-      const parsedUrl = resolveRequestUrl();
-      const method = (init?.method || 'GET').toUpperCase();
-      if (parsedUrl && method === 'GET') {
-        const fallback = resolveMvpApiFallbackPayload(
-          parsedUrl.pathname,
-          parsedUrl.searchParams
-        );
-        if (fallback !== null) {
-          return new Response(JSON.stringify(fallback), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-      }
-    }
-
     return response;
   } catch (err) {
-    const parsedUrl = resolveRequestUrl();
-    const method = (init?.method || 'GET').toUpperCase();
-    if (parsedUrl && method === 'GET') {
-      const fallback = resolveMvpApiFallbackPayload(
-        parsedUrl.pathname,
-        parsedUrl.searchParams
-      );
-      if (fallback !== null) {
-        return new Response(JSON.stringify(fallback), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-    }
+    const fallback = offlineFallback();
+    if (fallback) return fallback;
     throw err;
   }
 }
 
+/** Called once at startup: clears tokens that earlier builds stored where scripts could read them. */
 export function installAuthFetchInterceptor(): void {
-  if (typeof window === 'undefined' || fetchInterceptorInstalled) {
+  if (typeof window === 'undefined' || legacyCleanupDone) {
     return;
   }
-  fetchInterceptorInstalled = true;
+  legacyCleanupDone = true;
+  purgeLegacySessionToken();
   getNativeFetch();
 }
 
+/** Parses a JSON body without throwing on empty or non-JSON error responses. */
+export async function readJsonSafely<T>(response: Response): Promise<Partial<T>> {
+  try {
+    return (await response.json()) as Partial<T>;
+  } catch {
+    return {};
+  }
+}
+
+export type GoogleSignInStartResult = 'popup_opened' | 'not_configured' | 'popup_blocked' | 'failed';
+
+const GOOGLE_POPUP_NAME = 'econova_google_oauth';
+
+/**
+ * Starts Google sign-in in a popup. Must be called directly from a click
+ * handler: the popup is opened synchronously (before any await) so browsers
+ * do not block it, then pointed at Google once the authorize URL is ready.
+ * The result arrives later as a postMessage; see readOAuthPopupMessage.
+ */
+export async function startGooglePopupSignIn(
+  redirectTo: string,
+  locale: LocaleCode
+): Promise<GoogleSignInStartResult> {
+  const popup =
+    typeof window !== 'undefined'
+      ? window.open('', GOOGLE_POPUP_NAME, 'width=560,height=680')
+      : null;
+  try {
+    const params = new URLSearchParams({
+      redirectTo: sanitizeRedirectTo(redirectTo, '/overview'),
+      locale,
+      origin: window.location.origin,
+    });
+    const res = await apiFetch(`/api/auth/google/url?${params.toString()}`);
+    const data = await readJsonSafely<{ configured: boolean; url: string | null }>(res);
+    if (!res.ok || !data.configured || !data.url) {
+      popup?.close();
+      return res.ok ? 'not_configured' : 'failed';
+    }
+    if (!popup || popup.closed) {
+      return 'popup_blocked';
+    }
+    popup.location.href = data.url;
+    return 'popup_opened';
+  } catch {
+    popup?.close();
+    return 'failed';
+  }
+}
+
+export type OAuthPopupMessage =
+  | { type: 'success'; user: UserSummary; redirectTo: string | null }
+  | { type: 'error'; reason: string };
+
+/**
+ * Accepts OAuth results only from this app's own origin (the callback page is
+ * served from the same origin and posts with an exact target origin).
+ */
+export function readOAuthPopupMessage(event: MessageEvent): OAuthPopupMessage | null {
+  if (typeof window === 'undefined' || event.origin !== window.location.origin) {
+    return null;
+  }
+  const data = event.data as {
+    type?: string;
+    user?: UserSummary;
+    redirectTo?: string;
+    reason?: string;
+  } | null;
+  if (data?.type === 'OAUTH_AUTH_SUCCESS' && data.user && typeof data.user.id === 'string') {
+    return {
+      type: 'success',
+      user: data.user,
+      redirectTo: data.redirectTo ? sanitizeRedirectTo(data.redirectTo, '/overview') : null,
+    };
+  }
+  if (data?.type === 'OAUTH_AUTH_ERROR') {
+    return { type: 'error', reason: typeof data.reason === 'string' ? data.reason : 'unknown' };
+  }
+  return null;
+}

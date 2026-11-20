@@ -5,7 +5,9 @@ import { t } from '../lib/i18n';
 import {
   apiFetch,
   persistCachedUserSummary,
-  persistSessionToken,
+  readJsonSafely,
+  readOAuthPopupMessage,
+  startGooglePopupSignIn,
 } from '../lib/auth-client';
 import {
   formatDestinationLabel,
@@ -21,7 +23,7 @@ export interface AuthPageViewProps {
   onBackToOverview?: () => void;
   onAuthenticated: (
     user: UserSummary,
-    options?: { sessionToken?: string | null; redirectTo?: string | null }
+    options?: { redirectTo?: string | null }
   ) => Promise<void>;
 }
 
@@ -78,42 +80,34 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
   const destinationPath = intendedDestination?.path || '/overview';
   const destinationLabel = formatDestinationLabel(intendedDestination, locale);
 
-  // Listen for OAuth popup completion postMessage
+  // Full-page OAuth fallback lands back on /login?oauthError=<reason>.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('oauthError')) {
+      setErrorMsg(authStrings.googleFailed);
+    }
+  }, [authStrings.googleFailed]);
+
+  // Listen for OAuth popup completion postMessage (same origin only)
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      const origin = event.origin || '';
-      if (
-        origin &&
-        !origin.endsWith('.run.app') &&
-        !origin.includes('localhost') &&
-        origin !== window.location.origin
-      ) {
+      const message = readOAuthPopupMessage(event);
+      if (!message) return;
+      setGoogleLoading(false);
+      setGooglePressed(false);
+      if (message.type === 'error') {
+        setErrorMsg(authStrings.googleFailed);
         return;
       }
-      const data = event.data as {
-        type?: string;
-        user?: UserSummary;
-        sessionToken?: string;
-        redirectTo?: string;
-      } | null;
-
-      if (data?.type === 'OAUTH_AUTH_SUCCESS' && data.user) {
-        if (data.sessionToken) {
-          persistSessionToken(data.sessionToken);
-        }
-        persistCachedUserSummary(data.user);
-        setGoogleLoading(false);
-        setGooglePressed(false);
-        void onAuthenticated(data.user, {
-          sessionToken: data.sessionToken ?? null,
-          redirectTo: data.redirectTo ?? destinationPath,
-        });
-      }
+      persistCachedUserSummary(message.user);
+      void onAuthenticated(message.user, {
+        redirectTo: message.redirectTo ?? destinationPath,
+      });
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [destinationPath, onAuthenticated]);
+  }, [authStrings.googleFailed, destinationPath, onAuthenticated]);
 
   const handleGoogleSignIn = async () => {
     setErrorMsg(null);
@@ -121,60 +115,21 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
     setGoogleLoading(true);
     window.setTimeout(() => setGooglePressed(false), 180);
 
-    try {
-      const params = new URLSearchParams({
-        redirectTo: destinationPath,
-        locale,
-        origin: window.location.origin,
-      });
-      const urlRes = await apiFetch(`/api/auth/google/url?${params.toString()}`);
-      if (urlRes.ok) {
-        const urlData = (await urlRes.json()) as {
-          configured?: boolean;
-          url?: string | null;
-        };
-        if (urlData.configured && urlData.url) {
-          const popup = window.open(
-            urlData.url,
-            'econova_google_oauth',
-            'width=560,height=680'
-          );
-          if (popup) {
-            return;
-          }
-        }
-      }
+    const result = await startGooglePopupSignIn(destinationPath, locale);
+    // The popup reports back via postMessage; the button is usable again either way.
+    setGoogleLoading(false);
+    if (result === 'not_configured') setErrorMsg(authStrings.googleNotConfigured);
+    else if (result === 'popup_blocked') setErrorMsg(authStrings.googlePopupBlocked);
+    else if (result === 'failed') setErrorMsg(authStrings.googleFailed);
+  };
 
-      // Direct verified Google OAuth federation when popup is blocked or external OAuth credentials are not set in .env
-      const res = await apiFetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          preferredLocale: locale,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tashkent',
-        }),
-      });
-      const data = (await res.json()) as {
-        user?: UserSummary;
-        sessionToken?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.user) {
-        throw new Error(data.error || authStrings.authFailed);
-      }
-      if (data.sessionToken) {
-        persistSessionToken(data.sessionToken);
-      }
-      persistCachedUserSummary(data.user);
-      await onAuthenticated(data.user, {
-        sessionToken: data.sessionToken ?? null,
-        redirectTo: destinationPath,
-      });
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
-    } finally {
-      setGoogleLoading(false);
+  const completeSignIn = async (res: Response) => {
+    const data = await readJsonSafely<{ user: UserSummary; error: string }>(res);
+    if (!res.ok || !data.user) {
+      throw new Error(data.error || (res.status >= 500 ? authStrings.networkError : authStrings.authFailed));
     }
+    persistCachedUserSummary(data.user);
+    await onAuthenticated(data.user, { redirectTo: destinationPath });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -203,22 +158,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = (await res.json()) as {
-        user?: UserSummary;
-        sessionToken?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.user) {
-        throw new Error(data.error || authStrings.authFailed);
-      }
-      if (data.sessionToken) {
-        persistSessionToken(data.sessionToken);
-      }
-      persistCachedUserSummary(data.user);
-      await onAuthenticated(data.user, {
-        sessionToken: data.sessionToken ?? null,
-        redirectTo: destinationPath,
-      });
+      await completeSignIn(res);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
     } finally {
@@ -235,22 +175,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account }),
       });
-      const data = (await res.json()) as {
-        user?: UserSummary;
-        sessionToken?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.user) {
-        throw new Error(data.error || authStrings.authFailed);
-      }
-      if (data.sessionToken) {
-        persistSessionToken(data.sessionToken);
-      }
-      persistCachedUserSummary(data.user);
-      await onAuthenticated(data.user, {
-        sessionToken: data.sessionToken ?? null,
-        redirectTo: destinationPath,
-      });
+      await completeSignIn(res);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
     } finally {

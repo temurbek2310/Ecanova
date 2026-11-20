@@ -87,7 +87,6 @@ import {
   getCachedUserSummary,
   peekIntendedDestination,
   persistCachedUserSummary,
-  persistSessionToken,
   saveIntendedDestination,
 } from './lib/auth-client';
 import { scrollGlobalToTop } from './lib/scroll-sync';
@@ -585,19 +584,28 @@ export default function App() {
     try {
       const res = await apiFetch('/api/auth/me');
       if (res.ok) {
-        const data = (await res.json()) as {
-          user: UserSummary | null;
-          sessionToken?: string | null;
-        };
-        if (data.sessionToken) {
-          persistSessionToken(data.sessionToken);
-        }
-        setUser(data.user);
-        persistCachedUserSummary(data.user);
+        const data = (await res.json()) as { user?: UserSummary | null };
+        const verifiedUser = data.user ?? null;
+        setUser(verifiedUser);
+        persistCachedUserSummary(verifiedUser);
 
-        if (data.user) {
-          setDailyStudyGoalMinutes(data.user.dailyStudyGoalMinutes);
-          setGoalNotificationsEnabled(Boolean(data.user.studyGoalNotificationsEnabled));
+        if (verifiedUser) {
+          // The first screen may have been chosen from the cached profile; re-check
+          // it against the verified role (e.g. a stale or edited cached "admin").
+          if (typeof window !== 'undefined') {
+            const roleGuard = evaluateMiddlewareRouteGuard({
+              pathname: window.location.pathname,
+              search: window.location.search,
+              isAuthenticated: true,
+              userRole: verifiedUser.role,
+            });
+            if (roleGuard.action === 'redirect' && roleGuard.reason === 'insufficient_role') {
+              setActiveTab('overview');
+              window.history.replaceState({}, '', '/overview');
+            }
+          }
+          setDailyStudyGoalMinutes(verifiedUser.dailyStudyGoalMinutes);
+          setGoalNotificationsEnabled(Boolean(verifiedUser.studyGoalNotificationsEnabled));
           await loadProtectedData();
         } else {
           clearClientSessionState();
@@ -1088,11 +1096,8 @@ export default function App() {
   const handleUserAuthenticated = useCallback(
     async (
       authedUser: UserSummary,
-      options?: { sessionToken?: string | null; redirectTo?: string | null }
+      options?: { redirectTo?: string | null }
     ) => {
-      if (options?.sessionToken) {
-        persistSessionToken(options.sessionToken);
-      }
       persistCachedUserSummary(authedUser);
       setUser(authedUser);
       setLocale(authedUser.preferredLocale);

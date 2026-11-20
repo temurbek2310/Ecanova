@@ -7,9 +7,15 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
 import {
+  OAUTH_NONCE_COOKIE_NAME,
+  assertSessionSecretForProduction,
   attachOptionalAuth,
   buildGoogleOAuthAuthorizeUrl,
+  clearAuthFailuresForEmail,
+  clearOAuthNonceCookie,
   clearSessionCookie,
+  createOAuthNonce,
+  getAuthThrottleRetryAfter,
   getGoogleClientId,
   getGoogleClientSecret,
   getGoogleOAuthRedirectUri,
@@ -17,16 +23,18 @@ import {
   isGoogleOAuthConfigured,
   isSessionSecretConfigured,
   loadUserSummaryById,
+  parseCookies,
+  recordAuthFailure,
   requireAuth,
   requireStaffRole,
+  setOAuthNonceCookie,
   setSessionCookie,
   upsertGoogleOAuthUser,
   verifyGoogleOAuthState,
   verifyPassword,
   type AuthenticatedRequest,
 } from './server/auth.ts';
-import { middleware as runNextRouteMiddleware } from './src/middleware.ts';
-import { sanitizeRedirectTo } from './src/lib/auth-routing.ts';
+import { evaluateMiddlewareRouteGuard, sanitizeRedirectTo } from './src/lib/auth-routing.ts';
 import {
   isAiConfigured,
   runAiChat,
@@ -63,11 +71,8 @@ import {
   type RawQuizAttemptRow,
 } from './src/lib/quiz-leaderboard.ts';
 import {
-  buildAuthMePayload,
   buildCatalogPayload,
   buildCourseDetailPayload,
-  buildGuestCertificatesPayload,
-  buildGuestOverviewPayload,
   buildLeaderboardsPayload,
 } from './src/lib/mvp-api-stubs.ts';
 import type {
@@ -532,7 +537,10 @@ function requireDatabase(req: Request, res: Response, next: NextFunction): void 
 }
 
 async function startServer() {
+  assertSessionSecretForProduction();
   const app = express();
+  // One proxy hop (Cloud Run / load balancer) so req.ip and req.secure reflect the real client.
+  app.set('trust proxy', 1);
   app.use(express.json({ limit: '1mb' }));
   app.use(asyncHandler(attachOptionalAuth));
 
@@ -554,18 +562,26 @@ async function startServer() {
 
   // --- AUTH ---
   app.get('/api/auth/me', (req: AuthenticatedRequest, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     if (req.authUser) {
       res.json({
         id: req.authUser.id,
         name: req.authUser.displayName,
         role: req.authUser.role,
         user: req.authUser,
-        sessionToken: req.sessionToken ?? null,
       });
       return;
     }
-    res.json(buildAuthMePayload(null));
+    res.json({ user: null });
   });
+
+  const sendThrottled = (res: Response, retryAfter: number) => {
+    res.setHeader('Retry-After', String(retryAfter));
+    res.status(429).json({
+      error: 'Too many attempts. Please wait a few minutes and try again.',
+      retryAfterSeconds: retryAfter,
+    });
+  };
 
   app.post(
     '/api/auth/register',
@@ -581,6 +597,14 @@ async function startServer() {
       };
       const cleanEmail = (email ?? '').trim().toLowerCase();
       const cleanName = (displayName ?? '').trim();
+      const registerRetry = getAuthThrottleRetryAfter(req, 'register');
+      if (registerRetry !== null) {
+        sendThrottled(res, registerRetry);
+        return;
+      }
+      // Every registration attempt counts toward the per-IP budget; this caps both
+      // bulk sign-ups and probing which emails already have accounts.
+      recordAuthFailure(req, 'register');
       if (!cleanEmail || !cleanEmail.includes('@')) {
         res.status(400).json({ error: 'Please enter a valid email address.' });
         return;
@@ -624,8 +648,8 @@ async function startServer() {
       });
 
       const user = await loadUserSummaryById(userId);
-      const sessionToken = setSessionCookie(res, userId, req, user?.role);
-      res.status(201).json({ user, sessionToken });
+      setSessionCookie(res, userId, req, user?.role);
+      res.status(201).json({ user });
     })
   );
 
@@ -639,17 +663,24 @@ async function startServer() {
         res.status(400).json({ error: 'Email and password are required.' });
         return;
       }
+      const loginRetry = getAuthThrottleRetryAfter(req, 'login', cleanEmail);
+      if (loginRetry !== null) {
+        sendThrottled(res, loginRetry);
+        return;
+      }
       const row = await db.queryOne<{ id: string; password_hash: string }>(
         'SELECT id, password_hash FROM users WHERE email = $1',
         [cleanEmail]
       );
       if (!row || !verifyPassword(password, row.password_hash)) {
+        recordAuthFailure(req, 'login', cleanEmail);
         res.status(401).json({ error: 'Invalid email or password.' });
         return;
       }
+      clearAuthFailuresForEmail('login', cleanEmail);
       const user = await loadUserSummaryById(row.id);
-      const sessionToken = setSessionCookie(res, row.id, req, user?.role);
-      res.json({ user, sessionToken });
+      setSessionCookie(res, row.id, req, user?.role);
+      res.json({ user });
     })
   );
 
@@ -674,11 +705,14 @@ async function startServer() {
       return;
     }
 
+    const nonce = createOAuthNonce();
+    setOAuthNonceCookie(res, nonce, req);
     const url = buildGoogleOAuthAuthorizeUrl({
       clientId,
       redirectUri,
       redirectTo,
       locale,
+      nonce,
     });
     res.json({
       configured: true,
@@ -687,122 +721,119 @@ async function startServer() {
     });
   });
 
-  // Google OAuth 2.0 Direct / Federated Sign-In Handler
-  app.post(
-    '/api/auth/google',
-    requireDatabase,
-    asyncHandler(async (req, res) => {
-      const { email, displayName, preferredLocale, timezone } = req.body as {
-        email?: string;
-        displayName?: string;
-        preferredLocale?: LocaleCode;
-        timezone?: string;
-      };
-      const targetEmail = (email || 'ghostwire2010@gmail.com').trim().toLowerCase();
-      const targetName = (
-        displayName ||
-        (targetEmail === 'ghostwire2010@gmail.com'
-          ? 'Azizbek Karimov'
-          : targetEmail.split('@')[0] || 'Google Scholar')
-      ).trim();
-
-      const user = await upsertGoogleOAuthUser({
-        email: targetEmail,
-        displayName: targetName,
-        preferredLocale: preferredLocale === 'uz' ? 'uz' : 'en',
-        timezone: timezone || 'Asia/Tashkent',
-      });
-      const sessionToken = setSessionCookie(res, user.id, req, user.role);
-      res.json({ user, sessionToken, provider: 'google' });
-    })
-  );
-
-  // Google OAuth 2.0 Callback Handler (postMessage to opener window for cross-origin iframe support)
-  const googleCallbackHandler = asyncHandler(async (req, res) => {
-    await ensureDbReady();
-    const code = typeof req.query.code === 'string' ? req.query.code : '';
-    const stateParam = typeof req.query.state === 'string' ? req.query.state : '';
-    const { redirectTo, locale } = verifyGoogleOAuthState(stateParam);
-
-    let googleEmail = 'ghostwire2010@gmail.com';
-    let googleName = 'Azizbek Karimov';
-
-    if (code && isGoogleOAuthConfigured()) {
-      try {
-        const redirectUri = getGoogleOAuthRedirectUri(req);
-        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            code,
-            client_id: getGoogleClientId(),
-            client_secret: getGoogleClientSecret(),
-            redirect_uri: redirectUri,
-            grant_type: 'authorization_code',
-          }).toString(),
-        });
-        if (tokenRes.ok) {
-          const tokenData = (await tokenRes.json()) as { access_token?: string };
-          if (tokenData.access_token) {
-            const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: { Authorization: `Bearer ${tokenData.access_token}` },
-            });
-            if (profileRes.ok) {
-              const profileData = (await profileRes.json()) as {
-                email?: string;
-                name?: string;
-              };
-              if (profileData.email) googleEmail = profileData.email;
-              if (profileData.name) googleName = profileData.name;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Google OAuth token exchange fallback:', err);
-      }
-    }
-
-    const user = await upsertGoogleOAuthUser({
-      email: googleEmail,
-      displayName: googleName,
-      preferredLocale: locale,
-    });
-    const sessionToken = setSessionCookie(res, user.id, req, user.role);
-    const serializedPayload = JSON.stringify({
-      type: 'OAUTH_AUTH_SUCCESS',
-      user,
-      sessionToken,
-      redirectTo,
-    });
-
+  // Google OAuth 2.0 Callback Handler. Signs the user in only after a verified
+  // code exchange, then notifies the same-origin opener window (popup flow) or
+  // redirects (full-page flow). The session token never reaches page scripts.
+  const renderOAuthResultPage = (
+    res: Response,
+    locale: LocaleCode,
+    message: string,
+    payload: Record<string, unknown>,
+    fallbackHref: string
+  ) => {
+    // Escape '<' so user-controlled strings (e.g. a Google display name) cannot close the script tag.
+    const serializedPayload = JSON.stringify(payload).replace(/</g, '\\u003c');
+    const serializedHref = JSON.stringify(fallbackHref).replace(/</g, '\\u003c');
+    const safeMessage = message.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
     res.send(`<!DOCTYPE html>
-<html lang="${locale}">
+<html lang="${locale === 'uz' ? 'uz' : 'en'}">
   <head>
     <meta charset="utf-8" />
-    <title>ECONOVA — Authentication Complete</title>
+    <title>ECONOVA — Google sign-in</title>
   </head>
   <body style="background:#080B14;color:#F3F6FC;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;">
     <div style="border:2px solid #222B3D;background:#101522;padding:24px 32px;border-radius:12px;">
-      <p style="margin:0;font-weight:700;">Authentication successful. Returning to ECONOVA...</p>
+      <p style="margin:0;font-weight:700;">${safeMessage}</p>
     </div>
     <script>
       (function() {
         var payload = ${serializedPayload};
-        try {
-          window.localStorage.setItem('econova_session_token', payload.sessionToken);
-          window.localStorage.setItem('econova_cached_user', JSON.stringify(payload.user));
-        } catch (e) {}
-        if (window.opener) {
-          window.opener.postMessage(payload, '*');
+        var fallbackHref = ${serializedHref};
+        try { window.localStorage.removeItem('econova_session_token'); } catch (e) {}
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(payload, window.location.origin);
           window.close();
         } else {
-          window.location.href = payload.redirectTo || '/';
+          window.location.replace(fallbackHref);
         }
       })();
     </script>
   </body>
 </html>`);
+  };
+
+  const googleCallbackHandler = asyncHandler(async (req, res) => {
+    const code = typeof req.query.code === 'string' ? req.query.code : '';
+    const stateParam = typeof req.query.state === 'string' ? req.query.state : '';
+    const nonce = parseCookies(req.headers.cookie)[OAUTH_NONCE_COOKIE_NAME];
+    const state = verifyGoogleOAuthState(stateParam, nonce);
+    clearOAuthNonceCookie(res, req);
+
+    const locale: LocaleCode = state?.locale ?? 'en';
+    const fail = (reason: string) => {
+      res.status(400);
+      renderOAuthResultPage(
+        res,
+        locale,
+        'Google sign-in failed. Please return to ECONOVA and try again.',
+        { type: 'OAUTH_AUTH_ERROR', reason },
+        `/login?redirectTo=${encodeURIComponent(state?.redirectTo ?? '/overview')}&oauthError=${encodeURIComponent(reason)}`
+      );
+    };
+
+    if (!isGoogleOAuthConfigured()) return fail('not_configured');
+    if (!state) return fail('invalid_state');
+    if (!code) return fail(typeof req.query.error === 'string' ? 'access_denied' : 'missing_code');
+    if (!(await ensureDbReady())) return fail('database_unavailable');
+
+    type GoogleUserInfo = { email?: string; email_verified?: boolean; name?: string };
+    let profile = null as GoogleUserInfo | null;
+    try {
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: getGoogleClientId(),
+          client_secret: getGoogleClientSecret(),
+          redirect_uri: getGoogleOAuthRedirectUri(req),
+          grant_type: 'authorization_code',
+        }).toString(),
+      });
+      if (tokenRes.ok) {
+        const tokenData = (await tokenRes.json()) as { access_token?: string };
+        if (tokenData.access_token) {
+          const profileRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` },
+          });
+          if (profileRes.ok) {
+            profile = (await profileRes.json()) as GoogleUserInfo;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Google OAuth token exchange failed:', err);
+    }
+
+    if (!profile?.email || profile.email_verified !== true) {
+      return fail('unverified_identity');
+    }
+
+    const user = await upsertGoogleOAuthUser({
+      email: profile.email,
+      displayName: profile.name || profile.email.split('@')[0] || 'Google Scholar',
+      preferredLocale: locale,
+    });
+    setSessionCookie(res, user.id, req, user.role);
+    renderOAuthResultPage(
+      res,
+      locale,
+      'Authentication successful. Returning to ECONOVA...',
+      { type: 'OAUTH_AUTH_SUCCESS', user, redirectTo: state.redirectTo },
+      state.redirectTo
+    );
   });
 
   app.get(['/auth/callback', '/auth/callback/', '/api/auth/callback/google'], googleCallbackHandler);
@@ -825,8 +856,8 @@ async function startServer() {
         res.status(404).json({ error: 'Sandbox profile not found.' });
         return;
       }
-      const sessionToken = setSessionCookie(res, user.id, req, user.role);
-      res.json({ user, sessionToken });
+      setSessionCookie(res, user.id, req, user.role);
+      res.json({ user });
     })
   );
 
@@ -1206,7 +1237,7 @@ async function startServer() {
     '/api/me/overview',
     asyncHandler(async (req, res) => {
       if (!req.authUser || !isDatabaseConfigured()) {
-        res.json(buildGuestOverviewPayload());
+        res.status(401).json({ error: 'Authentication required.' });
         return;
       }
       await ensureDbReady();
@@ -1658,7 +1689,7 @@ async function startServer() {
     '/api/me/certificates',
     asyncHandler(async (req, res) => {
       if (!req.authUser || !isDatabaseConfigured()) {
-        res.json(buildGuestCertificatesPayload());
+        res.status(401).json({ error: 'Authentication required.' });
         return;
       }
       await ensureDbReady();
@@ -2236,11 +2267,7 @@ async function startServer() {
     '/api/me/referrals',
     asyncHandler(async (req, res) => {
       if (!req.authUser || !isDatabaseConfigured()) {
-        res.json({
-          myCode: 'ECONOVA-MVP',
-          referralsCount: 3,
-          claimedByMe: null,
-        });
+        res.status(401).json({ error: 'Authentication required.' });
         return;
       }
       await ensureDbReady();
@@ -2957,22 +2984,22 @@ async function startServer() {
       next();
       return;
     }
-    const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-    const host = req.headers.host || 'localhost:3000';
-    const mwResult = runNextRouteMiddleware({
-      url: `${proto}://${host}${req.originalUrl}`,
-      headers: {
-        get(name: string) {
-          const val = req.headers[name.toLowerCase()];
-          if (Array.isArray(val)) return val[0] ?? null;
-          return val ?? null;
-        },
-      },
+    // Uses the session verified by attachOptionalAuth (signature + DB lookup),
+    // never an unverified token decode.
+    const decision = evaluateMiddlewareRouteGuard({
+      pathname: req.path,
+      search: req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '',
+      isAuthenticated: Boolean(req.authUser),
+      userRole: req.authUser?.role ?? null,
     });
-    for (const [k, v] of Object.entries(mwResult.headers)) {
-      if (k.toLowerCase() !== 'location') {
-        res.setHeader(k, v);
-      }
+    res.setHeader('x-econova-auth-status', req.authUser ? 'authenticated' : 'anonymous');
+    if (decision.action === 'redirect' && decision.destination) {
+      const target = decision.destination.startsWith('/login')
+        ? decision.destination
+        : sanitizeRedirectTo(decision.destination, '/overview');
+      res.setHeader('Cache-Control', 'no-store');
+      res.redirect(302, target);
+      return;
     }
     next();
   });

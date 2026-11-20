@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { ArrowRight, X } from 'lucide-react';
 import type { AgeBand, LocaleCode, UserSummary } from '../shared/types';
 import { t } from '../lib/i18n';
-import { apiFetch, persistCachedUserSummary, persistSessionToken } from '../lib/auth-client';
+import {
+  apiFetch,
+  persistCachedUserSummary,
+  readJsonSafely,
+  readOAuthPopupMessage,
+  startGooglePopupSignIn,
+} from '../lib/auth-client';
 import { GoogleLogoSvg } from './AuthPageView';
 
 interface AuthModalProps {
@@ -12,7 +18,7 @@ interface AuthModalProps {
   onClose: () => void;
   onAuthenticated: (
     user: UserSummary,
-    options?: { sessionToken?: string | null; redirectTo?: string | null }
+    options?: { redirectTo?: string | null }
   ) => Promise<void>;
 }
 
@@ -38,39 +44,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      const origin = event.origin || '';
-      if (
-        origin &&
-        !origin.endsWith('.run.app') &&
-        !origin.includes('localhost') &&
-        origin !== window.location.origin
-      ) {
+      const message = readOAuthPopupMessage(event);
+      if (!message) return;
+      setGoogleLoading(false);
+      setGooglePressed(false);
+      if (message.type === 'error') {
+        setErrorMsg(authStrings.googleFailed);
         return;
       }
-      const data = event.data as {
-        type?: string;
-        user?: UserSummary;
-        sessionToken?: string;
-        redirectTo?: string;
-      } | null;
-
-      if (data?.type === 'OAUTH_AUTH_SUCCESS' && data.user) {
-        if (data.sessionToken) {
-          persistSessionToken(data.sessionToken);
-        }
-        persistCachedUserSummary(data.user);
-        setGoogleLoading(false);
-        setGooglePressed(false);
-        void onAuthenticated(data.user, {
-          sessionToken: data.sessionToken ?? null,
-          redirectTo: data.redirectTo ?? redirectTo,
-        }).then(() => onClose());
-      }
+      persistCachedUserSummary(message.user);
+      void onAuthenticated(message.user, {
+        redirectTo: message.redirectTo ?? redirectTo,
+      }).then(() => onClose());
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [onAuthenticated, onClose, redirectTo]);
+  }, [authStrings.googleFailed, onAuthenticated, onClose, redirectTo]);
 
   const handleGoogleSignIn = async () => {
     setErrorMsg(null);
@@ -78,60 +68,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setGoogleLoading(true);
     window.setTimeout(() => setGooglePressed(false), 180);
 
-    try {
-      const params = new URLSearchParams({
-        redirectTo: redirectTo || '/overview',
-        locale,
-        origin: window.location.origin,
-      });
-      const urlRes = await apiFetch(`/api/auth/google/url?${params.toString()}`);
-      if (urlRes.ok) {
-        const urlData = (await urlRes.json()) as {
-          configured?: boolean;
-          url?: string | null;
-        };
-        if (urlData.configured && urlData.url) {
-          const popup = window.open(
-            urlData.url,
-            'econova_google_oauth',
-            'width=560,height=680'
-          );
-          if (popup) {
-            return;
-          }
-        }
-      }
+    const result = await startGooglePopupSignIn(redirectTo || '/overview', locale);
+    // The popup reports back via postMessage; the button is usable again either way.
+    setGoogleLoading(false);
+    if (result === 'not_configured') setErrorMsg(authStrings.googleNotConfigured);
+    else if (result === 'popup_blocked') setErrorMsg(authStrings.googlePopupBlocked);
+    else if (result === 'failed') setErrorMsg(authStrings.googleFailed);
+  };
 
-      const res = await apiFetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          preferredLocale: locale,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tashkent',
-        }),
-      });
-      const data = (await res.json()) as {
-        user?: UserSummary;
-        sessionToken?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.user) {
-        throw new Error(data.error || authStrings.authFailed);
-      }
-      if (data.sessionToken) {
-        persistSessionToken(data.sessionToken);
-      }
-      persistCachedUserSummary(data.user);
-      await onAuthenticated(data.user, {
-        sessionToken: data.sessionToken ?? null,
-        redirectTo,
-      });
-      onClose();
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
-    } finally {
-      setGoogleLoading(false);
+  const completeSignIn = async (res: Response) => {
+    const data = await readJsonSafely<{ user: UserSummary; error: string }>(res);
+    if (!res.ok || !data.user) {
+      throw new Error(data.error || (res.status >= 500 ? authStrings.networkError : authStrings.authFailed));
     }
+    persistCachedUserSummary(data.user);
+    await onAuthenticated(data.user, { redirectTo });
+    onClose();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -160,21 +112,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = (await res.json()) as {
-        user?: UserSummary;
-        sessionToken?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.user) throw new Error(data.error || authStrings.authFailed);
-      if (data.sessionToken) {
-        persistSessionToken(data.sessionToken);
-      }
-      persistCachedUserSummary(data.user);
-      await onAuthenticated(data.user, {
-        sessionToken: data.sessionToken ?? null,
-        redirectTo,
-      });
-      onClose();
+      await completeSignIn(res);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
     } finally {
@@ -191,21 +129,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account }),
       });
-      const data = (await res.json()) as {
-        user?: UserSummary;
-        sessionToken?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.user) throw new Error(data.error || authStrings.authFailed);
-      if (data.sessionToken) {
-        persistSessionToken(data.sessionToken);
-      }
-      persistCachedUserSummary(data.user);
-      await onAuthenticated(data.user, {
-        sessionToken: data.sessionToken ?? null,
-        redirectTo,
-      });
-      onClose();
+      await completeSignIn(res);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
     } finally {

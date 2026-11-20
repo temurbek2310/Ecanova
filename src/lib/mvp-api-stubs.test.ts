@@ -1,29 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  buildAuthMePayload,
   buildCatalogPayload,
   buildHealthPayload,
   buildLeaderboardsPayload,
   resolveMvpApiFallbackPayload,
 } from './mvp-api-stubs';
 
-test('buildHealthPayload returns ok status and ISO timestamp', () => {
+test('buildHealthPayload reports an offline server with every capability off', () => {
   const fixedDate = new Date('2026-03-26T12:00:00.000Z');
   const payload = buildHealthPayload(fixedDate);
-  assert.equal(payload.status, 'ok');
-  assert.equal(payload.ok, true);
+  assert.equal(payload.status, 'offline');
+  assert.equal(payload.ok, false);
+  assert.equal(payload.offline, true);
   assert.equal(payload.timestamp, '2026-03-26T12:00:00.000Z');
-  assert.equal(payload.databaseConfigured, true);
-});
-
-test('buildAuthMePayload returns Guest User payload with student role for pitch deck bypass', () => {
-  const payload = buildAuthMePayload();
-  assert.equal(payload.id, '1');
-  assert.equal(payload.name, 'Guest User');
-  assert.equal(payload.role, 'student');
-  assert.equal(payload.user.displayName, 'Guest User');
-  assert.equal(payload.user.id, '1');
+  assert.equal(payload.databaseConfigured, false);
+  assert.equal(payload.sandboxEnabled, false);
+  assert.equal(payload.googleOAuthConfigured, false);
 });
 
 test('buildCatalogPayload returns Math, Economics, and Business courses with bilingual editions', () => {
@@ -50,9 +43,12 @@ test('buildLeaderboardsPayload returns quizLeaderboard and filters by courseId',
   assert.equal(filtered.quizLeaderboard[0]?.rank, 1);
 });
 
-test('resolveMvpApiFallbackPayload maps all 4 core endpoints cleanly', () => {
+test('resolveMvpApiFallbackPayload serves public endpoints only, never identity or learner data', () => {
   assert.ok(resolveMvpApiFallbackPayload('/api/health'));
-  assert.ok(resolveMvpApiFallbackPayload('/api/auth/me'));
+  assert.equal(resolveMvpApiFallbackPayload('/api/auth/me'), null);
+  assert.equal(resolveMvpApiFallbackPayload('/api/me/overview'), null);
+  assert.equal(resolveMvpApiFallbackPayload('/api/me/certificates'), null);
+  assert.equal(resolveMvpApiFallbackPayload('/api/me/referrals'), null);
   assert.ok(resolveMvpApiFallbackPayload('/api/catalog'));
   assert.ok(resolveMvpApiFallbackPayload('/api/leaderboards'));
   assert.equal(resolveMvpApiFallbackPayload('/api/unknown-endpoint'), null);

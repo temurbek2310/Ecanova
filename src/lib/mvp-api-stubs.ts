@@ -12,7 +12,6 @@ import type {
   LocaleCode,
   QuizLeaderboardEntry,
   StreakSummary,
-  UserSummary,
   XpLedgerEntry,
 } from '../shared/types';
 import {
@@ -20,35 +19,6 @@ import {
   getCurrentWeekWindow,
   type WeekWindow,
 } from './quiz-leaderboard';
-
-export interface MvpGuestAuthResponse {
-  id: string;
-  name: string;
-  role: 'student' | UserSummary['role'];
-  email: string;
-  displayName: string;
-  user: UserSummary & { name: string };
-  sessionToken: string;
-}
-
-export const MVP_GUEST_USER: UserSummary & { name: string } = {
-  id: '1',
-  name: 'Guest User',
-  displayName: 'Guest User',
-  email: 'guest@econova.edu.uz',
-  role: 'learner',
-  preferredLocale: 'en',
-  timezone: 'Asia/Tashkent',
-  ageBand: 'university',
-  leaderboardOptIn: true,
-  leaderboardPseudonym: 'tashkent_quant_99',
-  consentAcceptedAt: '2026-03-01T00:00:00.000Z',
-  dailyStudyGoalMinutes: 20,
-  studyGoalNotificationsEnabled: false,
-  weeklyDigestEmailEnabled: false,
-  lessonNotes: {},
-  bookmarkedCourseIds: ['course-macro-stabilization', 'course-quant-calculus'],
-};
 
 function createEditionSummary(params: {
   id: string;
@@ -474,37 +444,24 @@ export const MVP_COHORT_LEADERBOARD: LeaderboardEntry[] = [
   },
 ];
 
+/**
+ * Offline stand-in for /api/health. Every capability flag is false: when the
+ * server cannot be reached the client must not assume a database, sessions,
+ * Google OAuth or the demo sandbox are available.
+ */
 export function buildHealthPayload(now: Date = new Date()) {
   return {
-    status: 'ok' as const,
-    ok: true,
+    status: 'offline' as const,
+    ok: false,
+    offline: true,
     timestamp: now.toISOString(),
     service: 'econova',
     database: 'supabase_postgresql',
-    databaseConfigured: true,
-    sessionConfigured: true,
+    databaseConfigured: false,
+    sessionConfigured: false,
     googleOAuthConfigured: false,
-    aiConfigured: true,
-    sandboxEnabled: true,
-  };
-}
-
-export function buildAuthMePayload(userOverride?: UserSummary | null): MvpGuestAuthResponse {
-  const resolvedUser: UserSummary & { name: string } = userOverride
-    ? {
-        ...userOverride,
-        name: userOverride.displayName || 'Guest User',
-      }
-    : MVP_GUEST_USER;
-
-  return {
-    id: resolvedUser.id,
-    name: resolvedUser.name,
-    role: userOverride ? resolvedUser.role : 'student',
-    email: resolvedUser.email,
-    displayName: resolvedUser.displayName,
-    user: resolvedUser,
-    sessionToken: 'econova-mvp-guest-session',
+    aiConfigured: false,
+    sandboxEnabled: false,
   };
 }
 
@@ -744,15 +701,13 @@ export function buildCourseDetailPayload(
  * Resolves a fallback JSON payload when the frontend runs in a static or serverless
  * preview where an API endpoint is missing (HTTP 404) or unreachable.
  */
+/** Offline data for public, read-only endpoints only. Returns null for anything else. */
 export function resolveMvpApiFallbackPayload(
   pathname: string,
   searchParams?: URLSearchParams
 ): unknown | null {
   if (pathname === '/api/health') {
     return buildHealthPayload();
-  }
-  if (pathname === '/api/auth/me') {
-    return buildAuthMePayload();
   }
   if (pathname === '/api/catalog') {
     return buildCatalogPayload();
@@ -761,19 +716,8 @@ export function resolveMvpApiFallbackPayload(
     const courseId = searchParams?.get('courseId') || 'all';
     return buildLeaderboardsPayload(courseId);
   }
-  if (pathname === '/api/me/overview') {
-    return buildGuestOverviewPayload();
-  }
-  if (pathname === '/api/me/certificates') {
-    return buildGuestCertificatesPayload();
-  }
-  if (pathname === '/api/me/referrals') {
-    return {
-      myCode: 'ECONOVA-MVP',
-      referralsCount: 3,
-      claimedByMe: null,
-    };
-  }
+  // /api/auth/* and /api/me/* are intentionally absent: identity and learner
+  // data must come from the server, never from bundled stand-ins.
 
   const courseMatch = pathname.match(/^\/api\/courses\/([^/]+)\/editions\/([^/]+)/);
   if (courseMatch) {

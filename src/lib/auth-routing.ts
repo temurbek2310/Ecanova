@@ -54,13 +54,11 @@ export function isProtectedTab(tab: AppNavTab): tab is 'achievements' | 'profile
 
 export function isProtectedPathname(pathname: string): boolean {
   const clean = stripLocalePrefix(pathname);
-  if (PROTECTED_ROUTE_PREFIXES.some((prefix) => clean === prefix || clean.startsWith(`${prefix}/`))) {
-    return true;
-  }
-  if (/^\/course\/[^/]+\/(lesson|assessment)/.test(clean)) {
-    return true;
-  }
-  return false;
+  // Course pages (including lessons and assessments) are intentionally public:
+  // guests study with local progress, and only saving to the server needs sign-in.
+  return PROTECTED_ROUTE_PREFIXES.some(
+    (prefix) => clean === prefix || clean.startsWith(`${prefix}/`)
+  );
 }
 
 export function stripLocalePrefix(pathname: string): string {

@@ -297,7 +297,10 @@
     "backToOverview": "Bosh sahifaga qaytish",
     "sessionPersistedBadge": "SSR + Mijoz sessiyasi sinxronlangan",
     "authFailed": "Avtorizatsiya xatosi yuz berdi.",
-    "networkError": "Tarmoq xatosi yuz berdi."
+    "networkError": "Tarmoq xatosi yuz berdi.",
+    "googleNotConfigured": "Google orqali kirish hali sozlanmagan. Iltimos, email va parol bilan kiring.",
+    "googlePopupBlocked": "Google kirish oynasi bloklandi. Ushbu sayt uchun qalqib chiquvchi oynalarga ruxsat bering va qayta urinib ko'ring.",
+    "googleFailed": "Google orqali kirish yakunlanmadi. Iltimos, qayta urinib ko'ring."
   },
   "companion": {
     "title": "ECONOVA o‘quv va tahririyat yordamchisi",

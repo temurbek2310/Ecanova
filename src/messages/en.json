@@ -297,7 +297,10 @@
     "backToOverview": "Back to Public Overview",
     "sessionPersistedBadge": "SSR + Client Session Sync Active",
     "authFailed": "Authentication failed.",
-    "networkError": "Network error."
+    "networkError": "Network error.",
+    "googleNotConfigured": "Google sign-in is not set up yet. Please use email and password.",
+    "googlePopupBlocked": "The Google sign-in window was blocked. Allow pop-ups for this site and try again.",
+    "googleFailed": "Google sign-in did not complete. Please try again."
   },
   "companion": {
     "title": "ECONOVA Study & Editorial Companion",

@@ -6,7 +6,6 @@ import {
 import type { UserRole } from './shared/types';
 
 export const SESSION_COOKIE_NAME = 'econova_session';
-export const CLIENT_SESSION_COOKIE_NAME = 'econova_client_session';
 
 export interface MinimalMiddlewareRequest {
   url: string;
@@ -87,17 +86,21 @@ export function extractTokenFromMiddlewareRequest(
   if (customHeader?.trim()) {
     return customHeader.trim();
   }
-  const directCookie =
-    req.cookies?.get(SESSION_COOKIE_NAME)?.value ||
-    req.cookies?.get(CLIENT_SESSION_COOKIE_NAME)?.value;
+  const directCookie = req.cookies?.get(SESSION_COOKIE_NAME)?.value;
   if (directCookie) {
     return directCookie;
   }
   const parsedCookies = parseCookieHeader(req.headers.get('cookie'));
-  return parsedCookies[SESSION_COOKIE_NAME] || parsedCookies[CLIENT_SESSION_COOKIE_NAME] || null;
+  return parsedCookies[SESSION_COOKIE_NAME] || null;
 }
 
 /**
+ * NOT AN AUTHORIZATION CHECK. This edge-style middleware has no access to the
+ * session secret, so it only decodes the token payload without verifying its
+ * signature; a forged token passes. It is suitable for UX hints (early
+ * redirects, headers) only. The Express server enforces the real guard in
+ * server.ts using the verified session from attachOptionalAuth.
+ *
  * Next.js / Edge-compatible middleware that:
  * 1. Reads the active session cookie or Authorization header.
  * 2. Actively refreshes sessions approaching expiry on the response headers.
