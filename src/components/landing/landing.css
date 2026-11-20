@@ -822,6 +822,45 @@
  */
 
 /* ------------------------------------------------------------------ */
+/* Bilingual O‘Z / EN — zero layout shift on toggle                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * <Bi>: both editions stacked in one grid cell, so every box is sized to the longer edition and the
+ * O‘Z / EN switch never reflows the page (no vertical jump, no button/badge width jitter).
+ */
+.econova-landing .lp-bi {
+  display: inline-grid;
+  max-width: 100%;
+  vertical-align: top;
+}
+.econova-landing .lp-bi--block {
+  display: grid;
+}
+.econova-landing .lp-bi > .lp-bi__ed {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+/* Buttons / badges / pills centre the shorter edition inside the reserved width. */
+.econova-landing .lp-btn .lp-bi,
+.econova-landing .lp-badge .lp-bi {
+  justify-items: center;
+  text-align: center;
+}
+.econova-landing .lp-bi > .lp-bi__ed[aria-hidden='true'] {
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Locale pill: equal, fixed-width segments so the control is identical in both states. */
+.econova-landing .lp-locale button {
+  min-width: 40px;
+  min-height: 30px;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------ */
 /* Touch & small-viewport safety                                       */
 /* ------------------------------------------------------------------ */
 
@@ -907,6 +946,7 @@
     display: none;
   }
   .econova-landing .lp-locale button {
+    min-width: 36px;
     padding: 7px 8px;
   }
 }

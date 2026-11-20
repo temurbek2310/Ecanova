@@ -6,6 +6,7 @@ import { ArrowUpRight, Command, FileCheck2, Languages, RefreshCw } from 'lucide-
 import type { LucideIcon } from 'lucide-react';
 import { useEconovaGSAP } from '@/hooks/useEconovaGSAP';
 import { getActiveLenisInstance } from '../../lib/scroll-sync';
+import { applyDocumentLocale, persistLocalePreference } from '../../lib/i18n';
 import type { LocaleCode } from '../../shared/types';
 import { ConstellationCanvas } from './ConstellationCanvas';
 import { FooterWordmarkCanvas } from './FooterWordmarkCanvas';
@@ -90,10 +91,20 @@ interface LandingCopy {
   };
   /** Chapter rail labels, in RAIL_TARGETS order (00–05). */
   rail: { label: string; items: [string, string, string, string, string, string] };
+  /** `<title>` + `<meta name="description">` while the landing page is mounted. */
+  meta: { title: string; description: string };
+  /** Screen-reader-only landmark / control names. */
+  a11y: { primaryNav: string; footerNav: string; language: string };
 }
 
 const COPY: Record<LocaleCode, LandingCopy> = {
   en: {
+    meta: {
+      title: 'ECONOVA — Bilingual Academic Engine for Economics, Mathematics & Business',
+      description:
+        'Master Economics, Mathematics and Business on one bilingual (Uzbek / English) platform — structured tracks, offline sync and server-verified certificates.',
+    },
+    a11y: { primaryNav: 'Primary', footerNav: 'Footer', language: 'Language' },
     nav: { tracks: 'Tracks', architecture: 'Architecture', start: 'Get Started', signIn: 'Sign In', launch: 'Launch App' },
     hero: {
       badge: '[ BILINGUAL ACADEMIC ENGINE :: O‘Z / EN ]',
@@ -198,6 +209,12 @@ const COPY: Record<LocaleCode, LandingCopy> = {
     rail: { label: 'Sections', items: ['Intro', 'Economics', 'Mathematics', 'Business', 'Architecture', 'Get started'] },
   },
   uz: {
+    meta: {
+      title: 'ECONOVA — Iqtisodiyot, matematika va biznes uchun ikki tilli akademik platforma',
+      description:
+        'Iqtisodiyot, matematika va biznesni yagona ikki tilli (o‘zbek / ingliz) platformada o‘rganing — tizimli yo‘nalishlar, oflayn sinxronlash va serverda tasdiqlangan sertifikatlar.',
+    },
+    a11y: { primaryNav: 'Asosiy navigatsiya', footerNav: 'Sahifa osti navigatsiyasi', language: 'Til' },
     nav: {
       tracks: 'Yo‘nalishlar',
       architecture: 'Arxitektura',
@@ -233,7 +250,7 @@ const COPY: Record<LocaleCode, LandingCopy> = {
       {
         tag: 'BIZNES',
         headline: 'Faqat jozibali emas, miqyoslanadigan strategiya.',
-        body: 'Birlik iqtisodidan kapital taqsimotigacha: o‘sib boruvchi kompaniyalar ortidagi hisob-kitob, kelishuvlar va tizim dizayni.',
+        body: 'Birlik iqtisodidan kapital taqsimotigacha: o‘sib boruvchi kompaniyalar ortidagi hisob-kitob, murosalar va tizim dizayni.',
         topics: ['Birlik iqtisodi', 'Kapital taqsimoti', 'Strategik tizimlar'],
       },
     ],
@@ -243,18 +260,18 @@ const COPY: Record<LocaleCode, LandingCopy> = {
       body: 'Boshqaruv panelini harakatlantiruvchi aynan shu tizim — tezkor, ikki tilli, barqaror va tekshiriladigan.',
       items: [
         {
-          title: '⌘K Spotlight buyruqlar paneli',
+          title: '⌘K tezkor buyruqlar paneli',
           module: 'NAVIGATSIYA',
           body: 'Har bir kurs, dars va test bo‘ylab klaviatura orqali tezkor navigatsiya.',
         },
         {
-          title: 'Ikki nashrli chop etish (O‘Z / EN)',
+          title: 'Ikki tilli nashr (O‘Z / EN)',
           module: 'KONTENT',
           body: 'O‘zbek va ingliz tillaridagi akademik nashrlar yonma-yon chop etiladi va sinxron saqlanadi.',
         },
         {
-          title: 'Oflayn ma’lumotlar uyg‘unlashuvi (Sync HUD)',
-          module: 'SINXRON',
+          title: 'Oflayn ma’lumotlarni sinxronlash (Sync HUD)',
+          module: 'SINXRONLASH',
           body: 'Mahalliy saqlash — tarmoq qaytishi bilan ma’lumotlar toza uyg‘unlashadi, holat HUD’da ko‘rinadi.',
         },
         {
@@ -391,10 +408,47 @@ function Badge({ children, tone }: { children: ReactNode; tone?: string }) {
   );
 }
 
-function LocaleSwitch({ locale, onChange }: { locale: LocaleCode; onChange: (next: LocaleCode) => void }) {
+const LOCALES: readonly LocaleCode[] = ['en', 'uz'];
+
+/**
+ * Layout-shift-free bilingual text. Both editions are rendered into the same grid cell, so the box is
+ * always sized to the longer one and toggling O‘Z / EN never reflows the page. Only the active
+ * edition is visible; the other is `visibility: hidden` + `aria-hidden` (skipped by screen readers,
+ * find-in-page and selection). Each edition carries its own `lang` for correct hyphenation / speech.
+ */
+function Bi({
+  locale,
+  pick,
+  block,
+}: {
+  locale: LocaleCode;
+  pick: (copy: LandingCopy) => ReactNode;
+  /** Block-level grid (fills the line) instead of an inline-grid. */
+  block?: boolean;
+}) {
   return (
-    <div role="group" aria-label="Language" className="lp-locale">
-      <button type="button" aria-pressed={locale === 'en'} onClick={() => onChange('en')}>
+    <span className={block ? 'lp-bi lp-bi--block' : 'lp-bi'}>
+      {LOCALES.map((l) => (
+        <span key={l} lang={l} className="lp-bi__ed" aria-hidden={l === locale ? undefined : true}>
+          {pick(COPY[l])}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function LocaleSwitch({
+  locale,
+  label,
+  onChange,
+}: {
+  locale: LocaleCode;
+  label: string;
+  onChange: (next: LocaleCode) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="lp-locale">
+      <button type="button" lang="en" aria-pressed={locale === 'en'} onClick={() => onChange('en')}>
         EN
       </button>
       <button type="button" lang="uz" aria-pressed={locale === 'uz'} onClick={() => onChange('uz')}>
@@ -454,6 +508,52 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
   const copy = COPY[locale];
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef(0);
+
+  // Persist through the app's shared i18n helper (`econova_locale` in localStorage + cookie), so the
+  // landing and the dashboard always agree and a reload restores the choice via resolveInitialLocale.
+  const setLocale = useCallback(
+    (next: LocaleCode) => {
+      if (next === locale) return;
+      persistLocalePreference(next);
+      onToggleLocale(next);
+    },
+    [locale, onToggleLocale],
+  );
+
+  // Document metadata. Deferred one microtask: App's own locale effect (which writes the dashboard
+  // title) runs after this child effect in the same commit, so the landing values must land last.
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const { title, description } = COPY[locale].meta;
+      document.documentElement.lang = locale;
+      document.title = title;
+      let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'description';
+        document.head.appendChild(meta);
+      }
+      meta.content = description;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [locale]);
+
+  // Leaving the landing (e.g. → /overview): hand the head back to the app's own metadata.
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
+  useEffect(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    const originalDescription = meta?.content ?? '';
+    return () => {
+      applyDocumentLocale(localeRef.current);
+      const current = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+      if (current) current.content = originalDescription;
+    };
+  }, []);
 
   const scrollToId = useCallback((id: string) => {
     const el = document.getElementById(id);
@@ -793,7 +893,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
       {/* ---------------- Sticky Glass-Brutalist navbar ---------------- */}
       <header className="lp-nav sticky top-0 z-30">
         <nav
-          aria-label="Primary"
+          aria-label={copy.a11y.primaryNav}
           className="lp-gutter mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr]"
         >
           <div className="flex items-center">
@@ -803,23 +903,23 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
           {/* Centre links from lg up: below 1024px the right-hand controls (longest in O‘Z) need the room. */}
           <div className="hidden items-center gap-1 lg:flex">
             <a {...anchorProps('tracks')} className="lp-nav__link inline-flex">
-              {copy.nav.tracks}
+              <Bi locale={locale} pick={(c) => c.nav.tracks} />
             </a>
             <a {...anchorProps('architecture')} className="lp-nav__link inline-flex">
-              {copy.nav.architecture}
+              <Bi locale={locale} pick={(c) => c.nav.architecture} />
             </a>
             <a {...anchorProps('get-started')} className="lp-nav__link inline-flex">
-              {copy.nav.start}
+              <Bi locale={locale} pick={(c) => c.nav.start} />
             </a>
           </div>
 
           <div className="flex items-center justify-end gap-3">
-            <LocaleSwitch locale={locale} onChange={onToggleLocale} />
+            <LocaleSwitch locale={locale} label={copy.a11y.language} onChange={setLocale} />
             <a {...signInProps} className="lp-nav__link hidden sm:inline-flex">
-              {copy.nav.signIn}
+              <Bi locale={locale} pick={(c) => c.nav.signIn} />
             </a>
             <BrutalButton size="sm" arrow {...enterProps}>
-              {copy.nav.launch}
+              <Bi locale={locale} pick={(c) => c.nav.launch} />
             </BrutalButton>
           </div>
         </nav>
@@ -864,15 +964,25 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
             <div data-hero-copy className="min-w-0">
               <div>
                 <div data-hero-badge>
-                  <Badge tone="#5DE1D2">{copy.hero.badge}</Badge>
+                  <Badge tone="#5DE1D2">
+                    <Bi locale={locale} pick={(c) => c.hero.badge} />
+                  </Badge>
                 </div>
 
                 <h1 className="lp-display mt-7">
-                  {copy.hero.lines.map(([lead, accent], i) => (
+                  {[0, 1].map((i) => (
                     <span key={i} className="lp-mask">
                       <span data-hero-line className="block">
-                        {lead}
-                        <span style={{ color: i === 0 ? '#9274FF' : '#5DE1D2' }}>{accent}</span>
+                        <Bi
+                          locale={locale}
+                          block
+                          pick={(c) => (
+                            <>
+                              {c.hero.lines[i][0]}
+                              <span style={{ color: i === 0 ? '#9274FF' : '#5DE1D2' }}>{c.hero.lines[i][1]}</span>
+                            </>
+                          )}
+                        />
                       </span>
                     </span>
                   ))}
@@ -881,23 +991,23 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
 
               <div>
                 <p data-hero-rise className="lp-lead mt-7 max-w-[540px]">
-                  {copy.hero.body}
+                  <Bi locale={locale} block pick={(c) => c.hero.body} />
                 </p>
 
                 <div data-hero-rise className="mt-9 flex flex-wrap items-center gap-4">
                   <BrutalButton arrow {...enterProps}>
-                    {copy.hero.cta}
+                    <Bi locale={locale} pick={(c) => c.hero.cta} />
                   </BrutalButton>
                   <BrutalButton variant="glass" {...anchorProps('tracks')}>
-                    {copy.hero.explore}
+                    <Bi locale={locale} pick={(c) => c.hero.explore} />
                   </BrutalButton>
                 </div>
 
                 <ul data-hero-rise className="lp-proof mt-10">
-                  {copy.hero.proof.map((item, i) => (
+                  {[0, 1, 2].map((i) => (
                     <li key={i}>
                       <span aria-hidden="true" className="lp-proof__dot" style={{ backgroundColor: CHAPTER_ACCENTS[i] }} />
-                      {item}
+                      <Bi locale={locale} pick={(c) => c.hero.proof[i]} />
                     </li>
                   ))}
                 </ul>
@@ -910,7 +1020,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
 
         {/* ---------------- Core disciplines ---------------- */}
         <section id="tracks" data-anchor="tracks" className="scroll-mt-16">
-          {chapters.map(({ anchor, chapter, accent, right }, i) => (
+          {chapters.map(({ anchor, accent, right }, i) => (
             <article
               key={anchor}
               id={TRACK_IDS[i]}
@@ -928,10 +1038,12 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
               {i === 0 && (
                 <div className={`${GUTTER} mb-10 md:mb-12`}>
                   <div>
-                    <Badge tone="#9274FF">{copy.tracks.badge}</Badge>
+                    <Badge tone="#9274FF">
+                      <Bi locale={locale} pick={(c) => c.tracks.badge} />
+                    </Badge>
                   </div>
                   <h2 className="lp-heading-lg mt-5 max-w-[720px]">
-                    {copy.tracks.headline}
+                    <Bi locale={locale} block pick={(c) => c.tracks.headline} />
                   </h2>
                 </div>
               )}
@@ -945,20 +1057,36 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
                 <div className="lp-panel lp-track" style={{ '--lp-accent': accent } as CSSProperties}>
                   <span aria-hidden="true" data-track-strip className="lp-track__strip" />
                   <p className="lp-index">
-                    {String(i + 1).padStart(2, '0')} <span className="opacity-50">{'//'}</span> {chapter.tag}
+                    {String(i + 1).padStart(2, '0')} <span className="opacity-50">{'//'}</span>{' '}
+                    <Bi locale={locale} pick={(c) => c.chapters[i].tag} />
                   </p>
-                  <h3 className="lp-heading mt-5">{chapter.headline}</h3>
-                  <p className="lp-body mt-4">{chapter.body}</p>
-                  <ul className="mt-7 flex flex-wrap gap-2.5">
-                    {chapter.topics.map((topic) => (
-                      <li key={topic} data-track-tag className="lp-tag">
-                        {topic}
-                      </li>
+                  <h3 className="lp-heading mt-5">
+                    <Bi locale={locale} block pick={(c) => c.chapters[i].headline} />
+                  </h3>
+                  <p className="lp-body mt-4">
+                    <Bi locale={locale} block pick={(c) => c.chapters[i].body} />
+                  </p>
+                  {/* Both editions' pill rows share one grid cell (same idea as <Bi>), so a row that wraps
+                      in one language doesn't change the card height in the other. */}
+                  <div className="lp-bi lp-bi--block mt-7">
+                    {LOCALES.map((l) => (
+                      <ul
+                        key={l}
+                        lang={l}
+                        aria-hidden={l === locale ? undefined : true}
+                        className="lp-bi__ed flex flex-wrap gap-2.5"
+                      >
+                        {COPY[l].chapters[i].topics.map((topic) => (
+                          <li key={topic} data-track-tag className="lp-tag">
+                            {topic}
+                          </li>
+                        ))}
+                      </ul>
                     ))}
-                  </ul>
+                  </div>
                   <div className="mt-9">
                     <BrutalButton variant="glass" arrow {...enterProps}>
-                      {copy.tracks.explore}
+                      <Bi locale={locale} pick={(c) => c.tracks.explore} />
                     </BrutalButton>
                   </div>
                 </div>
@@ -977,19 +1105,21 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
             <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div>
                 <div>
-                  <Badge tone="#F5B942">{copy.architecture.badge}</Badge>
+                  <Badge tone="#F5B942">
+                    <Bi locale={locale} pick={(c) => c.architecture.badge} />
+                  </Badge>
                 </div>
                 <h2 className="lp-heading-lg mt-5 max-w-[720px]">
-                  {copy.architecture.headline}
+                  <Bi locale={locale} block pick={(c) => c.architecture.headline} />
                 </h2>
               </div>
               <p className="lp-body max-w-[420px]">
-                {copy.architecture.body}
+                <Bi locale={locale} block pick={(c) => c.architecture.body} />
               </p>
             </div>
 
             <ol data-arch-grid className="mt-14 grid grid-cols-1 gap-6 md:mt-16 md:grid-cols-2">
-              {copy.architecture.items.map((item, i) => {
+              {CAPABILITY_META.map((_, i) => {
                 const { icon: Icon, accent } = CAPABILITY_META[i];
                 return (
                   /* <li> carries the column scroll parallax, the inner panel the entrance reveal. */
@@ -1005,12 +1135,17 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
                         <Icon aria-hidden="true" size={22} strokeWidth={2.25} />
                       </span>
                       <span className="lp-index lp-index--muted">
-                        {String(i + 1).padStart(2, '0')} :: {item.module}
+                        {String(i + 1).padStart(2, '0')} ::{' '}
+                        <Bi locale={locale} pick={(c) => c.architecture.items[i].module} />
                       </span>
                     </div>
                     <div className="mt-10">
-                      <h3 className="lp-tile__title">{item.title}</h3>
-                      <p className="lp-body mt-3">{item.body}</p>
+                      <h3 className="lp-tile__title">
+                        <Bi locale={locale} block pick={(c) => c.architecture.items[i].title} />
+                      </h3>
+                      <p className="lp-body mt-3">
+                        <Bi locale={locale} block pick={(c) => c.architecture.items[i].body} />
+                      </p>
                     </div>
                   </div>
                   </div>
@@ -1031,16 +1166,22 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
           <div data-cta-trigger className={GUTTER}>
             <div data-cta-box className="lp-panel lp-cta">
               <div className="max-w-[760px]">
-                <Badge tone="#5DE1D2">{copy.closing.badge}</Badge>
-                <h2 className="lp-closing mt-6">{copy.closing.headline}</h2>
-                <p className="lp-lead mt-5 max-w-[520px]">{copy.closing.body}</p>
+                <Badge tone="#5DE1D2">
+                  <Bi locale={locale} pick={(c) => c.closing.badge} />
+                </Badge>
+                <h2 className="lp-closing mt-6">
+                  <Bi locale={locale} block pick={(c) => c.closing.headline} />
+                </h2>
+                <p className="lp-lead mt-5 max-w-[520px]">
+                  <Bi locale={locale} block pick={(c) => c.closing.body} />
+                </p>
               </div>
               <div className="flex flex-wrap items-center gap-4">
                 <BrutalButton arrow {...enterProps}>
-                  {copy.closing.cta}
+                  <Bi locale={locale} pick={(c) => c.closing.cta} />
                 </BrutalButton>
                 <BrutalButton variant="glass" {...signInProps}>
-                  {copy.closing.signIn}
+                  <Bi locale={locale} pick={(c) => c.closing.signIn} />
                 </BrutalButton>
               </div>
             </div>
@@ -1070,14 +1211,14 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
               </p>
               <div className="mt-6 flex items-center gap-3">
                 <span className="lp-footer__title">{copy.footer.language}</span>
-                <LocaleSwitch locale={locale} onChange={onToggleLocale} />
+                <LocaleSwitch locale={locale} label={copy.a11y.language} onChange={setLocale} />
               </div>
               </div>
             </div>
 
             {/* Navigation columns */}
             <nav
-              aria-label="Footer"
+              aria-label={copy.a11y.footerNav}
               className="grid grid-cols-1 gap-8 min-[400px]:grid-cols-2 sm:grid-cols-3 md:col-span-7"
             >
               {copy.footer.columns.map((column) => (
