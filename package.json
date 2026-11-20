@@ -6,13 +6,14 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "node server.ts",
-    "build": "vite build",
+    "build": "vite build && npm run build:server",
+    "build:server": "node scripts/build-server.mjs",
     "preview": "vite preview",
     "test": "tsx --test \"src/**/*.test.ts\" \"server/**/*.test.ts\"",
     "db:migrate": "tsx server/migrate.ts",
     "db:seed": "tsx server/seed-cli.ts",
     "db:import:learn-anything": "tsx server/etl/learn-anything/cli.ts",
-    "clean": "rm -rf dist server.js",
+    "clean": "rm -rf dist dist-server server.js",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -49,6 +50,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.12",
     "playwright": "^1.65.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",

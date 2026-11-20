@@ -5,7 +5,6 @@ import http from 'node:http';
 import path from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import QRCode from 'qrcode';
-import { createServer as createViteServer } from 'vite';
 import {
   OAUTH_NONCE_COOKIE_NAME,
   assertSessionSecretForProduction,
@@ -567,11 +566,29 @@ function requireDatabase(req: Request, res: Response, next: NextFunction): void 
     });
 }
 
-async function startServer() {
+// True inside a Vercel Serverless Function. There the platform owns the HTTP
+// listener and the CDN serves dist/, so this module only exports `app`.
+const isServerless = Boolean(process.env.VERCEL);
+
+/**
+ * Builds the Express app with every API/auth route registered. It is
+ * synchronous so `app` can be exported at module load for serverless use;
+ * listening, static files and the Vite dev middleware live in startLocalServer().
+ */
+function buildApp(): express.Express {
   assertSessionSecretForProduction();
   const app = express();
-  // One proxy hop (Cloud Run / load balancer) so req.ip and req.secure reflect the real client.
+  // One proxy hop (Vercel edge / Cloud Run load balancer) so req.ip, req.secure,
+  // x-forwarded-proto (secure cookies) and OAuth redirect URLs reflect the real client.
   app.set('trust proxy', 1);
+  if (isServerless) {
+    // Cold starts finish DB init (migrations + seed check) before any handler or
+    // session lookup runs. ensureDbReady() memoizes a single initPromise per
+    // instance, so warm invocations reuse it instead of re-running migrations.
+    app.use((_req: Request, _res: Response, next: NextFunction) => {
+      ensureDbReady().then(() => next(), next);
+    });
+  }
   app.use(express.json({ limit: '1mb' }));
   app.use(asyncHandler(attachOptionalAuth));
 
@@ -3088,8 +3105,6 @@ async function startServer() {
     }
   });
 
-  const httpServer = http.createServer(app);
-
   // Route Guard & Session Headers Middleware before SPA HTML serving
   app.use((req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (req.method !== 'GET' || req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
@@ -3121,6 +3136,15 @@ async function startServer() {
     next();
   });
 
+  return app;
+}
+
+export const app = buildApp();
+export default app;
+
+async function startLocalServer(): Promise<void> {
+  const httpServer = http.createServer(app);
+
   // Vite middleware in development, static dist/ in production
   const isProd =
     process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve(process.cwd(), 'dist'));
@@ -3131,6 +3155,10 @@ async function startServer() {
       res.sendFile(path.join(distDir, 'index.html'));
     });
   } else {
+    // Loaded lazily through a variable specifier so the production/serverless
+    // bundle never pulls Vite (and its native binaries) into the function.
+    const viteModuleId = 'vite';
+    const { createServer: createViteServer } = (await import(viteModuleId)) as typeof import('vite');
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
@@ -3149,7 +3177,9 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error('Failed to start ECONOVA server:', err);
-  process.exit(1);
-});
+if (!isServerless) {
+  startLocalServer().catch((err) => {
+    console.error('Failed to start ECONOVA server:', err);
+    process.exit(1);
+  });
+}
