@@ -1,6 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, FilePlus2, MessageSquarePlus, ShieldAlert, ShieldCheck } from 'lucide-react';
-import type { CourseCatalogItem, CourseEditionSummary, EditorialStatus, LocaleCode, SegmentReviewRequest } from '../shared/types';
+import type {
+  CourseCatalogItem,
+  CourseEditionSummary,
+  EditorialSignoffType,
+  EditorialStatus,
+  LocaleCode,
+  SegmentReviewRequest,
+  UserRole,
+} from '../shared/types';
+import {
+  authorizeEditorialTransition,
+  DESTRUCTIVE_ACTION_ROLES,
+  getRoleDisplayLabel,
+  hasAnyRole,
+} from '../shared/econova-rules';
 import { t } from '../lib/i18n';
 import { apiFetch } from '../lib/auth-client';
 import { AiCompanionPanel } from './AiCompanionPanel';
@@ -49,6 +63,8 @@ interface AdminStudioViewProps {
   courses: CourseCatalogItem[];
   aiConfigured?: boolean;
   onCatalogRefresh: () => Promise<void>;
+  /** Verified session user; used only to disable actions the server would reject with 403. */
+  currentUser: { id: string; role: UserRole };
 }
 
 export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
@@ -56,8 +72,31 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
   courses,
   aiConfigured = false,
   onCatalogRefresh,
+  currentUser,
 }) => {
   const strings = t(locale);
+  const canRevokeCertificates = hasAnyRole(currentUser.role, DESTRUCTIVE_ACTION_ROLES);
+  const transitionGate = (
+    ed: CourseEditionSummary,
+    targetStatus: EditorialStatus,
+    signoffType?: EditorialSignoffType
+  ) => {
+    const verdict = authorizeEditorialTransition({
+      actorId: currentUser.id,
+      actorRole: currentUser.role,
+      currentStatus: ed.status,
+      targetStatus,
+      signoffType: signoffType ?? null,
+      reviewers: {
+        subject: ed.subjectReviewerId ?? null,
+        language: ed.languageReviewerId ?? null,
+        rights: ed.rightsReviewerId ?? null,
+      },
+    });
+    return verdict.allowed
+      ? { disabled: false, title: undefined }
+      : { disabled: true, title: verdict.reason };
+  };
   const [data, setData] = useState<AdminOverviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -99,7 +138,7 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
   const handleTransition = async (
     editionId: string,
     nextStatus: EditorialStatus,
-    signoffType?: 'subject' | 'language' | 'rights'
+    signoffType?: EditorialSignoffType
   ) => {
     setActionMsg(null);
     setErrorMsg(null);
@@ -209,6 +248,12 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
         <p className="mt-1 text-xs text-muted">
           {strings.admin.subtitle}
         </p>
+        <p className="mt-2 text-xs text-muted">
+          {strings.admin.yourRoleLabel}{' '}
+          <span className="font-semibold text-teal" data-role={currentUser.role}>
+            {getRoleDisplayLabel(currentUser.role, locale)}
+          </span>
+        </p>
         {data && (
           <div className="mt-4 grid gap-3 sm:grid-cols-4">
             <div className="rounded-lg border border-line bg-chrome p-3">
@@ -281,8 +326,9 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
                   {ed.status === 'draft' && (
                     <button
                       type="button"
+                      {...transitionGate(ed, 'subject_review')}
                       onClick={() => handleTransition(ed.id, 'subject_review')}
-                      className="min-h-[34px] rounded-lg border border-line bg-elevated px-3 py-1 text-xs font-medium text-ink"
+                      className="min-h-[34px] rounded-lg disabled:cursor-not-allowed disabled:opacity-50 border border-line bg-elevated px-3 py-1 text-xs font-medium text-ink"
                     >
                       {strings.admin.sendToSubjectReview}
                     </button>
@@ -290,8 +336,9 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
                   {ed.status === 'subject_review' && (
                     <button
                       type="button"
+                      {...transitionGate(ed, 'language_review', 'subject')}
                       onClick={() => handleTransition(ed.id, 'language_review', 'subject')}
-                      className="min-h-[34px] rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-ink hover:bg-accent-hover"
+                      className="min-h-[34px] rounded-lg disabled:cursor-not-allowed disabled:opacity-50 bg-accent px-3 py-1 text-xs font-semibold text-accent-ink hover:bg-accent-hover"
                     >
                       {strings.admin.signSubjectReview}
                     </button>
@@ -299,8 +346,9 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
                   {ed.status === 'language_review' && (
                     <button
                       type="button"
+                      {...transitionGate(ed, 'rights_accessibility_review', 'language')}
                       onClick={() => handleTransition(ed.id, 'rights_accessibility_review', 'language')}
-                      className="min-h-[34px] rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-ink hover:bg-accent-hover"
+                      className="min-h-[34px] rounded-lg disabled:cursor-not-allowed disabled:opacity-50 bg-accent px-3 py-1 text-xs font-semibold text-accent-ink hover:bg-accent-hover"
                     >
                       {strings.admin.signLanguageReview}
                     </button>
@@ -308,8 +356,9 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
                   {ed.status === 'rights_accessibility_review' && (
                     <button
                       type="button"
+                      {...transitionGate(ed, 'approved', 'rights')}
                       onClick={() => handleTransition(ed.id, 'approved', 'rights')}
-                      className="min-h-[34px] rounded-lg bg-teal px-3 py-1 text-xs font-semibold text-teal-ink hover:bg-teal-hover"
+                      className="min-h-[34px] rounded-lg disabled:cursor-not-allowed disabled:opacity-50 bg-teal px-3 py-1 text-xs font-semibold text-teal-ink hover:bg-teal-hover"
                     >
                       {strings.admin.signRightsApprove}
                     </button>
@@ -317,8 +366,9 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
                   {ed.status === 'approved' && (
                     <button
                       type="button"
+                      {...transitionGate(ed, 'published')}
                       onClick={() => handleTransition(ed.id, 'published')}
-                      className="min-h-[34px] rounded-lg bg-success px-3 py-1 text-xs font-semibold text-accent-ink"
+                      className="min-h-[34px] rounded-lg disabled:cursor-not-allowed disabled:opacity-50 bg-success px-3 py-1 text-xs font-semibold text-accent-ink"
                     >
                       {strings.admin.publishEdition}
                     </button>
@@ -326,8 +376,9 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
                   {ed.status === 'published' && (
                     <button
                       type="button"
+                      {...transitionGate(ed, 'retired')}
                       onClick={() => handleTransition(ed.id, 'retired')}
-                      className="min-h-[34px] rounded-lg border border-line px-3 py-1 text-xs text-muted hover:text-danger"
+                      className="min-h-[34px] rounded-lg disabled:cursor-not-allowed disabled:opacity-50 border border-line px-3 py-1 text-xs text-muted hover:text-danger"
                     >
                       {strings.admin.retireUnpublish}
                     </button>
@@ -335,8 +386,9 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
                   {ed.status === 'retired' && (
                     <button
                       type="button"
+                      {...transitionGate(ed, 'approved')}
                       onClick={() => handleTransition(ed.id, 'approved')}
-                      className="min-h-[34px] rounded-lg border border-line px-3 py-1 text-xs text-teal"
+                      className="min-h-[34px] rounded-lg disabled:cursor-not-allowed disabled:opacity-50 border border-line px-3 py-1 text-xs text-teal"
                     >
                       {strings.admin.restoreToApproved}
                     </button>
@@ -482,8 +534,10 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
                       />
                       <button
                         type="button"
+                        disabled={!canRevokeCertificates}
+                        title={canRevokeCertificates ? undefined : strings.admin.revokeRequiresRole}
                         onClick={() => handleRevokeCertificate(c.id)}
-                        className="rounded-md border border-danger/50 bg-danger-surface/30 px-2.5 py-1 text-xs text-danger-text hover:bg-danger-surface/60"
+                        className="rounded-md border border-danger/50 bg-danger-surface/30 px-2.5 disabled:cursor-not-allowed disabled:opacity-50 py-1 text-xs text-danger-text hover:bg-danger-surface/60"
                       >
                         {strings.admin.revokeBtn}
                       </button>

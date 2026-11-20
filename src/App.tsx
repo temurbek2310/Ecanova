@@ -147,7 +147,7 @@ import {
   shouldTriggerStudyGoalReminder,
   type BrowserNotificationPermission,
 } from './lib/study-notifications';
-import { formatLocalDateKey } from './shared/econova-rules';
+import { formatLocalDateKey, isStaffRole } from './shared/econova-rules';
 import {
   applyDocumentTheme,
   detectSystemColorScheme,
@@ -365,7 +365,7 @@ export default function App() {
   } | null>(null);
 
   const isStaff = Boolean(
-    user && ['editor', 'reviewer', 'publisher', 'admin'].includes(user.role)
+    user && isStaffRole(user.role)
   );
 
   const loadHealth = useCallback(async () => {
@@ -743,19 +743,55 @@ export default function App() {
     setSyllabusSyncNote(null);
   }, [courseDetail?.course.id, user?.id]);
 
+  // Tell the server when a signed-in learner opens a lesson, so completion can be
+  // verified against a server-measured study session.
+  const activeLessonIdForProgress =
+    typeof activeLessonIndex === 'number' ? courseDetail?.lessons[activeLessonIndex]?.id ?? null : null;
+  useEffect(() => {
+    if (!user || !activeLessonIdForProgress) return;
+    apiFetch(`/api/me/progress/${encodeURIComponent(activeLessonIdForProgress)}/start`, {
+      method: 'POST',
+    }).catch(() => {
+      // Offline: the completion can still sync later as local_sync.
+    });
+  }, [user?.id, activeLessonIdForProgress]);
+
   const handleCompleteLesson = async (lessonId: string) => {
     const activeCourseId = courseDetail?.course.id ?? selectedCourseId;
-    if (activeCourseId) {
-      const updatedLocal = recordLocalLessonCompletion(activeCourseId, lessonId, user?.id);
-      setLocalSyllabusCompletedIds(updatedLocal);
+    const lesson = courseDetail?.lessons.find((l) => l.id === lessonId);
+    const evidence = lesson && lesson.simulationType !== 'none' ? 'interactive_check' : 'lesson_read';
+    let res: Response;
+    try {
+      res = await apiFetch(`/api/me/progress/${encodeURIComponent(lessonId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ evidence }),
+      });
+    } catch (err) {
+      // Network failure: keep the completion locally so it can sync later.
+      if (activeCourseId) {
+        setLocalSyllabusCompletedIds(recordLocalLessonCompletion(activeCourseId, lessonId, user?.id));
+      }
+      throw err instanceof Error ? err : new Error('Could not record completion.');
     }
-    const res = await apiFetch(`/api/me/progress/${lessonId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ evidence: 'study_and_simulation' }),
-    });
-    const data = (await res.json()) as { error?: string };
-    if (!res.ok) throw new Error(data.error || 'Could not record completion.');
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      code?: string;
+      retryAfterSeconds?: number;
+    };
+    if (!res.ok) {
+      if (data.code === 'min_dwell_not_met' && typeof data.retryAfterSeconds === 'number') {
+        throw new Error(
+          locale === 'uz'
+            ? `Darsni tugallangan deb belgilashdan oldin yana ${data.retryAfterSeconds} soniya o‘qing.`
+            : `Keep studying for ${data.retryAfterSeconds} more seconds before marking this lesson complete.`
+        );
+      }
+      throw new Error(data.error || 'Could not record completion.');
+    }
+    if (activeCourseId) {
+      setLocalSyllabusCompletedIds(recordLocalLessonCompletion(activeCourseId, lessonId, user?.id));
+    }
     await Promise.all([loadProtectedData({ allowCelebrate: true }), loadLeaderboard()]);
   };
 
@@ -804,7 +840,7 @@ export default function App() {
         const putRes = await apiFetch(`/api/me/progress/${encodeURIComponent(lessonId)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ evidence: 'manual_syllabus_sync' }),
+          body: JSON.stringify({ evidence: 'local_sync' }),
         });
         if (putRes.ok) {
           pushedCount += 1;
@@ -2986,12 +3022,13 @@ export default function App() {
           )}
 
           {/* STAFF EDITORIAL & CONTENT GOVERNANCE STUDIO */}
-          {activeTab === 'admin' && isStaff && (
+          {activeTab === 'admin' && isStaff && user && (
             <AdminStudioView
               locale={locale}
               courses={courses}
               aiConfigured={health.aiConfigured}
               onCatalogRefresh={loadCatalog}
+              currentUser={{ id: user.id, role: user.role }}
             />
           )}
         </main>

@@ -306,6 +306,8 @@ export interface IssueReportRecord {
   createdAt: string;
 }
 
+export type EditorialSignoffType = 'subject' | 'language' | 'rights';
+
 export interface EditorialSignoffs {
   hasProvenance: boolean;
   hasSubjectReview: boolean;

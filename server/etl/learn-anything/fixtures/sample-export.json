@@ -1,0 +1,87 @@
+{
+  "source": {
+    "name": "Example fixture (not real learn-anything data)",
+    "url": "https://example.org/learn-anything-fixture",
+    "license": "Example licence for tests only",
+    "attribution": "Example fixture content written for ECONOVA tests.",
+    "author": "ECONOVA test suite",
+    "commercialAllowed": true,
+    "adaptationAllowed": true,
+    "translationAllowed": true
+  },
+  "topics": [
+    {
+      "id": "intro-economics",
+      "title": "Introduction to Economics",
+      "topic": "economics",
+      "description": "Scarcity, choices and markets.",
+      "url": "https://example.org/topics/intro-economics",
+      "level": "Beginner",
+      "modules": [
+        {
+          "id": "scarcity",
+          "title": "Scarcity and choice",
+          "summary": "Why every choice has a cost.",
+          "lessons": [
+            { "id": "opportunity-cost", "title": "Opportunity cost", "summary": "The value of the next best alternative.", "url": "https://example.org/r/opportunity-cost", "estimatedMinutes": 8 },
+            { "id": "ppf", "title": "Production possibilities", "summary": "Trade-offs drawn as a frontier.", "estimatedMinutes": 12 }
+          ]
+        },
+        {
+          "id": "markets",
+          "title": "Markets",
+          "summary": "How prices coordinate buyers and sellers.",
+          "lessons": [
+            { "id": "supply-demand", "title": "Supply and demand", "summary": "Where the curves meet.", "body": "Price adjusts until quantity supplied equals quantity demanded." }
+          ]
+        }
+      ],
+      "translations": {
+        "uz": {
+          "title": "Iqtisodiyotga kirish",
+          "description": "Tanqislik, tanlov va bozorlar.",
+          "aiAssisted": true,
+          "aiModel": "example-model",
+          "modules": {
+            "scarcity": { "title": "Tanqislik va tanlov", "summary": "Har bir tanlovning narxi bor." },
+            "markets": { "title": "Bozorlar", "summary": "Narxlar xaridor va sotuvchilarni qanday muvofiqlashtiradi." }
+          },
+          "lessons": {
+            "opportunity-cost": { "title": "Muqobil xarajat", "summary": "Keyingi eng yaxshi muqobilning qiymati." },
+            "ppf": { "title": "Ishlab chiqarish imkoniyatlari", "summary": "Chegaralar sifatida chizilgan tanlovlar." },
+            "supply-demand": { "title": "Talab va taklif", "summary": "Egri chiziqlar kesishgan joy." }
+          }
+        }
+      }
+    },
+    {
+      "id": "linear-algebra-basics",
+      "title": "Linear algebra basics",
+      "topic": "linear-algebra",
+      "description": "Vectors and matrices.",
+      "modules": [
+        {
+          "id": "vectors",
+          "title": "Vectors",
+          "lessons": [
+            { "id": "vector-addition", "title": "Vector addition", "summary": "Adding arrows tip to tail." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "street-photography",
+      "title": "Street photography",
+      "topic": "photography",
+      "modules": [
+        {
+          "id": "light",
+          "title": "Light",
+          "lessons": [
+            { "id": "golden-hour", "title": "Golden hour", "summary": "Shooting in soft light." }
+          ]
+        }
+      ]
+    }
+  ]
+}

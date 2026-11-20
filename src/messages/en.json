@@ -343,6 +343,8 @@
     "signRightsApprove": "Sign Rights & Approve",
     "publishEdition": "Publish Edition",
     "retireUnpublish": "Retire / Unpublish",
+    "yourRoleLabel": "Your role:",
+    "revokeRequiresRole": "Revoking certificates requires the publisher or admin role.",
     "restoreToApproved": "Restore to Approved",
     "createDraftTitle": "Create New Versioned Draft Edition",
     "targetCourse": "Target Course",

@@ -26,6 +26,7 @@ import {
   parseCookies,
   recordAuthFailure,
   requireAuth,
+  requireRole,
   requireStaffRole,
   setOAuthNonceCookie,
   setSessionCookie,
@@ -50,9 +51,20 @@ import {
 } from './server/db.ts';
 import { seedIfEmpty } from './server/seed.ts';
 import {
+  completionRejectedResponse,
+  computeMinDwellSeconds,
+  decideLessonCompletion,
+  invalidEvidenceResponse,
+  LESSON_STARTED_MARKER,
+  parseLessonEvidence,
+  type ProgressRowFacts,
+} from './server/lesson-progress-policy.ts';
+import {
   calculateAssessmentScore,
   calculateEligibleXp,
+  authorizeEditorialTransition,
   canTransitionEditorialState,
+  DESTRUCTIVE_ACTION_ROLES,
   evaluateCertificateVerification,
   evaluateCourseCompletion,
   evaluateStreakUpdate,
@@ -79,6 +91,7 @@ import type {
   AssessmentPublic,
   CourseCatalogItem,
   CourseEditionSummary,
+  EditorialSignoffType,
   EditorialStatus,
   KeyTerm,
   LessonBlock,
@@ -118,6 +131,24 @@ function asyncHandler(
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
+}
+
+async function loadPublishedLessonForProgress(lessonId: string) {
+  return db.queryOne<{
+    id: string;
+    title: string;
+    edition_id: string;
+    course_id: string;
+    locale: LocaleCode;
+    version: number;
+    estimated_minutes: number;
+  }>(
+    `SELECT l.id, l.title, l.edition_id, l.estimated_minutes, ce.course_id, ce.locale, ce.version
+     FROM lessons l
+     JOIN course_editions ce ON ce.id = l.edition_id
+     WHERE l.id = $1 AND ce.status = 'published'`,
+    [lessonId]
+  );
 }
 
 function uid(prefix: string): string {
@@ -1464,46 +1495,108 @@ async function startServer() {
     })
   );
 
-  app.put(
-    '/api/me/progress/:lessonId',
+  // Records that a learner opened a lesson. The first start time is kept
+  // (re-opening does not reset it); completed lessons are never downgraded.
+  app.post(
+    '/api/me/progress/:lessonId/start',
     requireDatabase,
     requireAuth,
     asyncHandler(async (req, res) => {
-      const lessonId = String(req.params.lessonId);
-      const { evidence } = req.body as { evidence?: string };
-      const lesson = await db.queryOne<{
-        id: string;
-        title: string;
-        edition_id: string;
-        course_id: string;
-        locale: LocaleCode;
-        version: number;
-      }>(
-        `SELECT l.id, l.title, l.edition_id, ce.course_id, ce.locale, ce.version
-         FROM lessons l
-         JOIN course_editions ce ON ce.id = l.edition_id
-         WHERE l.id = $1 AND ce.status = 'published'`,
-        [lessonId]
-      );
-
+      const lesson = await loadPublishedLessonForProgress(String(req.params.lessonId));
       if (!lesson) {
         res.status(404).json({ error: 'Published lesson not found.' });
         return;
       }
 
+      await db.execute(
+        `INSERT INTO lesson_progress (id, user_id, lesson_id, edition_version, state, completion_evidence, updated_at)
+         VALUES ($1, $2, $3, $4, 'in_progress', $5, NOW())
+         ON CONFLICT (user_id, lesson_id) DO NOTHING`,
+        [uid('lp'), req.authUser!.id, lesson.id, lesson.version, LESSON_STARTED_MARKER]
+      );
+      const row = await db.queryOne<{ state: string; updated_at: string | Date }>(
+        'SELECT state, updated_at FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
+        [req.authUser!.id, lesson.id]
+      );
+
+      res.json({
+        ok: true,
+        state: row?.state ?? 'in_progress',
+        startedAt: row?.state === 'in_progress' ? new Date(row.updated_at).toISOString() : null,
+        minDwellSeconds: computeMinDwellSeconds(lesson.estimated_minutes),
+      });
+    })
+  );
+
+  app.put(
+    '/api/me/progress/:lessonId',
+    requireDatabase,
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const parsed = parseLessonEvidence((req.body as { evidence?: unknown } | undefined)?.evidence);
+      if (!parsed.ok) {
+        const rejection = invalidEvidenceResponse(parsed);
+        res.status(rejection.status).json(rejection.body);
+        return;
+      }
+
+      const lesson = await loadPublishedLessonForProgress(String(req.params.lessonId));
+      if (!lesson) {
+        res.status(404).json({ error: 'Published lesson not found.' });
+        return;
+      }
+
+      const userId = req.authUser!.id;
+      const [progressRow, enrollmentRow, passedAttemptRow] = await Promise.all([
+        db.queryOne<{ state: ProgressRowFacts['state']; updated_at: string | Date }>(
+          'SELECT state, updated_at FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
+          [userId, lesson.id]
+        ),
+        db.queryOne<{ id: string }>(
+          'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
+          [userId, lesson.course_id]
+        ),
+        parsed.evidence === 'assessment_passed'
+          ? db.queryOne<{ id: string }>(
+              `SELECT aa.id FROM assessment_attempts aa
+               JOIN assessments a ON a.id = aa.assessment_id
+               WHERE aa.user_id = $1 AND a.edition_id = $2 AND aa.passed = TRUE
+               LIMIT 1`,
+              [userId, lesson.edition_id]
+            )
+          : Promise.resolve(null),
+      ]);
+
+      const decision = decideLessonCompletion({
+        evidence: parsed.evidence,
+        lessonEstimatedMinutes: lesson.estimated_minutes,
+        existing: progressRow
+          ? { state: progressRow.state, updatedAt: new Date(progressRow.updated_at) }
+          : null,
+        isEnrolled: Boolean(enrollmentRow),
+        hasPassedEditionAssessment: Boolean(passedAttemptRow),
+        now: new Date(),
+      });
+
+      if (!decision.ok) {
+        const rejection = completionRejectedResponse(decision);
+        res.status(rejection.status).json(rejection.body);
+        return;
+      }
+
       const out = await runInTransaction(async (tx) => {
         const now = new Date().toISOString();
-        const existing = await tx.queryOne<{ id: string }>(
-          'SELECT id FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
-          [req.authUser!.id, lesson.id]
-        );
-
-        if (!existing) {
+        if (!decision.alreadyCompleted) {
           await tx.execute(
             `INSERT INTO lesson_progress (id, user_id, lesson_id, edition_version, state, completion_evidence, updated_at)
              VALUES ($1, $2, $3, $4, 'completed', $5, $6)
-             ON CONFLICT (user_id, lesson_id) DO NOTHING`,
-            [uid('lp'), req.authUser!.id, lesson.id, lesson.version, evidence || 'study_and_practice', now]
+             ON CONFLICT (user_id, lesson_id) DO UPDATE
+               SET state = 'completed',
+                   completion_evidence = EXCLUDED.completion_evidence,
+                   edition_version = EXCLUDED.edition_version,
+                   updated_at = EXCLUDED.updated_at
+               WHERE lesson_progress.state <> 'completed'`,
+            [uid('lp'), userId, lesson.id, lesson.version, decision.evidence, now]
           );
         }
 
@@ -2764,7 +2857,7 @@ async function startServer() {
       const editionId = String(req.params.editionId);
       const { nextStatus, signoffType, reason } = req.body as {
         nextStatus?: EditorialStatus;
-        signoffType?: 'subject' | 'language' | 'rights';
+        signoffType?: EditorialSignoffType | null;
         reason?: string;
       };
 
@@ -2777,16 +2870,40 @@ async function startServer() {
         return;
       }
 
+      if (
+        signoffType !== undefined &&
+        signoffType !== null &&
+        signoffType !== 'subject' &&
+        signoffType !== 'language' &&
+        signoffType !== 'rights'
+      ) {
+        res.status(400).json({ error: 'Unknown signoff type. Expected subject, language or rights.' });
+        return;
+      }
+
       const now = new Date().toISOString();
       let subjectRev = row.subject_reviewer_id ? String(row.subject_reviewer_id) : null;
       let langRev = row.language_reviewer_id ? String(row.language_reviewer_id) : null;
       let rightsRev = row.rights_reviewer_id ? String(row.rights_reviewer_id) : null;
 
+      const targetStatus = (nextStatus ?? row.status) as EditorialStatus;
+      const roleCheck = authorizeEditorialTransition({
+        actorId: req.authUser!.id,
+        actorRole: req.authUser!.role,
+        currentStatus: row.status as EditorialStatus,
+        targetStatus,
+        signoffType: signoffType ?? null,
+        reviewers: { subject: subjectRev, language: langRev, rights: rightsRev },
+      });
+      if (!roleCheck.allowed) {
+        res.status(403).json({ error: roleCheck.reason });
+        return;
+      }
+
       if (signoffType === 'subject') subjectRev = req.authUser!.id;
       if (signoffType === 'language') langRev = req.authUser!.id;
       if (signoffType === 'rights') rightsRev = req.authUser!.id;
 
-      const targetStatus = (nextStatus ?? row.status) as EditorialStatus;
       const check = canTransitionEditorialState(row.status as EditorialStatus, targetStatus, {
         hasProvenance: Boolean(row.provenance_id),
         hasSubjectReview: Boolean(subjectRev),
@@ -2830,7 +2947,7 @@ async function startServer() {
   app.post(
     '/api/admin/certificates/:certificateId/revoke',
     requireDatabase,
-    requireStaffRole,
+    requireRole(...DESTRUCTIVE_ACTION_ROLES),
     asyncHandler(async (req, res) => {
       const certificateId = String(req.params.certificateId);
       const { reason } = req.body as { reason?: string };

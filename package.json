@@ -8,9 +8,10 @@
     "start": "node server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "tsx --test src/shared/econova-rules.test.ts",
+    "test": "tsx --test \"src/**/*.test.ts\" \"server/**/*.test.ts\"",
     "db:migrate": "tsx server/migrate.ts",
     "db:seed": "tsx server/seed-cli.ts",
+    "db:import:learn-anything": "tsx server/etl/learn-anything/cli.ts",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },

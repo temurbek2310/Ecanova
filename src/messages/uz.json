@@ -343,6 +343,8 @@
     "signRightsApprove": "Huquqni imzolash va tasdiqlash",
     "publishEdition": "Nashrni chop etish",
     "retireUnpublish": "Arxivlash / Nashrdan olish",
+    "yourRoleLabel": "Sizning rolingiz:",
+    "revokeRequiresRole": "Sertifikatni bekor qilish uchun nashr etuvchi yoki administrator roli kerak.",
     "restoreToApproved": "Tasdiqlangan holatga qaytarish",
     "createDraftTitle": "Yangi versiyali qoralama nashr yaratish",
     "targetCourse": "Maqsadli kurs",

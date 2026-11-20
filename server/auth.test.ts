@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Request } from 'express';
+import type { AddressInfo } from 'node:net';
+import type { Server } from 'node:http';
+import express, { type Request, type Response } from 'express';
+import type { UserRole } from '../src/shared/types.ts';
 import {
   __resetAuthThrottleForTests,
   assertSessionSecretForProduction,
@@ -13,6 +16,10 @@ import {
   signSessionToken,
   verifyGoogleOAuthState,
   verifySessionToken,
+  requireAdmin,
+  requireRole,
+  requireStaffRole,
+  type AuthenticatedRequest,
 } from './auth.ts';
 
 function fakeRequest(headers: Record<string, string> = {}, ip = '203.0.113.7'): Request {
@@ -109,4 +116,74 @@ test('production refuses to start without a real SESSION_SECRET', () => {
     if (previousSecret === undefined) delete process.env.SESSION_SECRET;
     else process.env.SESSION_SECRET = previousSecret;
   }
+});
+
+// --- RBAC guards: requireRole / requireStaffRole over a real Express server ---
+
+async function withGuardServer(run: (baseUrl: string) => Promise<void>): Promise<void> {
+  const app = express();
+  // Test-only stand-in for attachOptionalAuth: the role comes from a header.
+  app.use((req, _res, next) => {
+    const role = req.header('x-test-role');
+    if (role) {
+      (req as AuthenticatedRequest).authUser = {
+        id: `usr-${role}`,
+        role: role as UserRole,
+      } as AuthenticatedRequest['authUser'];
+    }
+    next();
+  });
+  const ok = (_req: Request, res: Response) => {
+    res.json({ ok: true });
+  };
+  app.get('/release', requireRole('publisher', 'admin'), ok);
+  app.get('/staff', requireStaffRole, ok);
+  app.get('/system', requireAdmin, ok);
+
+  const server = await new Promise<Server>((resolve) => {
+    const s = app.listen(0, '127.0.0.1', () => resolve(s));
+  });
+  try {
+    const { port } = server.address() as AddressInfo;
+    await run(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}
+
+async function statusFor(url: string, role?: string): Promise<number> {
+  const res = await fetch(url, { headers: role ? { 'x-test-role': role } : {} });
+  await res.arrayBuffer();
+  return res.status;
+}
+
+test('requireRole: 401 unauthenticated, 403 wrong role, 200 allowed role', async () => {
+  await withGuardServer(async (base) => {
+    assert.equal(await statusFor(`${base}/release`), 401);
+    assert.equal(await statusFor(`${base}/release`, 'learner'), 403);
+    assert.equal(await statusFor(`${base}/release`, 'editor'), 403);
+    assert.equal(await statusFor(`${base}/release`, 'reviewer'), 403);
+    assert.equal(await statusFor(`${base}/release`, 'publisher'), 200);
+    assert.equal(await statusFor(`${base}/release`, 'admin'), 200);
+  });
+});
+
+test('requireAdmin allows only admin; requireStaffRole keeps all four staff roles', async () => {
+  await withGuardServer(async (base) => {
+    assert.equal(await statusFor(`${base}/system`), 401);
+    for (const role of ['learner', 'editor', 'reviewer', 'publisher']) {
+      assert.equal(await statusFor(`${base}/system`, role), 403, role);
+    }
+    assert.equal(await statusFor(`${base}/system`, 'admin'), 200);
+
+    assert.equal(await statusFor(`${base}/staff`), 401);
+    assert.equal(await statusFor(`${base}/staff`, 'learner'), 403);
+    for (const role of ['editor', 'reviewer', 'publisher', 'admin']) {
+      assert.equal(await statusFor(`${base}/staff`, role), 200, role);
+    }
+  });
+});
+
+test('requireRole refuses to be built with no roles', () => {
+  assert.throws(() => requireRole());
 });

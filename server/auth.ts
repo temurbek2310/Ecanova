@@ -4,6 +4,7 @@ import { normalizeBookmarkedCourseIds } from '../src/lib/course-bookmarks.ts';
 import { sanitizeRedirectTo } from '../src/lib/auth-routing.ts';
 import { db, isDatabaseConfigured, runInTransaction } from './db.ts';
 import type { LocaleCode, UserRole, UserSummary } from '../src/shared/types.ts';
+import { STAFF_ROLES } from '../src/shared/econova-rules.ts';
 
 let cachedFallbackSecret: string | null = null;
 let warnedMissingSecret = false;
@@ -371,6 +372,35 @@ export function requireAuth(
   next();
 }
 
+/**
+ * Returns middleware that allows the request only when the verified session
+ * user holds one of `allowedRoles`: 401 when unauthenticated, 403 otherwise.
+ */
+export function requireRole(...allowedRoles: UserRole[]) {
+  if (allowedRoles.length === 0) {
+    throw new Error('requireRole needs at least one allowed role.');
+  }
+  const allowed = new Set<UserRole>(allowedRoles);
+  return function requireRoleMiddleware(
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+  ): void {
+    if (!req.authUser) {
+      res.status(401).json({ error: 'Authentication required.' });
+      return;
+    }
+    if (!allowed.has(req.authUser.role)) {
+      res.status(403).json({
+        error: `This action requires one of these roles: ${allowedRoles.join(', ')}.`,
+      });
+      return;
+    }
+    next();
+  };
+}
+
+/** General staff guard: editor, reviewer, publisher or admin. */
 export function requireStaffRole(
   req: AuthenticatedRequest,
   res: Response,
@@ -380,13 +410,15 @@ export function requireStaffRole(
     res.status(401).json({ error: 'Authentication required.' });
     return;
   }
-  const allowed: UserRole[] = ['editor', 'reviewer', 'publisher', 'admin'];
-  if (!allowed.includes(req.authUser.role)) {
+  if (!STAFF_ROLES.includes(req.authUser.role)) {
     res.status(403).json({ error: 'Staff editorial permission required.' });
     return;
   }
   next();
 }
+
+/** Admin-only guard for system actions (role management, imports, etc.). */
+export const requireAdmin = requireRole('admin');
 
 // --- Google OAuth 2.0 Utilities ---
 
