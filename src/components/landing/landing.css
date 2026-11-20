@@ -821,6 +821,96 @@
  * toward the cursor and true perspective separates the near / focal / far layers.
  */
 
+/* ------------------------------------------------------------------ */
+/* Touch & small-viewport safety                                       */
+/* ------------------------------------------------------------------ */
+
+.econova-landing {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+.econova-landing a,
+.econova-landing button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* no double-tap-zoom delay on finger taps */
+}
+.econova-landing .lp-btn {
+  max-width: 100%;
+}
+
+/*
+ * Phones and touch tablets: lighter frosted glass. A 40px backdrop blur re-sampled over a live WebGL
+ * canvas every frame is among the costliest things a mobile compositor does; a denser tint keeps the
+ * same contrast for the copy.
+ */
+@media (max-width: 767px), (pointer: coarse) {
+  .econova-landing .lp-panel {
+    --lp-surface: rgba(16, 21, 34, 0.76);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .econova-landing .lp-nav {
+    background-color: rgba(8, 11, 20, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .econova-landing .lp-badge,
+  .econova-landing .lp-btn--glass {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}
+
+/* Narrow phones: tighter display type, wrapping buttons, slimmer card padding — nothing clips. */
+@media (max-width: 479px) {
+  .econova-landing .lp-display {
+    font-size: clamp(32px, 10.4vw, 40px);
+  }
+  .econova-landing .lp-heading-lg {
+    font-size: clamp(28px, 8.8vw, 34px);
+  }
+  .econova-landing .lp-closing {
+    font-size: clamp(30px, 9.6vw, 36px);
+  }
+  .econova-landing .lp-heading {
+    font-size: clamp(23px, 7vw, 26px);
+  }
+  /* Long O‘Z labels wrap inside the button instead of pushing past a card edge. */
+  .econova-landing .lp-btn:not(.lp-btn--sm) {
+    padding: 10px 16px;
+    line-height: 1.25;
+    text-align: center;
+    white-space: normal;
+  }
+  .econova-landing .lp-track {
+    padding: 32px 20px 24px;
+  }
+  .econova-landing .lp-cta {
+    gap: 32px;
+    padding: 28px 20px;
+  }
+}
+
+/* ≤399px (iPhone SE / small Android): logo + locale + launch must share one 64px navbar row. */
+@media (max-width: 399px) {
+  .econova-landing .lp-nav > nav {
+    column-gap: 8px;
+  }
+  .econova-landing .lp-nav > nav > div:last-child {
+    gap: 8px;
+  }
+  .econova-landing .lp-nav .lp-btn--sm {
+    padding: 0 10px;
+    letter-spacing: 0.04em;
+  }
+  .econova-landing .lp-nav .lp-btn--sm .lp-btn__icon {
+    display: none;
+  }
+  .econova-landing .lp-locale button {
+    padding: 7px 8px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .econova-landing .lp-pulse::after {
     animation: none;

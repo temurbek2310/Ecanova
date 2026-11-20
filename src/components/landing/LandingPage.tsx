@@ -852,7 +852,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
 
       <main id="top" className="relative z-10">
         {/* ---------------- Hero ---------------- */}
-        <section data-hero data-chapter="0" className="relative flex min-h-[calc(100vh-4rem)] items-center py-16 md:py-20">
+        <section data-hero data-chapter="0" className="relative flex min-h-[calc(100svh-4rem)] items-center py-16 md:py-20">
           {/* Legibility scrim behind the copy column: strongest below 1024px, subtle on wide desktops. */}
           <div
             aria-hidden="true"
@@ -919,7 +919,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
               data-track={right ? 'right' : 'left'}
               /* First article: +4rem top (the navbar height) so its content centres in the visible area
                  below the fixed navbar rather than the full viewport. */
-              className={`flex min-h-[88vh] items-center ${i === 0 ? 'pb-16 pt-32 md:pb-20 md:pt-36' : 'py-16 md:py-20'}`}
+              className={`flex min-h-[88svh] items-center ${i === 0 ? 'pb-16 pt-32 md:pb-20 md:pt-36' : 'py-16 md:py-20'}`}
             >
               <div className="w-full">
               {/* Section header lives inside the Economics article, above its card: the formation
@@ -1026,7 +1026,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
           id="get-started"
           data-anchor="cta"
           data-chapter="5"
-          className="flex min-h-[80vh] items-center py-24 md:py-32"
+          className="flex min-h-[80svh] items-center py-24 md:py-32"
         >
           <div data-cta-trigger className={GUTTER}>
             <div data-cta-box className="lp-panel lp-cta">
@@ -1078,7 +1078,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
             {/* Navigation columns */}
             <nav
               aria-label="Footer"
-              className="grid grid-cols-2 gap-8 sm:grid-cols-3 md:col-span-7"
+              className="grid grid-cols-1 gap-8 min-[400px]:grid-cols-2 sm:grid-cols-3 md:col-span-7"
             >
               {copy.footer.columns.map((column) => (
                 <div key={column.title} data-footer-col>

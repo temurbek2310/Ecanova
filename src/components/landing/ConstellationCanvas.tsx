@@ -49,6 +49,31 @@ const BG_DESKTOP = 440;
 const BG_MOBILE = 220;
 const MOBILE_QUERY_PX = 768;
 
+/**
+ * Adaptive quality tiers. Tier 0 is full fidelity; each step down thins particle density, caps the
+ * backing-store DPR and (last tier) throttles the render loop. Formation silhouettes stay intact —
+ * only their sampling density drops. The starting tier comes from device hints (`initialTier`);
+ * the runtime FPS guard can only step *down*, never back up, so quality never oscillates.
+ */
+interface QualityTier {
+  density: number; // multiplier on the desktop/mobile particle budgets
+  dprCap: number; // max renderer pixel ratio
+  fpsCap: number; // 0 = uncapped (display refresh)
+}
+const QUALITY_TIERS: readonly QualityTier[] = [
+  { density: 1, dprCap: 2, fpsCap: 0 },
+  { density: 0.7, dprCap: 1.5, fpsCap: 0 },
+  { density: 0.45, dprCap: 1, fpsCap: 30 },
+];
+/** FPS guard: sample window (s), threshold, and consecutive slow windows before stepping down. */
+const FPS_WINDOW = 2;
+const FPS_MIN = 40;
+const FPS_SLOW_WINDOWS = 2;
+/** Grace period (s) after mount / tier change / tab resume before FPS is judged (shader compile, GC). */
+const FPS_GRACE = 1.5;
+/** A single frame gap longer than this (s) is a hitch (tab switch, debugger), not sustained load. */
+const FPS_HITCH = 0.5;
+
 const FOV = 45;
 const REF_CAM_Z = 14; // layout reference plane
 const STAGES = 5; // 0 gyroscope · 1 growth chart · 2 sigma · 3 briefcase · 4 certificate shield
@@ -1334,11 +1359,32 @@ function pickSize(r: Rng, hero: boolean): number {
   return band[1] + (band[2] - band[1]) * Math.pow(r(), 1.6);
 }
 
-function createParticles(mobile: boolean, pixelRatio: number, maxPoint: number): Particles {
+/**
+ * Starting quality tier from device hints: touch / narrow viewports, few CPU cores, little memory,
+ * Save-Data, or reduced motion (static pose — full density buys nothing) all start lighter.
+ */
+function initialTier(): number {
+  const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
+  const cores = nav.hardwareConcurrency || 4;
+  const memory = nav.deviceMemory ?? 8; // Chromium only; others assume capable
+  const dpr = window.devicePixelRatio || 1;
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  const narrow = window.innerWidth < MOBILE_QUERY_PX;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const saveData = nav.connection?.saveData === true;
+
+  let tier = 0;
+  // Phones/tablets, budget office laptops (≤4 cores, or a 1× panel paired with a weak CPU), low RAM.
+  if (coarse || narrow || cores <= 4 || memory <= 4 || (dpr <= 1 && cores <= 6) || reduced) tier = 1;
+  if (cores <= 2 || memory <= 2 || saveData || (coarse && (cores <= 4 || memory <= 3))) tier = 2;
+  return tier;
+}
+
+function createParticles(mobile: boolean, pixelRatio: number, maxPoint: number, density = 1): Particles {
   const r = mulberry32(0x0ec0a0a);
-  const count = mobile ? COUNT_MOBILE : COUNT_DESKTOP;
-  const fgCount = mobile ? FG_MOBILE : FG_DESKTOP;
-  const bgCount = mobile ? BG_MOBILE : BG_DESKTOP;
+  const count = Math.round((mobile ? COUNT_MOBILE : COUNT_DESKTOP) * density);
+  const fgCount = Math.max(8, Math.round((mobile ? FG_MOBILE : FG_DESKTOP) * density));
+  const bgCount = Math.round((mobile ? BG_MOBILE : BG_DESKTOP) * density);
   const n = count - fgCount - bgCount;
   const bounds = gyroBounds(n);
 
@@ -1464,18 +1510,22 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
     const container = containerRef.current;
     if (!container) return;
 
+    let tierIndex = initialTier();
+    const tierDpr = () => Math.min(window.devicePixelRatio || 1, QUALITY_TIERS[tierIndex].dprCap);
+
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
         antialias: false, // strokes are antialiased analytically in the fragment shader
         alpha: true, // transparent canvas so the page's obsidian #080B14 shows through
-        powerPreference: 'high-performance',
+        // Don't wake a discrete GPU (battery) on devices that already start in a lighter tier.
+        powerPreference: tierIndex === 0 ? 'high-performance' : 'default',
       });
     } catch {
       return; // WebGL unavailable — the landing page still works on its plain background
     }
 
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    let pixelRatio = tierDpr();
     renderer.setPixelRatio(pixelRatio);
     renderer.setClearColor(0x000000, 0);
     const canvas = renderer.domElement;
@@ -1498,12 +1548,61 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
     const maxPoint = pointRange && pointRange[1] > 1 ? pointRange[1] : 64;
 
     let isMobile = window.innerWidth < MOBILE_QUERY_PX;
-    let particles = createParticles(isMobile, pixelRatio, maxPoint);
+    let particles = createParticles(isMobile, pixelRatio, maxPoint, QUALITY_TIERS[tierIndex].density);
     scene.add(particles.points);
 
     let width = 1;
     let height = 1;
     let dirty = true;
+
+    const rebuildParticles = () => {
+      scene.remove(particles.points);
+      particles.geometry.dispose();
+      particles.material.dispose();
+      particles = createParticles(isMobile, pixelRatio, maxPoint, QUALITY_TIERS[tierIndex].density);
+      scene.add(particles.points);
+      dirty = true;
+    };
+
+    /* ---- FPS guard: sustained low frame rate steps the quality tier down (never up) ---- */
+    let fpsGrace = FPS_GRACE;
+    let fpsTime = 0;
+    let fpsFrames = 0;
+    let slowWindows = 0;
+    const resetFps = () => {
+      fpsGrace = FPS_GRACE;
+      fpsTime = 0;
+      fpsFrames = 0;
+      slowWindows = 0;
+    };
+    const applyTier = (next: number) => {
+      tierIndex = Math.min(next, QUALITY_TIERS.length - 1);
+      pixelRatio = tierDpr();
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(width, height, false);
+      rebuildParticles();
+      resetFps();
+    };
+    const sampleFps = (rawDt: number) => {
+      // Reduced motion renders on demand only, and the last tier has nowhere lower to go.
+      if (reduced || tierIndex >= QUALITY_TIERS.length - 1) return;
+      if (rawDt > FPS_HITCH) {
+        resetFps();
+        return;
+      }
+      if (fpsGrace > 0) {
+        fpsGrace -= rawDt;
+        return;
+      }
+      fpsTime += rawDt;
+      fpsFrames++;
+      if (fpsTime < FPS_WINDOW) return;
+      const fps = fpsFrames / fpsTime;
+      fpsTime = 0;
+      fpsFrames = 0;
+      slowWindows = fps < FPS_MIN ? slowWindows + 1 : 0;
+      if (slowWindows >= FPS_SLOW_WINDOWS) applyTier(tierIndex + 1);
+    };
 
     // Responsive layout: `layoutTarget` is recomputed on resize; `layout` eases toward it every frame.
     const halfRefH = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
@@ -1525,11 +1624,7 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
       const mobile = window.innerWidth < MOBILE_QUERY_PX;
       if (mobile !== isMobile) {
         isMobile = mobile;
-        scene.remove(particles.points);
-        particles.geometry.dispose();
-        particles.material.dispose();
-        particles = createParticles(isMobile, pixelRatio, maxPoint);
-        scene.add(particles.points);
+        rebuildParticles();
       }
       dirty = true;
     };
@@ -1580,9 +1675,31 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
     };
     reducedQuery.addEventListener('change', onReducedChange);
 
-    const onContextLost = (e: Event) => e.preventDefault();
-    const onContextRestored = () => {
+    // Pause the loop entirely while the tab is hidden or the GL context is gone (battery); resume
+    // with a fresh clock so the first frame back doesn't see a huge dt or trip the FPS guard.
+    let contextLost = false;
+    const stopLoop = () => {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    };
+    const startLoop = () => {
+      if (raf || contextLost || document.hidden) return;
+      last = performance.now();
+      resetFps();
       dirty = true;
+      raf = requestAnimationFrame(frame);
+    };
+    const onVisibility = () => (document.hidden ? stopLoop() : startLoop());
+    document.addEventListener('visibilitychange', onVisibility);
+
+    const onContextLost = (e: Event) => {
+      e.preventDefault();
+      contextLost = true;
+      stopLoop();
+    };
+    const onContextRestored = () => {
+      contextLost = false;
+      startLoop();
     };
     canvas.addEventListener('webglcontextlost', onContextLost);
     canvas.addEventListener('webglcontextrestored', onContextRestored);
@@ -1603,8 +1720,13 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
 
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
-      const dt = Math.min((now - last) / 1000, 0.1);
+      const rawDt = Math.max(0, (now - last) / 1000);
+      // Lowest tier: render at ~30 fps (4 ms slack so a 60 Hz display reliably hits every 2nd vsync).
+      const fpsCap = QUALITY_TIERS[tierIndex].fpsCap;
+      if (fpsCap > 0 && rawDt < 1 / fpsCap - 0.004) return; // `last` kept: dt accumulates
       last = now;
+      const dt = Math.min(rawDt, 0.1);
+      sampleFps(rawDt);
 
       const target = clamp01(progressRef.current);
       smoothed = reduced ? target : smoothed + (target - smoothed) * (1 - Math.exp(-dt * 5));
@@ -1774,10 +1896,11 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
 
       renderer.render(scene, camera);
     };
-    raf = requestAnimationFrame(frame);
+    startLoop();
 
     return () => {
-      cancelAnimationFrame(raf);
+      stopLoop();
+      document.removeEventListener('visibilitychange', onVisibility);
       resizeObserver.disconnect();
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerout', onPointerOut);
@@ -1799,7 +1922,10 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
     <div
       ref={containerRef}
       aria-hidden="true"
-      className="fixed inset-0 z-0 pointer-events-none bg-transparent"
+      // Sized to the *large* viewport (lvh, h-screen fallback) so mobile URL-bar show/hide never
+      // resizes the canvas mid-scroll (no backing-store reallocation or layout jump per swipe).
+      className="fixed inset-x-0 top-0 z-0 h-screen pointer-events-none bg-transparent"
+      style={{ height: '100lvh' }}
     />
   );
 }
