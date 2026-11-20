@@ -3,26 +3,74 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>ECONOVA — Economics, Mathematics & Business Learning PWA</title>
-    <meta name="description" content="Bilingual Uzbek and English PWA learning platform for Economics, Mathematics, and Business with server-verified progress, course-specific certificates, and human-reviewed content governance." />
-    <meta property="og:title" content="ECONOVA — Economics, Mathematics & Business Learning PWA" />
-    <meta property="og:description" content="Bilingual Uzbek and English PWA learning platform for Economics, Mathematics, and Business with server-verified progress and verifiable certificates." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <title>ECONOVA — Bilingual Academic Engine for Economics, Mathematics & Business</title>
+    <meta name="description" content="Master Economics, Mathematics and Business on one bilingual (Uzbek / English) platform — structured tracks, offline sync and server-verified certificates." />
+    <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#080B14" />
+
+    <!-- Paint the obsidian canvas colour before any CSS/JS arrives: no white flash, no blank frame. -->
+    <style>
+      html,
+      body {
+        background-color: #080b14;
+        color: #f4f7fa;
+      }
+    </style>
+
+    <!-- Social previews (Open Graph + Twitter / X) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ECONOVA" />
+    <meta property="og:title" content="ECONOVA — Bilingual Academic Engine for Economics, Mathematics & Business" />
+    <meta property="og:description" content="Master Economics, Mathematics and Business on one bilingual (Uzbek / English) platform — structured tracks, offline sync and server-verified certificates." />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="uz_UZ" />
+    <meta property="og:image" content="/pwa-512x512.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="ECONOVA logo" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="ECONOVA — Bilingual Academic Engine for Economics, Mathematics & Business" />
+    <meta name="twitter:description" content="Master Economics, Mathematics and Business on one bilingual (Uzbek / English) platform — structured tracks, offline sync and server-verified certificates." />
+    <meta name="twitter:image" content="/pwa-512x512.png" />
+    <meta name="twitter:image:alt" content="ECONOVA logo" />
+
+    <!-- PWA -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="ECONOVA" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+
+    <!--
+      Fonts: one stylesheet for the whole app (landing weights included: Jakarta 800, Mono 700),
+      fetched early via preconnect + preload but applied without blocking first paint
+      (media="print" → "all" on load). display=swap keeps text visible with the fallback face.
+      Browsers only download the faces a page actually uses, so extra weights cost nothing until needed.
+    -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+      />
+    </noscript>
   </head>
   <body class="bg-canvas text-ink antialiased selection:bg-accent/30 selection:text-ink">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -7,12 +7,21 @@ import type { LucideIcon } from 'lucide-react';
 import { useEconovaGSAP } from '@/hooks/useEconovaGSAP';
 import { getActiveLenisInstance } from '../../lib/scroll-sync';
 import { applyDocumentLocale, persistLocalePreference } from '../../lib/i18n';
-import type { LocaleCode } from '../../shared/types';
-import { ConstellationCanvas } from './ConstellationCanvas';
+import { apiFetch, getCachedUserSummary } from '../../lib/auth-client';
+import type { CourseCatalogItem, CourseLevel, LocaleCode, Subject } from '../../shared/types';
+import { EngineSandbox } from './EngineSandbox';
+import type { SandboxTrack } from './EngineSandbox';
 import { FooterWordmarkCanvas } from './FooterWordmarkCanvas';
 import './landing.css';
 
 gsap.registerPlugin(ScrollTrigger);
+
+/**
+ * The WebGL constellation is a decorative background layer: load its module in its own chunk so it
+ * never sits on the critical path of the first paint (the canvas itself also defers its GPU boot to
+ * an idle period and fades in on its first frame).
+ */
+const ConstellationCanvas = lazy(() => import('./ConstellationCanvas'));
 
 export interface LandingPageProps {
   locale: LocaleCode;
@@ -59,13 +68,15 @@ interface FooterColumn {
 }
 
 interface LandingCopy {
-  nav: { tracks: string; architecture: string; start: string; signIn: string; launch: string };
+  nav: { tracks: string; architecture: string; start: string; signIn: string; launch: string; dashboard: string };
   hero: {
     badge: string;
     /** Each line: plain lead + accented tail. */
     lines: [[string, string], [string, string]];
     body: string;
     cta: string;
+    /** Signed-in replacement for `cta`. */
+    continue: string;
     explore: string;
     proof: [string, string, string];
   };
@@ -77,7 +88,17 @@ interface LandingCopy {
     body: string;
     items: [Capability, Capability, Capability, Capability];
   };
-  closing: { badge: string; headline: string; body: string; cta: string; signIn: string };
+  closing: {
+    badge: string;
+    headline: string;
+    body: string;
+    cta: string;
+    signIn: string;
+    /** Signed-in replacements for `body` / `cta` / `signIn`. */
+    continueBody: string;
+    continue: string;
+    browse: string;
+  };
   footer: {
     tagline: string;
     /** Monospace telemetry pill, e.g. `[ ENGINE :: ONLINE · O‘Z / EN ]`. */
@@ -95,17 +116,135 @@ interface LandingCopy {
   meta: { title: string; description: string };
   /** Screen-reader-only landmark / control names. */
   a11y: { primaryNav: string; footerNav: string; language: string };
+  /** Trust & transparency: per-track syllabus + server-verified credential specimen. */
+  trust: {
+    badge: string;
+    headline: string;
+    body: string;
+    syllabus: {
+      /** Courses · Lessons · Study time (values come from the live catalog). */
+      stats: [string, string, string];
+      hoursUnit: string;
+      levels: string;
+      levelNames: Record<CourseLevel, string>;
+      skillsTitle: string;
+      profileTitle: string;
+      open: string;
+      /** Card order: Economics, Mathematics, Business. */
+      tracks: [TrackSyllabus, TrackSyllabus, TrackSyllabus];
+    };
+    credential: {
+      heading: string;
+      body: string;
+      tabsLabel: string;
+      specimen: string;
+      certTitle: string;
+      trackNames: [string, string, string];
+      recipientLabel: string;
+      recipient: string;
+      issuedLabel: string;
+      scoreLabel: string;
+      idLabel: string;
+      hashLabel: string;
+      /** Idle · checking · verified. */
+      status: [string, string, string];
+      steps: [string, string, string];
+      run: string;
+      rerun: string;
+      note: string;
+      verifyReal: string;
+    };
+  };
+}
+
+interface TrackSyllabus {
+  skills: [string, string, string, string];
+  profile: string;
 }
 
 const COPY: Record<LocaleCode, LandingCopy> = {
   en: {
+    trust: {
+      badge: '[ TRUST & TRANSPARENCY ]',
+      headline: 'Know exactly what you study — and what you earn.',
+      body: 'Every track publishes its syllabus up front, and every credential can be checked against the server in seconds.',
+      syllabus: {
+        stats: ['Courses', 'Lessons', 'Study time'],
+        hoursUnit: 'h',
+        levels: 'Levels',
+        levelNames: { Beginner: 'Beginner', Intermediate: 'Intermediate', Advanced: 'Advanced' },
+        skillsTitle: 'Core analytical skills',
+        profileTitle: 'Who it’s for',
+        open: 'Open track',
+        tracks: [
+          {
+            skills: [
+              'Model supply, demand and market equilibrium',
+              'Read macro indicators: inflation, output, rates',
+              'Reason strategically with game theory',
+              'Weigh policy trade-offs with data',
+            ],
+            profile: 'Students and early-career analysts who want to explain how markets and policy really move.',
+          },
+          {
+            skills: [
+              'Work fluently with vectors and matrices',
+              'Quantify uncertainty with probability',
+              'Optimise under constraints with calculus',
+              'Build and test quantitative models',
+            ],
+            profile: 'Learners preparing for quantitative study, data roles or exams that demand rigorous problem-solving.',
+          },
+          {
+            skills: [
+              'Calculate unit economics and break-even',
+              'Allocate capital across competing projects',
+              'Design operating systems that scale',
+              'Turn financial models into strategy',
+            ],
+            profile: 'Founders, managers and business students who want numbers behind every strategic decision.',
+          },
+        ],
+      },
+      credential: {
+        heading: 'Server-verified credentials',
+        body: 'Finish a track and receive a credential with a unique ID and verification hash. Anyone can confirm it against the server — no PDF to trust blindly.',
+        tabsLabel: 'Sample credential',
+        specimen: 'SPECIMEN',
+        certTitle: 'Certificate of Completion',
+        trackNames: ['Economics Track', 'Mathematics Track', 'Business Track'],
+        recipientLabel: 'Recipient',
+        recipient: 'Sample Learner',
+        issuedLabel: 'Issued',
+        scoreLabel: 'Final score',
+        idLabel: 'Credential ID',
+        hashLabel: 'Verification hash',
+        status: ['Ready to verify', 'Checking…', 'Verified on Server'],
+        steps: [
+          'Credential ID found on the server',
+          'Learner and track details match the record',
+          'Status: valid, not revoked',
+        ],
+        run: 'Run verification',
+        rerun: 'Run again',
+        note: 'Specimen: this check is simulated in your browser. Real credentials are verified live by the server.',
+        verifyReal: 'Verify a real credential',
+      },
+    },
     meta: {
       title: 'ECONOVA — Bilingual Academic Engine for Economics, Mathematics & Business',
       description:
         'Master Economics, Mathematics and Business on one bilingual (Uzbek / English) platform — structured tracks, offline sync and server-verified certificates.',
     },
     a11y: { primaryNav: 'Primary', footerNav: 'Footer', language: 'Language' },
-    nav: { tracks: 'Tracks', architecture: 'Architecture', start: 'Get Started', signIn: 'Sign In', launch: 'Launch App' },
+    nav: {
+      tracks: 'Tracks',
+      architecture: 'Architecture',
+      start: 'Get Started',
+      signIn: 'Sign In',
+      launch: 'Launch App',
+      dashboard: 'Dashboard',
+    },
     hero: {
       badge: '[ BILINGUAL ACADEMIC ENGINE :: O‘Z / EN ]',
       lines: [
@@ -114,6 +253,7 @@ const COPY: Record<LocaleCode, LandingCopy> = {
       ],
       body: 'Master Economics, Mathematics and Business in one bilingual engine — every lesson, syllabus and credential verified on the server.',
       cta: 'Launch Platform',
+      continue: 'Continue Learning',
       explore: 'Explore Tracks',
       proof: ['3 Core Tracks', 'O‘Z / EN', 'Verified Certificates'],
     },
@@ -168,9 +308,12 @@ const COPY: Record<LocaleCode, LandingCopy> = {
     closing: {
       badge: '[ GET STARTED ]',
       headline: 'Ready to think in systems?',
-      body: 'Open the dashboard and start your first track in seconds.',
-      cta: 'Enter ECONOVA',
+      body: 'Create your account and start your first track in seconds.',
+      cta: 'Create Account',
       signIn: 'Sign In',
+      continueBody: 'Pick up exactly where you left off, or open a new track.',
+      continue: 'Continue Learning',
+      browse: 'Browse Courses',
     },
     footer: {
       tagline: 'A bilingual academic engine for Economics, Mathematics and Business.',
@@ -209,6 +352,73 @@ const COPY: Record<LocaleCode, LandingCopy> = {
     rail: { label: 'Sections', items: ['Intro', 'Economics', 'Mathematics', 'Business', 'Architecture', 'Get started'] },
   },
   uz: {
+    trust: {
+      badge: '[ ISHONCH VA SHAFFOFLIK ]',
+      headline: 'Nimani o‘rganishingiz va nimaga erishishingizni aniq biling.',
+      body: 'Har bir yo‘nalish sillabusini oldindan e’lon qiladi, har bir sertifikatni esa serverda bir necha soniyada tekshirish mumkin.',
+      syllabus: {
+        stats: ['Kurslar', 'Darslar', 'O‘qish vaqti'],
+        hoursUnit: 'soat',
+        levels: 'Darajalar',
+        levelNames: { Beginner: 'Boshlang‘ich', Intermediate: 'O‘rta', Advanced: 'Yuqori' },
+        skillsTitle: 'Asosiy tahliliy ko‘nikmalar',
+        profileTitle: 'Kimlar uchun',
+        open: 'Yo‘nalishni ochish',
+        tracks: [
+          {
+            skills: [
+              'Talab, taklif va bozor muvozanatini modellashtirish',
+              'Makro ko‘rsatkichlarni o‘qish: inflyatsiya, ishlab chiqarish, foiz stavkalari',
+              'O‘yinlar nazariyasi bilan strategik fikrlash',
+              'Siyosat murosalarini ma’lumotlar asosida baholash',
+            ],
+            profile: 'Bozorlar va iqtisodiy siyosat qanday harakatlanishini tushuntirishni istagan talabalar va yosh tahlilchilar.',
+          },
+          {
+            skills: [
+              'Vektor va matritsalar bilan erkin ishlash',
+              'Noaniqlikni ehtimollik orqali o‘lchash',
+              'Cheklovlar ostida differensial hisob bilan optimallashtirish',
+              'Miqdoriy modellar qurish va sinash',
+            ],
+            profile: 'Miqdoriy ta’lim, ma’lumotlar bilan ishlash yoki qat’iy masala yechishni talab qiladigan imtihonlarga tayyorlanayotganlar.',
+          },
+          {
+            skills: [
+              'Birlik iqtisodiyoti va zararsizlik nuqtasini hisoblash',
+              'Kapitalni raqobatdosh loyihalar o‘rtasida taqsimlash',
+              'Miqyoslanadigan operatsion tizimlarni loyihalash',
+              'Moliyaviy modellarni strategiyaga aylantirish',
+            ],
+            profile: 'Har bir strategik qaror ortida raqamlar bo‘lishini istagan asoschilar, menejerlar va biznes talabalari.',
+          },
+        ],
+      },
+      credential: {
+        heading: 'Serverda tasdiqlanadigan sertifikatlar',
+        body: 'Yo‘nalishni tugatib, noyob ID va tekshiruv xeshiga ega sertifikat oling. Uni istalgan kishi serverda tasdiqlay oladi — PDF faylga ko‘r-ko‘rona ishonish shart emas.',
+        tabsLabel: 'Namuna sertifikat',
+        specimen: 'NAMUNA',
+        certTitle: 'Tamomlanganlik sertifikati',
+        trackNames: ['Iqtisodiyot yo‘nalishi', 'Matematika yo‘nalishi', 'Biznes yo‘nalishi'],
+        recipientLabel: 'Egasi',
+        recipient: 'Namuna o‘quvchi',
+        issuedLabel: 'Berilgan sana',
+        scoreLabel: 'Yakuniy ball',
+        idLabel: 'Sertifikat ID',
+        hashLabel: 'Tekshiruv xeshi',
+        status: ['Tekshirishga tayyor', 'Tekshirilmoqda…', 'Serverda tasdiqlangan'],
+        steps: [
+          'Sertifikat ID serverda topildi',
+          'O‘quvchi va yo‘nalish ma’lumotlari yozuvga mos',
+          'Holati: amalda, bekor qilinmagan',
+        ],
+        run: 'Tekshiruvni boshlash',
+        rerun: 'Qayta tekshirish',
+        note: 'Namuna: bu tekshiruv brauzeringizda simulyatsiya qilinadi. Haqiqiy sertifikatlar server tomonidan jonli tekshiriladi.',
+        verifyReal: 'Haqiqiy sertifikatni tekshirish',
+      },
+    },
     meta: {
       title: 'ECONOVA — Iqtisodiyot, matematika va biznes uchun ikki tilli akademik platforma',
       description:
@@ -221,6 +431,7 @@ const COPY: Record<LocaleCode, LandingCopy> = {
       start: 'Boshlash',
       signIn: 'Hisobga kirish',
       launch: 'Ilovani ochish',
+      dashboard: 'Boshqaruv paneli',
     },
     hero: {
       badge: '[ IKKI TILLI AKADEMIK TIZIM :: O‘Z / EN ]',
@@ -230,6 +441,7 @@ const COPY: Record<LocaleCode, LandingCopy> = {
       ],
       body: 'Iqtisodiyot, matematika va biznesni yagona ikki tilli tizimda o‘zlashtiring — har bir dars, sillabus va sertifikat serverda tekshiriladi.',
       cta: 'Platformaga o‘tish',
+      continue: 'O‘qishni davom ettirish',
       explore: 'Yo‘nalishlar',
       proof: ['3 asosiy yo‘nalish', 'O‘Z / EN', 'Tasdiqlangan sertifikatlar'],
     },
@@ -284,9 +496,12 @@ const COPY: Record<LocaleCode, LandingCopy> = {
     closing: {
       badge: '[ BOSHLASH ]',
       headline: 'Tizimli fikrlashga tayyormisiz?',
-      body: 'Boshqaruv panelini oching va birinchi yo‘nalishni bir necha soniyada boshlang.',
-      cta: 'ECONOVA’ga kirish',
+      body: 'Hisob yarating va birinchi yo‘nalishni bir necha soniyada boshlang.',
+      cta: 'Hisob yaratish',
       signIn: 'Hisobga kirish',
+      continueBody: 'To‘xtagan joyingizdan davom eting yoki yangi yo‘nalishni oching.',
+      continue: 'O‘qishni davom ettirish',
+      browse: 'Kurslarni ko‘rish',
     },
     footer: {
       tagline: 'Iqtisodiyot, matematika va biznes uchun ikki tilli akademik tizim.',
@@ -350,6 +565,43 @@ const FOOTER_ACCENTS: Partial<Record<FooterAction, string>> = {
 const RAIL_TARGETS = ['top', 'track-economics', 'track-mathematics', 'track-business', 'architecture', 'get-started'] as const;
 const RAIL_ACCENTS = ['#5DE1D2', '#5DE1D2', '#9274FF', '#6FE0A1', '#F5B942', '#5DE1D2'] as const;
 const TRACK_IDS = ['track-economics', 'track-mathematics', 'track-business'] as const;
+
+/* ------------------------------------------------------------------ */
+/* App routes                                                          */
+/* ------------------------------------------------------------------ */
+
+/** Real app paths (see src/lib/auth-routing.ts → parseRouteFromLocation). */
+const ROUTES = {
+  overview: '/overview',
+  catalog: '/catalog',
+  register: '/register',
+  course: (id: string) => `/course/${encodeURIComponent(id)}`,
+} as const;
+
+/** Card / sandbox order → catalog subject. */
+const TRACK_KEYS: readonly SandboxTrack[] = ['econ', 'math', 'biz'];
+const TRACK_SUBJECT: Record<SandboxTrack, Subject> = { econ: 'Economics', math: 'Mathematics', biz: 'Business' };
+/**
+ * Entry course per track until /api/catalog answers (or if it fails): the database seed's courses
+ * (server/seed.ts). The live catalog then picks the most introductory course with this locale's edition.
+ */
+const FALLBACK_COURSE: Record<SandboxTrack, string> = {
+  econ: 'course-econ-beg',
+  math: 'course-math-int',
+  biz: 'course-biz-adv',
+};
+const LEVEL_ORDER: readonly CourseLevel[] = ['Beginner', 'Intermediate', 'Advanced'];
+
+function pickEntryCourse(courses: CourseCatalogItem[], subject: Subject, locale: LocaleCode): string | null {
+  const rank = (c: CourseCatalogItem) =>
+    (c.editions?.[locale] ? 0 : 10) + Math.max(0, LEVEL_ORDER.indexOf(c.level));
+  let best: CourseCatalogItem | null = null;
+  for (const c of courses) {
+    if (c.subject !== subject) continue;
+    if (!best || rank(c) < rank(best)) best = c; // stable: catalog order breaks ties
+  }
+  return best?.id ?? null;
+}
 
 /** Height of the sticky navbar — anchor scrolls stop below it. */
 const NAV_OFFSET = 64;
@@ -454,6 +706,236 @@ function LocaleSwitch({
       <button type="button" lang="uz" aria-pressed={locale === 'uz'} onClick={() => onChange('uz')}>
         O‘Z
       </button>
+    </div>
+  );
+}
+
+/** Same shift-free stacking as <Bi>, for UI states: every item reserves space, only `active` shows. */
+function Swap({ active, items, block }: { active: number; items: ReactNode[]; block?: boolean }) {
+  return (
+    <span className={block ? 'lp-bi lp-bi--block' : 'lp-bi'}>
+      {items.map((node, i) => (
+        <span key={i} className="lp-bi__ed" aria-hidden={i === active ? undefined : true}>
+          {node}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Bilingual list: both editions' <ul>s share one grid cell, so wrapping differences never shift layout. */
+function BiList({
+  locale,
+  pick,
+  className,
+  item,
+}: {
+  locale: LocaleCode;
+  pick: (copy: LandingCopy) => readonly string[];
+  className?: string;
+  item: (text: string) => ReactNode;
+}) {
+  return (
+    <div className="lp-bi lp-bi--block">
+      {LOCALES.map((l) => (
+        <ul key={l} lang={l} aria-hidden={l === locale ? undefined : true} className={`lp-bi__ed ${className ?? ''}`}>
+          {pick(COPY[l]).map((text) => (
+            <li key={text}>{item(text)}</li>
+          ))}
+        </ul>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Illustrative specimen data — clearly labelled SPECIMEN / NAMUNA in the UI, never a real learner.
+ * Format mirrors a real credential: track-coded ID + truncated verification hash.
+ */
+const CREDENTIAL_SPECIMENS = [
+  { id: 'ECN-ECO-26-7F3A21', hash: '9f2c41b7…e41a0d3c', score: 94, issued: '2026-09-14' },
+  { id: 'ECN-MAT-26-B41C09', hash: '3ad8e05f…71c2b9e4', score: 91, issued: '2026-10-02' },
+  { id: 'ECN-BIZ-26-52E8D4', hash: 'c07b9a12…4f6e8a51', score: 96, issued: '2026-10-21' },
+] as const;
+const VERIFY_STEP_MS = 450;
+
+/**
+ * Server-verified credential specimen: switch between the three sample track credentials and replay
+ * the verification checklist in place (simulated client-side and labelled as such; the real check
+ * lives at /certificates, linked below).
+ */
+function CredentialSpecimen({ locale, verifyRealProps }: { locale: LocaleCode; verifyRealProps: AnchorLikeProps }) {
+  const [track, setTrack] = useState(0);
+  /** 0 idle · 1–3 checking step n · 4 verified. */
+  const [step, setStep] = useState(0);
+  const timers = useRef<number[]>([]);
+  const clearTimers = () => {
+    timers.current.forEach((id) => window.clearTimeout(id));
+    timers.current = [];
+  };
+  useEffect(() => clearTimers, []);
+
+  const run = () => {
+    clearTimers();
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setStep(4);
+      return;
+    }
+    setStep(1);
+    [2, 3, 4].forEach((s, i) => {
+      timers.current.push(window.setTimeout(() => setStep(s), VERIFY_STEP_MS * (i + 1)));
+    });
+  };
+  const selectTrack = (i: number) => {
+    clearTimers();
+    setTrack(i);
+    setStep(0);
+  };
+
+  const status = step === 0 ? 0 : step < 4 ? 1 : 2;
+  const spec = CREDENTIAL_SPECIMENS[track];
+  const accent = CHAPTER_ACCENTS[track];
+  const copy = COPY[locale].trust.credential;
+
+  return (
+    <div className="lp-cred" style={{ '--lp-accent': accent } as CSSProperties}>
+      <div className="lp-cred__intro">
+        <h3 className="lp-heading">
+          <Bi locale={locale} block pick={(c) => c.trust.credential.heading} />
+        </h3>
+        <p className="lp-body mt-4">
+          <Bi locale={locale} block pick={(c) => c.trust.credential.body} />
+        </p>
+
+        <div role="group" aria-label={copy.tabsLabel} className="lp-cred__tabs">
+          {CHAPTER_ACCENTS.map((tone, i) => (
+            <button
+              key={tone}
+              type="button"
+              aria-pressed={i === track}
+              onClick={() => selectTrack(i)}
+              className="lp-cred__tab"
+              style={{ '--lp-accent': tone } as CSSProperties}
+            >
+              <Bi locale={locale} pick={(c) => c.rail.items[i + 1]} />
+            </button>
+          ))}
+        </div>
+
+        <ol className="lp-cred__steps" aria-live="polite">
+          {[0, 1, 2].map((i) => {
+            const state = step > i + 1 || step === 4 ? 'done' : step === i + 1 ? 'running' : 'pending';
+            return (
+              <li key={i} data-state={state}>
+                <span aria-hidden="true" className="lp-cred__step-icon">
+                  {state === 'done' ? '✓' : ''}
+                </span>
+                <Bi locale={locale} block pick={(c) => c.trust.credential.steps[i]} />
+              </li>
+            );
+          })}
+        </ol>
+
+        <div className="lp-cred__actions">
+          <button type="button" onClick={run} disabled={status === 1} className="lp-btn lp-btn--primary">
+            <span>
+              <Swap
+                active={step === 4 ? 1 : 0}
+                items={[
+                  <Bi key="run" locale={locale} pick={(c) => c.trust.credential.run} />,
+                  <Bi key="rerun" locale={locale} pick={(c) => c.trust.credential.rerun} />,
+                ]}
+              />
+            </span>
+          </button>
+          <a {...verifyRealProps} className="lp-btn lp-btn--glass">
+            <span>
+              <Bi locale={locale} pick={(c) => c.trust.credential.verifyReal} />
+            </span>
+            <ArrowUpRight aria-hidden="true" className="lp-btn__icon" strokeWidth={2.5} />
+          </a>
+        </div>
+        <p className="lp-cred__note">
+          <Bi locale={locale} block pick={(c) => c.trust.credential.note} />
+        </p>
+      </div>
+
+      {/* The specimen itself */}
+      <article className="lp-panel lp-cred__card" data-status={status} aria-label={`${copy.certTitle} — ${copy.trackNames[track]} (${copy.specimen})`}>
+        <span aria-hidden="true" className="lp-track__strip" />
+        <div className="lp-cred__top">
+          <span className="lp-logo" aria-hidden="true">
+            <span className="lp-logo__mark">
+              <EconovaMark />
+            </span>
+            ECONOVA
+          </span>
+          <span className="lp-cred__specimen">
+            <Bi locale={locale} pick={(c) => c.trust.credential.specimen} />
+          </span>
+        </div>
+
+        <p className="lp-index mt-8">
+          <Bi locale={locale} pick={(c) => c.trust.credential.certTitle} />
+        </p>
+        <p className="lp-cred__track">
+          <Swap
+            active={track}
+            block
+            items={[0, 1, 2].map((i) => (
+              <Bi key={i} locale={locale} block pick={(c) => c.trust.credential.trackNames[i]} />
+            ))}
+          />
+        </p>
+
+        <dl className="lp-cred__meta">
+          <div>
+            <dt>
+              <Bi locale={locale} pick={(c) => c.trust.credential.recipientLabel} />
+            </dt>
+            <dd>
+              <Bi locale={locale} pick={(c) => c.trust.credential.recipient} />
+            </dd>
+          </div>
+          <div>
+            <dt>
+              <Bi locale={locale} pick={(c) => c.trust.credential.issuedLabel} />
+            </dt>
+            <dd className="lp-cred__mono">{spec.issued}</dd>
+          </div>
+          <div>
+            <dt>
+              <Bi locale={locale} pick={(c) => c.trust.credential.scoreLabel} />
+            </dt>
+            <dd className="lp-cred__mono">{spec.score}%</dd>
+          </div>
+          <div>
+            <dt>
+              <Bi locale={locale} pick={(c) => c.trust.credential.idLabel} />
+            </dt>
+            <dd className="lp-cred__mono">{spec.id}</dd>
+          </div>
+        </dl>
+
+        <div className="lp-cred__hash">
+          <span>
+            <Bi locale={locale} pick={(c) => c.trust.credential.hashLabel} />
+          </span>
+          <code>{spec.hash}</code>
+        </div>
+
+        <div className="lp-cred__seal" data-status={status} role="status">
+          <span aria-hidden="true" className="lp-cred__seal-icon">
+            <FileCheck2 size={18} strokeWidth={2.25} />
+          </span>
+          <Swap
+            active={status}
+            items={[0, 1, 2].map((i) => (
+              <Bi key={i} locale={locale} pick={(c) => c.trust.credential.status[i]} />
+            ))}
+          />
+        </div>
+      </article>
     </div>
   );
 }
@@ -576,9 +1058,14 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
     },
   });
 
+  /** Let the browser handle new-tab / new-window clicks (⌘/Ctrl/Shift/middle-click) natively. */
+  const isPlainClick = (e: ReactMouseEvent<HTMLElement>) =>
+    e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+
   const enterProps = {
-    href: '/overview',
+    href: ROUTES.overview,
     onClick: (e: ReactMouseEvent<HTMLElement>) => {
+      if (!isPlainClick(e)) return;
       e.preventDefault();
       onEnterApp();
     },
@@ -587,10 +1074,98 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
   const signInProps = {
     href: '/login',
     onClick: (e: ReactMouseEvent<HTMLElement>) => {
+      if (!isPlainClick(e)) return;
       e.preventDefault();
       onSignIn();
     },
   };
+
+  /*
+   * In-app navigation to any real route without a full reload: push the path, then fire the same
+   * `popstate` App already handles for Back/Forward (it re-parses the URL, switches tab and opens
+   * /course/:id). Scroll is reset first so the app surface doesn't inherit the landing's offset.
+   */
+  const routeProps = (path: string) => ({
+    href: path,
+    onClick: (e: ReactMouseEvent<HTMLElement>) => {
+      if (!isPlainClick(e)) return;
+      e.preventDefault();
+      getActiveLenisInstance()?.scrollTo(0, { immediate: true });
+      window.scrollTo(0, 0);
+      window.history.pushState({}, '', path);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    },
+  });
+
+  // Signed-in visitors get "Dashboard / Continue learning" instead of the sign-up funnel. This is the
+  // same cached profile App boots from; re-read when the tab regains focus or another tab signs in/out.
+  const [signedIn, setSignedIn] = useState(() => Boolean(getCachedUserSummary()));
+  useEffect(() => {
+    const sync = () => setSignedIn(Boolean(getCachedUserSummary()));
+    window.addEventListener('focus', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('focus', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  // Each track's real entry course, resolved from the live catalog (falls back to the seed IDs).
+  const [catalog, setCatalog] = useState<CourseCatalogItem[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    apiFetch('/api/catalog')
+      .then((res) => (res.ok ? (res.json() as Promise<{ courses?: CourseCatalogItem[] }>) : null))
+      .then((data) => {
+        if (alive && data?.courses?.length) setCatalog(data.courses);
+      })
+      .catch(() => {
+        /* offline / API down: keep the seed fallbacks */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const trackCourse = useMemo(() => {
+    const out = { ...FALLBACK_COURSE };
+    if (catalog) {
+      for (const key of TRACK_KEYS) out[key] = pickEntryCourse(catalog, TRACK_SUBJECT[key], locale) ?? out[key];
+    }
+    return out;
+  }, [catalog, locale]);
+  const trackLink = useCallback(
+    (track: SandboxTrack) => routeProps(ROUTES.course(trackCourse[track])),
+    // routeProps is a pure factory over stable globals
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trackCourse],
+  );
+
+  /**
+   * Syllabus transparency, computed from the live catalog (never hard-coded): per track, the number of
+   * published courses, total lessons and study hours in this locale's edition, and the level span.
+   * `null` until the catalog answers, rendered as an em dash in a fixed-width slot (no layout shift).
+   */
+  const trackStats = useMemo(
+    () =>
+      TRACK_KEYS.map((key) => {
+        if (!catalog) return null;
+        const list = catalog.filter((c) => c.subject === TRACK_SUBJECT[key]);
+        if (!list.length) return null;
+        let lessons = 0;
+        let minutes = 0;
+        for (const c of list) {
+          const edition = c.editions?.[locale] ?? c.editions?.en ?? null;
+          lessons += edition?.lessonCount ?? 0;
+          minutes += edition?.estimatedMinutes ?? c.estimatedMinutes ?? 0;
+        }
+        const levels = LEVEL_ORDER.filter((lv) => list.some((c) => c.level === lv));
+        return { courses: list.length, lessons, hours: Math.max(1, Math.round(minutes / 60)), levels };
+      }),
+    [catalog, locale],
+  );
+
+  /** Primary "into the app" action: dashboard for members, the public course catalog for visitors. */
+  const launchProps = signedIn ? enterProps : routeProps(ROUTES.catalog);
 
   /*
    * Scroll choreography. Everything created here lives in useGSAP's context and is reverted
@@ -888,7 +1463,9 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
 
   return (
     <div ref={rootRef} lang={locale} className="econova-landing relative min-h-screen overflow-x-clip">
-      <ConstellationCanvas progressRef={scrollProgressRef} />
+      <Suspense fallback={null}>
+        <ConstellationCanvas progressRef={scrollProgressRef} />
+      </Suspense>
 
       {/* ---------------- Sticky Glass-Brutalist navbar ---------------- */}
       <header className="lp-nav sticky top-0 z-30">
@@ -915,11 +1492,13 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
 
           <div className="flex items-center justify-end gap-3">
             <LocaleSwitch locale={locale} label={copy.a11y.language} onChange={setLocale} />
-            <a {...signInProps} className="lp-nav__link hidden sm:inline-flex">
-              <Bi locale={locale} pick={(c) => c.nav.signIn} />
-            </a>
-            <BrutalButton size="sm" arrow {...enterProps}>
-              <Bi locale={locale} pick={(c) => c.nav.launch} />
+            {!signedIn && (
+              <a {...signInProps} className="lp-nav__link hidden sm:inline-flex">
+                <Bi locale={locale} pick={(c) => c.nav.signIn} />
+              </a>
+            )}
+            <BrutalButton size="sm" arrow {...launchProps}>
+              <Bi locale={locale} pick={(c) => (signedIn ? c.nav.dashboard : c.nav.launch)} />
             </BrutalButton>
           </div>
         </nav>
@@ -995,8 +1574,8 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
                 </p>
 
                 <div data-hero-rise className="mt-9 flex flex-wrap items-center gap-4">
-                  <BrutalButton arrow {...enterProps}>
-                    <Bi locale={locale} pick={(c) => c.hero.cta} />
+                  <BrutalButton arrow {...launchProps}>
+                    <Bi locale={locale} pick={(c) => (signedIn ? c.hero.continue : c.hero.cta)} />
                   </BrutalButton>
                   <BrutalButton variant="glass" {...anchorProps('tracks')}>
                     <Bi locale={locale} pick={(c) => c.hero.explore} />
@@ -1085,7 +1664,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
                     ))}
                   </div>
                   <div className="mt-9">
-                    <BrutalButton variant="glass" arrow {...enterProps}>
+                    <BrutalButton variant="glass" arrow {...trackLink(TRACK_KEYS[i])}>
                       <Bi locale={locale} pick={(c) => c.tracks.explore} />
                     </BrutalButton>
                   </div>
@@ -1100,6 +1679,13 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
         </section>
 
         {/* ---------------- Platform architecture bento ---------------- */}
+        {/* ---------------- Live Engine Sandbox (try a lesson before signing up) ---------------- */}
+        <section id="sandbox" aria-labelledby="sandbox-title" className="scroll-mt-16 py-20 md:py-28">
+          <div className={GUTTER}>
+            <EngineSandbox locale={locale} trackLink={trackLink} />
+          </div>
+        </section>
+
         <section id="architecture" data-anchor="arch" data-chapter="4" className="py-24 md:py-32">
           <div className={GUTTER}>
             <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
@@ -1156,6 +1742,107 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
           </div>
         </section>
 
+        {/* ---------------- Trust & transparency: syllabus + credential specimen ---------------- */}
+        <section id="trust" aria-labelledby="trust-title" className="scroll-mt-16 py-20 md:py-28">
+          <div className={GUTTER}>
+            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+              <div className="min-w-0">
+                <Badge tone="#6FE0A1">
+                  <Bi locale={locale} pick={(c) => c.trust.badge} />
+                </Badge>
+                <h2 id="trust-title" className="lp-heading-lg mt-5 max-w-[760px]">
+                  <Bi locale={locale} block pick={(c) => c.trust.headline} />
+                </h2>
+              </div>
+              <p className="lp-body max-w-[420px]">
+                <Bi locale={locale} block pick={(c) => c.trust.body} />
+              </p>
+            </div>
+
+            {/* Transparent syllabus, one card per track */}
+            <ul className="lp-syl-grid mt-12 md:mt-14">
+              {TRACK_KEYS.map((key, i) => {
+                const stats = trackStats[i];
+                const values: Array<(c: LandingCopy) => string> = [
+                  () => (stats ? String(stats.courses) : '—'),
+                  () => (stats ? String(stats.lessons) : '—'),
+                  (c) => (stats ? `≈ ${stats.hours} ${c.trust.syllabus.hoursUnit}` : '—'),
+                ];
+                return (
+                  <li key={key} className="lp-panel lp-panel--md lp-syl" style={{ '--lp-accent': CHAPTER_ACCENTS[i] } as CSSProperties}>
+                    <span aria-hidden="true" className="lp-track__strip" />
+                    <p className="lp-index">
+                      {String(i + 1).padStart(2, '0')} <span className="opacity-50">{'//'}</span>{' '}
+                      <Bi locale={locale} pick={(c) => c.chapters[i].tag} />
+                    </p>
+
+                    <dl className="lp-syl__stats">
+                      {values.map((value, s) => (
+                        <div key={s} className="lp-syl__stat">
+                          <dt>
+                            <Bi locale={locale} pick={(c) => c.trust.syllabus.stats[s]} />
+                          </dt>
+                          <dd>
+                            <Bi locale={locale} pick={value} />
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+
+                    <p className="lp-syl__levels">
+                      <Bi
+                        locale={locale}
+                        pick={(c) =>
+                          `${c.trust.syllabus.levels}: ${
+                            stats?.levels.length
+                              ? stats.levels.map((lv) => c.trust.syllabus.levelNames[lv]).join(' → ')
+                              : '—'
+                          }`
+                        }
+                      />
+                    </p>
+
+                    <h3 className="lp-syl__title">
+                      <Bi locale={locale} pick={(c) => c.trust.syllabus.skillsTitle} />
+                    </h3>
+                    <BiList
+                      locale={locale}
+                      className="lp-syl__skills"
+                      pick={(c) => c.trust.syllabus.tracks[i].skills}
+                      item={(text) => (
+                        <>
+                          <span aria-hidden="true" className="lp-syl__tick">
+                            ✓
+                          </span>
+                          {text}
+                        </>
+                      )}
+                    />
+
+                    <h3 className="lp-syl__title">
+                      <Bi locale={locale} pick={(c) => c.trust.syllabus.profileTitle} />
+                    </h3>
+                    <p className="lp-body lp-syl__profile">
+                      <Bi locale={locale} block pick={(c) => c.trust.syllabus.tracks[i].profile} />
+                    </p>
+
+                    <div className="lp-syl__cta">
+                      <BrutalButton variant="glass" arrow {...trackLink(key)}>
+                        <Bi locale={locale} pick={(c) => c.trust.syllabus.open} />
+                      </BrutalButton>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Server-verified credential specimen */}
+            <div className="mt-16 md:mt-24">
+              <CredentialSpecimen locale={locale} verifyRealProps={routeProps('/certificates')} />
+            </div>
+          </div>
+        </section>
+
         {/* ---------------- Final CTA ---------------- */}
         <section
           id="get-started"
@@ -1173,15 +1860,15 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
                   <Bi locale={locale} block pick={(c) => c.closing.headline} />
                 </h2>
                 <p className="lp-lead mt-5 max-w-[520px]">
-                  <Bi locale={locale} block pick={(c) => c.closing.body} />
+                  <Bi locale={locale} block pick={(c) => (signedIn ? c.closing.continueBody : c.closing.body)} />
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-4">
-                <BrutalButton arrow {...enterProps}>
-                  <Bi locale={locale} pick={(c) => c.closing.cta} />
+                <BrutalButton arrow {...(signedIn ? enterProps : routeProps(ROUTES.register))}>
+                  <Bi locale={locale} pick={(c) => (signedIn ? c.closing.continue : c.closing.cta)} />
                 </BrutalButton>
-                <BrutalButton variant="glass" {...signInProps}>
-                  <Bi locale={locale} pick={(c) => c.closing.signIn} />
+                <BrutalButton variant="glass" {...(signedIn ? routeProps(ROUTES.catalog) : signInProps)}>
+                  <Bi locale={locale} pick={(c) => (signedIn ? c.closing.browse : c.closing.signIn)} />
                 </BrutalButton>
               </div>
             </div>

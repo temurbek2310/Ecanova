@@ -74,6 +74,10 @@ const FPS_GRACE = 1.5;
 /** A single frame gap longer than this (s) is a hitch (tab switch, debugger), not sustained load. */
 const FPS_HITCH = 0.5;
 
+/** Deferred boot: max wait for an idle period, and the fallback delay without requestIdleCallback. */
+const BOOT_IDLE_TIMEOUT_MS = 1200;
+const BOOT_FALLBACK_MS = 120;
+
 const FOV = 45;
 const REF_CAM_Z = 14; // layout reference plane
 const STAGES = 5; // 0 gyroscope · 1 growth chart · 2 sigma · 3 briefcase · 4 certificate shield
@@ -1510,411 +1514,456 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
     const container = containerRef.current;
     if (!container) return;
 
-    let tierIndex = initialTier();
-    const tierDpr = () => Math.min(window.devicePixelRatio || 1, QUALITY_TIERS[tierIndex].dprCap);
-
-    let renderer: THREE.WebGLRenderer;
-    try {
-      renderer = new THREE.WebGLRenderer({
-        antialias: false, // strokes are antialiased analytically in the fragment shader
-        alpha: true, // transparent canvas so the page's obsidian #080B14 shows through
-        // Don't wake a discrete GPU (battery) on devices that already start in a lighter tier.
-        powerPreference: tierIndex === 0 ? 'high-performance' : 'default',
-      });
-    } catch {
-      return; // WebGL unavailable — the landing page still works on its plain background
-    }
-
-    let pixelRatio = tierDpr();
-    renderer.setPixelRatio(pixelRatio);
-    renderer.setClearColor(0x000000, 0);
-    const canvas = renderer.domElement;
-    canvas.style.display = 'block';
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
-    container.appendChild(canvas);
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 100);
-    camera.position.set(0, 0, REF_CAM_Z);
-
-    const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-    let reduced = reducedQuery.matches;
-
-    // Hardware point-size ceiling (device px); sprites are clamped and the SDF shrinks to fit.
-    const gl = renderer.getContext();
-    const pointRange = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array | null;
-    const maxPoint = pointRange && pointRange[1] > 1 ? pointRange[1] : 64;
-
-    let isMobile = window.innerWidth < MOBILE_QUERY_PX;
-    let particles = createParticles(isMobile, pixelRatio, maxPoint, QUALITY_TIERS[tierIndex].density);
-    scene.add(particles.points);
-
-    let width = 1;
-    let height = 1;
-    let dirty = true;
-
-    const rebuildParticles = () => {
-      scene.remove(particles.points);
-      particles.geometry.dispose();
-      particles.material.dispose();
-      particles = createParticles(isMobile, pixelRatio, maxPoint, QUALITY_TIERS[tierIndex].density);
-      scene.add(particles.points);
-      dirty = true;
+    /*
+     * Non-blocking boot: the DOM (navbar, hero copy) paints first; renderer creation, particle
+     * baking and shader compilation run only after the first paint, in an idle period (or after
+     * a short timeout where requestIdleCallback is missing / the main thread never idles).
+     * The container fades in once the first WebGL frame has actually rendered (see `.lp-canvas`).
+     */
+    let disposed = false;
+    let teardown: (() => void) | undefined;
+    let bootRaf = 0;
+    let idleId = 0;
+    let timeoutId = 0;
+    const boot = () => {
+      idleId = 0;
+      timeoutId = 0;
+      if (!disposed) teardown = initScene();
     };
-
-    /* ---- FPS guard: sustained low frame rate steps the quality tier down (never up) ---- */
-    let fpsGrace = FPS_GRACE;
-    let fpsTime = 0;
-    let fpsFrames = 0;
-    let slowWindows = 0;
-    const resetFps = () => {
-      fpsGrace = FPS_GRACE;
-      fpsTime = 0;
-      fpsFrames = 0;
-      slowWindows = 0;
-    };
-    const applyTier = (next: number) => {
-      tierIndex = Math.min(next, QUALITY_TIERS.length - 1);
-      pixelRatio = tierDpr();
-      renderer.setPixelRatio(pixelRatio);
-      renderer.setSize(width, height, false);
-      rebuildParticles();
-      resetFps();
-    };
-    const sampleFps = (rawDt: number) => {
-      // Reduced motion renders on demand only, and the last tier has nowhere lower to go.
-      if (reduced || tierIndex >= QUALITY_TIERS.length - 1) return;
-      if (rawDt > FPS_HITCH) {
-        resetFps();
-        return;
-      }
-      if (fpsGrace > 0) {
-        fpsGrace -= rawDt;
-        return;
-      }
-      fpsTime += rawDt;
-      fpsFrames++;
-      if (fpsTime < FPS_WINDOW) return;
-      const fps = fpsFrames / fpsTime;
-      fpsTime = 0;
-      fpsFrames = 0;
-      slowWindows = fps < FPS_MIN ? slowWindows + 1 : 0;
-      if (slowWindows >= FPS_SLOW_WINDOWS) applyTier(tierIndex + 1);
-    };
-
-    // Responsive layout: `layoutTarget` is recomputed on resize; `layout` eases toward it every frame.
-    const halfRefH = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
-    let layoutTarget: Layout | null = null;
-    let layout: Layout | null = null;
-
-    const resize = () => {
-      width = Math.max(1, container.clientWidth || window.innerWidth);
-      height = Math.max(1, container.clientHeight || window.innerHeight);
-      renderer.setSize(width, height, false);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-
-      layoutTarget = computeLayout(window.innerWidth, width / height, halfRefH);
-      if (!layout) {
-        layout = { ...layoutTarget, x: [...layoutTarget.x], y: [...layoutTarget.y] }; // first mount: no ease-in
-      }
-
-      const mobile = window.innerWidth < MOBILE_QUERY_PX;
-      if (mobile !== isMobile) {
-        isMobile = mobile;
-        rebuildParticles();
-      }
-      dirty = true;
-    };
-    resize();
-
-    const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(container);
-
-    // Mouse parallax + cursor repulsion — fine pointers only, never on touch.
-    const pointer = { x: 0, y: 0 };
-    // Camera turn + ambient drift: `target*` follows the pointer (reset to 0 when it leaves the
-    // viewport), `current*` eases toward it every frame. NDC in [-1, 1], y down.
-    const mouse = { targetX: 0, targetY: 0, currentX: 0, currentY: 0 };
-    const cursor = { x: 0, y: 0, vx: 0, vy: 0 }; // spring-follower of `pointer` (NDC, y down)
-    let pointerActive = false;
-    let pointerSeen = false;
-    const onPointerMove = (e: PointerEvent) => {
-      if (e.pointerType !== 'mouse') return;
-      pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-      pointer.y = (e.clientY / window.innerHeight) * 2 - 1;
-      mouse.targetX = Math.max(-1, Math.min(1, pointer.x));
-      mouse.targetY = Math.max(-1, Math.min(1, pointer.y));
-      if (!pointerSeen) {
-        cursor.x = pointer.x;
-        cursor.y = pointer.y;
-        pointerSeen = true;
-      }
-      pointerActive = true;
-    };
-    const releasePointer = () => {
-      pointerActive = false;
-      mouse.targetX = 0;
-      mouse.targetY = 0;
-    };
-    const onPointerOut = (e: PointerEvent) => {
-      if (!e.relatedTarget) releasePointer(); // left the window
-    };
-    const onBlur = releasePointer;
-    if (finePointer) {
-      window.addEventListener('pointermove', onPointerMove, { passive: true });
-      window.addEventListener('pointerout', onPointerOut, { passive: true });
-      window.addEventListener('blur', onBlur);
-    }
-
-    const onReducedChange = (e: MediaQueryListEvent) => {
-      reduced = e.matches;
-      dirty = true;
-    };
-    reducedQuery.addEventListener('change', onReducedChange);
-
-    // Pause the loop entirely while the tab is hidden or the GL context is gone (battery); resume
-    // with a fresh clock so the first frame back doesn't see a huge dt or trip the FPS guard.
-    let contextLost = false;
-    const stopLoop = () => {
-      cancelAnimationFrame(raf);
-      raf = 0;
-    };
-    const startLoop = () => {
-      if (raf || contextLost || document.hidden) return;
-      last = performance.now();
-      resetFps();
-      dirty = true;
-      raf = requestAnimationFrame(frame);
-    };
-    const onVisibility = () => (document.hidden ? stopLoop() : startLoop());
-    document.addEventListener('visibilitychange', onVisibility);
-
-    const onContextLost = (e: Event) => {
-      e.preventDefault();
-      contextLost = true;
-      stopLoop();
-    };
-    const onContextRestored = () => {
-      contextLost = false;
-      startLoop();
-    };
-    canvas.addEventListener('webglcontextlost', onContextLost);
-    canvas.addEventListener('webglcontextrestored', onContextRestored);
-
-    /* ---- per-frame state ---- */
-    const ringRot = new THREE.Matrix4();
-    const tiltX = new THREE.Matrix4();
-    const spinM = new THREE.Matrix4();
-    const brightnessScratch: number[] = new Array<number>(STAGES).fill(1);
-    const scaleScratch: number[] = new Array<number>(STAGES).fill(1);
-    const rayDir = new THREE.Vector3();
-    let repel = 0;
-    let smoothed = clamp01(progressRef.current);
-    let lastRendered = -1;
-    let elapsed = 0;
-    let last = performance.now();
-    let raf = 0;
-
-    const frame = (now: number) => {
-      raf = requestAnimationFrame(frame);
-      const rawDt = Math.max(0, (now - last) / 1000);
-      // Lowest tier: render at ~30 fps (4 ms slack so a 60 Hz display reliably hits every 2nd vsync).
-      const fpsCap = QUALITY_TIERS[tierIndex].fpsCap;
-      if (fpsCap > 0 && rawDt < 1 / fpsCap - 0.004) return; // `last` kept: dt accumulates
-      last = now;
-      const dt = Math.min(rawDt, 0.1);
-      sampleFps(rawDt);
-
-      const target = clamp01(progressRef.current);
-      smoothed = reduced ? target : smoothed + (target - smoothed) * (1 - Math.exp(-dt * 5));
-      if (Math.abs(target - smoothed) < 1e-5) smoothed = target;
-
-      // Ease the responsive layout toward its target (snaps under reduced motion).
-      if (!layout || !layoutTarget) return;
-      {
-        const lt = layoutTarget;
-        const lc = layout;
-        const k = reduced ? 1 : 1 - Math.exp(-dt * LAYOUT_EASE);
-        let delta = 0;
-        const step = (cur: number, tgt: number): number => {
-          const next = cur + (tgt - cur) * k;
-          delta = Math.max(delta, Math.abs(tgt - next));
-          return Math.abs(tgt - next) < 1e-4 ? tgt : next;
-        };
-        lc.side = step(lc.side, lt.side);
-        lc.shield = step(lc.shield, lt.shield);
-        lc.alpha = step(lc.alpha, lt.alpha);
-        for (let s = 0; s < STAGES; s++) {
-          lc.x[s] = step(lc.x[s], lt.x[s]);
-          lc.y[s] = step(lc.y[s], lt.y[s]);
+    bootRaf = requestAnimationFrame(() => {
+      // Second frame: guarantees the first frame with the DOM content has been presented.
+      bootRaf = requestAnimationFrame(() => {
+        bootRaf = 0;
+        if (typeof window.requestIdleCallback === 'function') {
+          idleId = window.requestIdleCallback(boot, { timeout: BOOT_IDLE_TIMEOUT_MS });
+        } else {
+          timeoutId = window.setTimeout(boot, BOOT_FALLBACK_MS);
         }
-        if (delta >= 1e-4) dirty = true;
-      }
-
-      if (reduced) {
-        if (!dirty && Math.abs(smoothed - lastRendered) < 1e-5) return;
-      } else {
-        elapsed += dt;
-      }
-      dirty = false;
-      lastRendered = smoothed;
-
-      const { material } = particles;
-      const u = material.uniforms;
-      const time = reduced ? 0 : elapsed;
-
-      // Gyroscope: each ring counter-rotates about its own tilted axis; the core spins the other way.
-      const ringMats = u.uRingM.value as THREE.Matrix3[];
-      GYRO_RINGS.forEach((ring, k) => {
-        ringRot
-          .makeRotationZ(ring.tiltZ)
-          .multiply(tiltX.makeRotationX(ring.tiltX))
-          .multiply(spinM.makeRotationY(ring.spin * time));
-        ringMats[k].setFromMatrix4(ringRot);
       });
-      ringRot.makeRotationY(GYRO_CORE_SPIN * time).multiply(tiltX.makeRotationX(0.4 * GYRO_CORE_SPIN * time + 0.3));
-      (u.uCoreM.value as THREE.Matrix3).setFromMatrix4(ringRot);
+    });
 
-      // Stage blend weights.
-      // Hero → Economics runs its own two-phase choreography off the linear segment progress `heroT`:
-      // the morph is delayed (Phase B) while yaw + travel lead (Phase A). Other stages keep sampleKeys.
-      const heroT = clamp01((smoothed - STAGE_KEYS[1][0]) / (STAGE_KEYS[2][0] - STAGE_KEYS[1][0]));
-      const inHero = heroT > 0 && heroT < 1;
-      const stage = inHero ? smoothstep(HERO_LEAD.morph[0], HERO_LEAD.morph[1], heroT) : sampleKeys(STAGE_KEYS, smoothed);
-      const i0 = Math.min(Math.floor(stage), STAGES - 1);
-      const f = i0 >= STAGES - 1 ? 0 : stage - i0;
-      const weights = u.uW.value as number[];
-      for (let k = 0; k < STAGES; k++) weights[k] = 0;
-      weights[i0] = 1 - f;
-      if (f > 0) weights[i0 + 1] = f;
-      u.uEnergy.value = reduced ? 0 : Math.sin(Math.PI * f); // sinusoidal bell, peaks mid-transition
+    function initScene(): (() => void) | undefined {
+      if (!container) return undefined;
+      let shown = false;
+      let tierIndex = initialTier();
+      const tierDpr = () => Math.min(window.devicePixelRatio || 1, QUALITY_TIERS[tierIndex].dprCap);
 
-      const blend = (values: number[]): number => {
-        let v = 0;
-        for (let k = 0; k < STAGES; k++) v += values[k] * weights[k];
-        return v;
+      let renderer: THREE.WebGLRenderer;
+      try {
+        renderer = new THREE.WebGLRenderer({
+          antialias: false, // strokes are antialiased analytically in the fragment shader
+          alpha: true, // transparent canvas so the page's obsidian #080B14 shows through
+          // Don't wake a discrete GPU (battery) on devices that already start in a lighter tier.
+          powerPreference: tierIndex === 0 ? 'high-performance' : 'default',
+        });
+      } catch {
+        return; // WebGL unavailable — the landing page still works on its plain background
+      }
+
+      let pixelRatio = tierDpr();
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setClearColor(0x000000, 0);
+      const canvas = renderer.domElement;
+      canvas.style.display = 'block';
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      container.appendChild(canvas);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 100);
+      camera.position.set(0, 0, REF_CAM_Z);
+
+      const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+      let reduced = reducedQuery.matches;
+
+      // Hardware point-size ceiling (device px); sprites are clamped and the SDF shrinks to fit.
+      const gl = renderer.getContext();
+      const pointRange = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array | null;
+      const maxPoint = pointRange && pointRange[1] > 1 ? pointRange[1] : 64;
+
+      let isMobile = window.innerWidth < MOBILE_QUERY_PX;
+      let particles = createParticles(isMobile, pixelRatio, maxPoint, QUALITY_TIERS[tierIndex].density);
+      scene.add(particles.points);
+
+      let width = 1;
+      let height = 1;
+      let dirty = true;
+
+      const rebuildParticles = () => {
+        scene.remove(particles.points);
+        particles.geometry.dispose();
+        particles.material.dispose();
+        particles = createParticles(isMobile, pixelRatio, maxPoint, QUALITY_TIERS[tierIndex].density);
+        scene.add(particles.points);
+        dirty = true;
       };
 
-      // Camera path + damped mouse parallax (desktop only).
-      const camZ = sampleKeys(CAM_Z_KEYS, smoothed);
-      // Frame-rate-independent exponential follow (identical feel at 60 Hz and 120 Hz).
-      if (finePointer && !reduced) {
-        const k = 1 - Math.exp(-MOUSE_RATE * dt);
-        mouse.currentX += (mouse.targetX - mouse.currentX) * k;
-        mouse.currentY += (mouse.targetY - mouse.currentY) * k;
-      } else {
-        mouse.currentX = 0;
-        mouse.currentY = 0;
-      }
-      (u.uMouse.value as THREE.Vector2).set(mouse.currentX, mouse.currentY);
-      // Scroll parallax for the near-lens foreground (static under reduced motion).
-      u.uScroll.value = reduced ? 0 : smoothed;
-
-      // Layout: constellation scale is fixed to the reference plane, lateral offset to the live frustum.
-      const aspect = width / height;
-      const halfHCam = halfRefH * camZ;
-      const halfWCam = halfHCam * aspect;
-      for (let k = 0; k < STAGES - 1; k++) scaleScratch[k] = layout.side * STAGE_FIT[k];
-      scaleScratch[STAGES - 1] = layout.shield * STAGE_FIT[STAGES - 1];
-      if (!isMobile) scaleScratch[0] *= HERO_SCALE_WIDE;
-      let offsetX = blend(layout.x) * halfWCam;
-      let offsetY = blend(layout.y) * halfHCam;
-
-      let rotY = 0;
-      let rotX = 0;
-      for (let k = 0; k < STAGES; k++) {
-        if (weights[k] === 0) continue;
-        const [ry, rx] = STAGE_ROT[k](time);
-        rotY += ry * weights[k];
-        rotX += rx * weights[k];
-      }
-
-      if (inHero) {
-        // Phase A glide: the intact gyroscope travels into Economics' territory ahead of the morph.
-        const travel = smoothstep(HERO_LEAD.travel[0], HERO_LEAD.travel[1], heroT);
-        offsetX = lerp(layout.x[0], layout.x[1], travel) * halfWCam;
-        offsetY = lerp(layout.y[0], layout.y[1], travel) * halfHCam;
-        // Lead-in yaw/pitch builds through Phase A and unwinds into the chart's resting pose as the
-        // morph lands. Skipped under reduced motion (no large scroll-driven spin).
-        if (!reduced) {
-          const lead =
-            smoothstep(HERO_LEAD.turnIn[0], HERO_LEAD.turnIn[1], heroT) *
-            (1 - smoothstep(HERO_LEAD.unwind[0], HERO_LEAD.unwind[1], heroT));
-          rotY += HERO_LEAD.yaw * lead;
-          rotX += HERO_LEAD.pitch * lead;
+      /* ---- FPS guard: sustained low frame rate steps the quality tier down (never up) ---- */
+      let fpsGrace = FPS_GRACE;
+      let fpsTime = 0;
+      let fpsFrames = 0;
+      let slowWindows = 0;
+      const resetFps = () => {
+        fpsGrace = FPS_GRACE;
+        fpsTime = 0;
+        fpsFrames = 0;
+        slowWindows = 0;
+      };
+      const applyTier = (next: number) => {
+        tierIndex = Math.min(next, QUALITY_TIERS.length - 1);
+        pixelRatio = tierDpr();
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(width, height, false);
+        rebuildParticles();
+        resetFps();
+      };
+      const sampleFps = (rawDt: number) => {
+        // Reduced motion renders on demand only, and the last tier has nowhere lower to go.
+        if (reduced || tierIndex >= QUALITY_TIERS.length - 1) return;
+        if (rawDt > FPS_HITCH) {
+          resetFps();
+          return;
         }
-      }
-      // Camera: position stays on the scroll-driven base path (sway + dolly), aimed at the origin; the
-      // pointer adds only a gentle damped turn toward the cursor (local yaw, then pitch). mouse.currentY
-      // is NDC y-down, so it is flipped to y-up for the pitch.
-      camera.position.set(Math.sin(smoothed * Math.PI * 2) * 0.5, 0, camZ);
-      camera.lookAt(0, 0, 0);
-      camera.rotateY(-CAM_YAW * mouse.currentX);
-      camera.rotateX(CAM_PITCH * -mouse.currentY);
-      camera.updateMatrixWorld();
-
-      // Cursor: slightly under-damped spring toward the pointer (sub-stepped for stability), then a world ray.
-      const repelOn = finePointer && !reduced && pointerActive;
-      repel += ((repelOn ? 1 : 0) - repel) * (1 - Math.exp(-dt * (repelOn ? 4 : 2.5)));
-      if (repel > 1e-3) {
-        const stiffness = 110;
-        const damping = 2 * Math.sqrt(stiffness) * 0.62;
-        const steps = Math.max(1, Math.ceil(dt * 240));
-        const h = dt / steps;
-        for (let s = 0; s < steps; s++) {
-          cursor.vx += ((pointer.x - cursor.x) * stiffness - cursor.vx * damping) * h;
-          cursor.vy += ((pointer.y - cursor.y) * stiffness - cursor.vy * damping) * h;
-          cursor.x += cursor.vx * h;
-          cursor.y += cursor.vy * h;
+        if (fpsGrace > 0) {
+          fpsGrace -= rawDt;
+          return;
         }
-      } else {
-        cursor.x = pointer.x;
-        cursor.y = pointer.y;
-        cursor.vx = 0;
-        cursor.vy = 0;
+        fpsTime += rawDt;
+        fpsFrames++;
+        if (fpsTime < FPS_WINDOW) return;
+        const fps = fpsFrames / fpsTime;
+        fpsTime = 0;
+        fpsFrames = 0;
+        slowWindows = fps < FPS_MIN ? slowWindows + 1 : 0;
+        if (slowWindows >= FPS_SLOW_WINDOWS) applyTier(tierIndex + 1);
+      };
+
+      // Responsive layout: `layoutTarget` is recomputed on resize; `layout` eases toward it every frame.
+      const halfRefH = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
+      let layoutTarget: Layout | null = null;
+      let layout: Layout | null = null;
+
+      const resize = () => {
+        width = Math.max(1, container.clientWidth || window.innerWidth);
+        height = Math.max(1, container.clientHeight || window.innerHeight);
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+
+        layoutTarget = computeLayout(window.innerWidth, width / height, halfRefH);
+        if (!layout) {
+          layout = { ...layoutTarget, x: [...layoutTarget.x], y: [...layoutTarget.y] }; // first mount: no ease-in
+        }
+
+        const mobile = window.innerWidth < MOBILE_QUERY_PX;
+        if (mobile !== isMobile) {
+          isMobile = mobile;
+          rebuildParticles();
+        }
+        dirty = true;
+      };
+      resize();
+
+      const resizeObserver = new ResizeObserver(resize);
+      resizeObserver.observe(container);
+
+      // Mouse parallax + cursor repulsion — fine pointers only, never on touch.
+      const pointer = { x: 0, y: 0 };
+      // Camera turn + ambient drift: `target*` follows the pointer (reset to 0 when it leaves the
+      // viewport), `current*` eases toward it every frame. NDC in [-1, 1], y down.
+      const mouse = { targetX: 0, targetY: 0, currentX: 0, currentY: 0 };
+      const cursor = { x: 0, y: 0, vx: 0, vy: 0 }; // spring-follower of `pointer` (NDC, y down)
+      let pointerActive = false;
+      let pointerSeen = false;
+      const onPointerMove = (e: PointerEvent) => {
+        if (e.pointerType !== 'mouse') return;
+        pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+        pointer.y = (e.clientY / window.innerHeight) * 2 - 1;
+        mouse.targetX = Math.max(-1, Math.min(1, pointer.x));
+        mouse.targetY = Math.max(-1, Math.min(1, pointer.y));
+        if (!pointerSeen) {
+          cursor.x = pointer.x;
+          cursor.y = pointer.y;
+          pointerSeen = true;
+        }
+        pointerActive = true;
+      };
+      const releasePointer = () => {
+        pointerActive = false;
+        mouse.targetX = 0;
+        mouse.targetY = 0;
+      };
+      const onPointerOut = (e: PointerEvent) => {
+        if (!e.relatedTarget) releasePointer(); // left the window
+      };
+      const onBlur = releasePointer;
+      if (finePointer) {
+        window.addEventListener('pointermove', onPointerMove, { passive: true });
+        window.addEventListener('pointerout', onPointerOut, { passive: true });
+        window.addEventListener('blur', onBlur);
       }
-      rayDir.set(cursor.x, -cursor.y, 0.5).unproject(camera).sub(camera.position).normalize();
-      (u.uRayO.value as THREE.Vector3).copy(camera.position);
-      (u.uRayD.value as THREE.Vector3).copy(rayDir);
-      u.uRepel.value = reduced ? 0 : repel;
 
-      u.uTime.value = time;
-      u.uScale.value = blend(scaleScratch);
-      u.uSizeMul.value = blend(STAGE_TRI_SIZE);
-      (u.uOffset.value as THREE.Vector3).set(offsetX, offsetY, 0);
-      (u.uRot.value as THREE.Vector2).set(rotY, rotX);
-      (u.uAmbHalf.value as THREE.Vector2).set(halfRefH * aspect * 1.08, halfRefH * 1.08);
-      // Shield: dim behind the architecture copy, a touch brighter (but below its old peak) at the CTA.
-      const shieldB = 0.32 + 0.14 * smootherstep(clamp01((smoothed - 0.74) / 0.14));
-      const table = isMobile ? STAGE_BRIGHTNESS_MOBILE : STAGE_BRIGHTNESS_DESKTOP;
-      for (let k = 0; k < STAGES; k++) brightnessScratch[k] = table[k];
-      brightnessScratch[STAGES - 1] = isMobile ? shieldB * 0.8 : shieldB;
-      u.uBrightness.value = blend(brightnessScratch) * layout.alpha;
+      const onReducedChange = (e: MediaQueryListEvent) => {
+        reduced = e.matches;
+        dirty = true;
+      };
+      reducedQuery.addEventListener('change', onReducedChange);
 
-      renderer.render(scene, camera);
-    };
-    startLoop();
+      // Pause the loop entirely while the tab is hidden or the GL context is gone (battery); resume
+      // with a fresh clock so the first frame back doesn't see a huge dt or trip the FPS guard.
+      let contextLost = false;
+      const stopLoop = () => {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      };
+      const startLoop = () => {
+        if (raf || contextLost || document.hidden) return;
+        last = performance.now();
+        resetFps();
+        dirty = true;
+        raf = requestAnimationFrame(frame);
+      };
+      const onVisibility = () => (document.hidden ? stopLoop() : startLoop());
+      document.addEventListener('visibilitychange', onVisibility);
+
+      const onContextLost = (e: Event) => {
+        e.preventDefault();
+        contextLost = true;
+        stopLoop();
+      };
+      const onContextRestored = () => {
+        contextLost = false;
+        startLoop();
+      };
+      canvas.addEventListener('webglcontextlost', onContextLost);
+      canvas.addEventListener('webglcontextrestored', onContextRestored);
+
+      /* ---- per-frame state ---- */
+      const ringRot = new THREE.Matrix4();
+      const tiltX = new THREE.Matrix4();
+      const spinM = new THREE.Matrix4();
+      const brightnessScratch: number[] = new Array<number>(STAGES).fill(1);
+      const scaleScratch: number[] = new Array<number>(STAGES).fill(1);
+      const rayDir = new THREE.Vector3();
+      let repel = 0;
+      let smoothed = clamp01(progressRef.current);
+      let lastRendered = -1;
+      let elapsed = 0;
+      let last = performance.now();
+      let raf = 0;
+
+      const frame = (now: number) => {
+        raf = requestAnimationFrame(frame);
+        const rawDt = Math.max(0, (now - last) / 1000);
+        // Lowest tier: render at ~30 fps (4 ms slack so a 60 Hz display reliably hits every 2nd vsync).
+        const fpsCap = QUALITY_TIERS[tierIndex].fpsCap;
+        if (fpsCap > 0 && rawDt < 1 / fpsCap - 0.004) return; // `last` kept: dt accumulates
+        last = now;
+        const dt = Math.min(rawDt, 0.1);
+        sampleFps(rawDt);
+
+        const target = clamp01(progressRef.current);
+        smoothed = reduced ? target : smoothed + (target - smoothed) * (1 - Math.exp(-dt * 5));
+        if (Math.abs(target - smoothed) < 1e-5) smoothed = target;
+
+        // Ease the responsive layout toward its target (snaps under reduced motion).
+        if (!layout || !layoutTarget) return;
+        {
+          const lt = layoutTarget;
+          const lc = layout;
+          const k = reduced ? 1 : 1 - Math.exp(-dt * LAYOUT_EASE);
+          let delta = 0;
+          const step = (cur: number, tgt: number): number => {
+            const next = cur + (tgt - cur) * k;
+            delta = Math.max(delta, Math.abs(tgt - next));
+            return Math.abs(tgt - next) < 1e-4 ? tgt : next;
+          };
+          lc.side = step(lc.side, lt.side);
+          lc.shield = step(lc.shield, lt.shield);
+          lc.alpha = step(lc.alpha, lt.alpha);
+          for (let s = 0; s < STAGES; s++) {
+            lc.x[s] = step(lc.x[s], lt.x[s]);
+            lc.y[s] = step(lc.y[s], lt.y[s]);
+          }
+          if (delta >= 1e-4) dirty = true;
+        }
+
+        if (reduced) {
+          if (!dirty && Math.abs(smoothed - lastRendered) < 1e-5) return;
+        } else {
+          elapsed += dt;
+        }
+        dirty = false;
+        lastRendered = smoothed;
+
+        const { material } = particles;
+        const u = material.uniforms;
+        const time = reduced ? 0 : elapsed;
+
+        // Gyroscope: each ring counter-rotates about its own tilted axis; the core spins the other way.
+        const ringMats = u.uRingM.value as THREE.Matrix3[];
+        GYRO_RINGS.forEach((ring, k) => {
+          ringRot
+            .makeRotationZ(ring.tiltZ)
+            .multiply(tiltX.makeRotationX(ring.tiltX))
+            .multiply(spinM.makeRotationY(ring.spin * time));
+          ringMats[k].setFromMatrix4(ringRot);
+        });
+        ringRot.makeRotationY(GYRO_CORE_SPIN * time).multiply(tiltX.makeRotationX(0.4 * GYRO_CORE_SPIN * time + 0.3));
+        (u.uCoreM.value as THREE.Matrix3).setFromMatrix4(ringRot);
+
+        // Stage blend weights.
+        // Hero → Economics runs its own two-phase choreography off the linear segment progress `heroT`:
+        // the morph is delayed (Phase B) while yaw + travel lead (Phase A). Other stages keep sampleKeys.
+        const heroT = clamp01((smoothed - STAGE_KEYS[1][0]) / (STAGE_KEYS[2][0] - STAGE_KEYS[1][0]));
+        const inHero = heroT > 0 && heroT < 1;
+        const stage = inHero ? smoothstep(HERO_LEAD.morph[0], HERO_LEAD.morph[1], heroT) : sampleKeys(STAGE_KEYS, smoothed);
+        const i0 = Math.min(Math.floor(stage), STAGES - 1);
+        const f = i0 >= STAGES - 1 ? 0 : stage - i0;
+        const weights = u.uW.value as number[];
+        for (let k = 0; k < STAGES; k++) weights[k] = 0;
+        weights[i0] = 1 - f;
+        if (f > 0) weights[i0 + 1] = f;
+        u.uEnergy.value = reduced ? 0 : Math.sin(Math.PI * f); // sinusoidal bell, peaks mid-transition
+
+        const blend = (values: number[]): number => {
+          let v = 0;
+          for (let k = 0; k < STAGES; k++) v += values[k] * weights[k];
+          return v;
+        };
+
+        // Camera path + damped mouse parallax (desktop only).
+        const camZ = sampleKeys(CAM_Z_KEYS, smoothed);
+        // Frame-rate-independent exponential follow (identical feel at 60 Hz and 120 Hz).
+        if (finePointer && !reduced) {
+          const k = 1 - Math.exp(-MOUSE_RATE * dt);
+          mouse.currentX += (mouse.targetX - mouse.currentX) * k;
+          mouse.currentY += (mouse.targetY - mouse.currentY) * k;
+        } else {
+          mouse.currentX = 0;
+          mouse.currentY = 0;
+        }
+        (u.uMouse.value as THREE.Vector2).set(mouse.currentX, mouse.currentY);
+        // Scroll parallax for the near-lens foreground (static under reduced motion).
+        u.uScroll.value = reduced ? 0 : smoothed;
+
+        // Layout: constellation scale is fixed to the reference plane, lateral offset to the live frustum.
+        const aspect = width / height;
+        const halfHCam = halfRefH * camZ;
+        const halfWCam = halfHCam * aspect;
+        for (let k = 0; k < STAGES - 1; k++) scaleScratch[k] = layout.side * STAGE_FIT[k];
+        scaleScratch[STAGES - 1] = layout.shield * STAGE_FIT[STAGES - 1];
+        if (!isMobile) scaleScratch[0] *= HERO_SCALE_WIDE;
+        let offsetX = blend(layout.x) * halfWCam;
+        let offsetY = blend(layout.y) * halfHCam;
+
+        let rotY = 0;
+        let rotX = 0;
+        for (let k = 0; k < STAGES; k++) {
+          if (weights[k] === 0) continue;
+          const [ry, rx] = STAGE_ROT[k](time);
+          rotY += ry * weights[k];
+          rotX += rx * weights[k];
+        }
+
+        if (inHero) {
+          // Phase A glide: the intact gyroscope travels into Economics' territory ahead of the morph.
+          const travel = smoothstep(HERO_LEAD.travel[0], HERO_LEAD.travel[1], heroT);
+          offsetX = lerp(layout.x[0], layout.x[1], travel) * halfWCam;
+          offsetY = lerp(layout.y[0], layout.y[1], travel) * halfHCam;
+          // Lead-in yaw/pitch builds through Phase A and unwinds into the chart's resting pose as the
+          // morph lands. Skipped under reduced motion (no large scroll-driven spin).
+          if (!reduced) {
+            const lead =
+              smoothstep(HERO_LEAD.turnIn[0], HERO_LEAD.turnIn[1], heroT) *
+              (1 - smoothstep(HERO_LEAD.unwind[0], HERO_LEAD.unwind[1], heroT));
+            rotY += HERO_LEAD.yaw * lead;
+            rotX += HERO_LEAD.pitch * lead;
+          }
+        }
+        // Camera: position stays on the scroll-driven base path (sway + dolly), aimed at the origin; the
+        // pointer adds only a gentle damped turn toward the cursor (local yaw, then pitch). mouse.currentY
+        // is NDC y-down, so it is flipped to y-up for the pitch.
+        camera.position.set(Math.sin(smoothed * Math.PI * 2) * 0.5, 0, camZ);
+        camera.lookAt(0, 0, 0);
+        camera.rotateY(-CAM_YAW * mouse.currentX);
+        camera.rotateX(CAM_PITCH * -mouse.currentY);
+        camera.updateMatrixWorld();
+
+        // Cursor: slightly under-damped spring toward the pointer (sub-stepped for stability), then a world ray.
+        const repelOn = finePointer && !reduced && pointerActive;
+        repel += ((repelOn ? 1 : 0) - repel) * (1 - Math.exp(-dt * (repelOn ? 4 : 2.5)));
+        if (repel > 1e-3) {
+          const stiffness = 110;
+          const damping = 2 * Math.sqrt(stiffness) * 0.62;
+          const steps = Math.max(1, Math.ceil(dt * 240));
+          const h = dt / steps;
+          for (let s = 0; s < steps; s++) {
+            cursor.vx += ((pointer.x - cursor.x) * stiffness - cursor.vx * damping) * h;
+            cursor.vy += ((pointer.y - cursor.y) * stiffness - cursor.vy * damping) * h;
+            cursor.x += cursor.vx * h;
+            cursor.y += cursor.vy * h;
+          }
+        } else {
+          cursor.x = pointer.x;
+          cursor.y = pointer.y;
+          cursor.vx = 0;
+          cursor.vy = 0;
+        }
+        rayDir.set(cursor.x, -cursor.y, 0.5).unproject(camera).sub(camera.position).normalize();
+        (u.uRayO.value as THREE.Vector3).copy(camera.position);
+        (u.uRayD.value as THREE.Vector3).copy(rayDir);
+        u.uRepel.value = reduced ? 0 : repel;
+
+        u.uTime.value = time;
+        u.uScale.value = blend(scaleScratch);
+        u.uSizeMul.value = blend(STAGE_TRI_SIZE);
+        (u.uOffset.value as THREE.Vector3).set(offsetX, offsetY, 0);
+        (u.uRot.value as THREE.Vector2).set(rotY, rotX);
+        (u.uAmbHalf.value as THREE.Vector2).set(halfRefH * aspect * 1.08, halfRefH * 1.08);
+        // Shield: dim behind the architecture copy, a touch brighter (but below its old peak) at the CTA.
+        const shieldB = 0.32 + 0.14 * smootherstep(clamp01((smoothed - 0.74) / 0.14));
+        const table = isMobile ? STAGE_BRIGHTNESS_MOBILE : STAGE_BRIGHTNESS_DESKTOP;
+        for (let k = 0; k < STAGES; k++) brightnessScratch[k] = table[k];
+        brightnessScratch[STAGES - 1] = isMobile ? shieldB * 0.8 : shieldB;
+        u.uBrightness.value = blend(brightnessScratch) * layout.alpha;
+
+        renderer.render(scene, camera);
+        if (!shown) {
+          shown = true;
+          container.classList.add('is-ready'); // first real frame is on screen → fade in
+        }
+      };
+      startLoop();
+
+      return () => {
+        stopLoop();
+        document.removeEventListener('visibilitychange', onVisibility);
+        resizeObserver.disconnect();
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerout', onPointerOut);
+        window.removeEventListener('blur', onBlur);
+        reducedQuery.removeEventListener('change', onReducedChange);
+        canvas.removeEventListener('webglcontextlost', onContextLost);
+        canvas.removeEventListener('webglcontextrestored', onContextRestored);
+
+        scene.remove(particles.points);
+        particles.geometry.dispose();
+        particles.material.dispose();
+        renderer.dispose();
+        renderer.forceContextLoss();
+        if (canvas.parentNode === container) container.removeChild(canvas);
+        container.classList.remove('is-ready');
+      };
+    }
 
     return () => {
-      stopLoop();
-      document.removeEventListener('visibilitychange', onVisibility);
-      resizeObserver.disconnect();
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerout', onPointerOut);
-      window.removeEventListener('blur', onBlur);
-      reducedQuery.removeEventListener('change', onReducedChange);
-      canvas.removeEventListener('webglcontextlost', onContextLost);
-      canvas.removeEventListener('webglcontextrestored', onContextRestored);
-
-      scene.remove(particles.points);
-      particles.geometry.dispose();
-      particles.material.dispose();
-      renderer.dispose();
-      renderer.forceContextLoss();
-      if (canvas.parentNode === container) container.removeChild(canvas);
+      disposed = true;
+      if (bootRaf) cancelAnimationFrame(bootRaf);
+      if (idleId) window.cancelIdleCallback(idleId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+      teardown?.();
     };
   }, [progressRef]);
 
@@ -1924,7 +1973,8 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
       aria-hidden="true"
       // Sized to the *large* viewport (lvh, h-screen fallback) so mobile URL-bar show/hide never
       // resizes the canvas mid-scroll (no backing-store reallocation or layout jump per swipe).
-      className="fixed inset-x-0 top-0 z-0 h-screen pointer-events-none bg-transparent"
+      // `lp-canvas` starts transparent and fades in on the first rendered frame (landing.css).
+      className="lp-canvas fixed inset-x-0 top-0 z-0 h-screen pointer-events-none bg-transparent"
       style={{ height: '100lvh' }}
     />
   );
