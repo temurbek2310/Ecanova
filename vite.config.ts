@@ -48,7 +48,8 @@ export default defineConfig(() => {
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api\//],
+          // /auth/callback is served by the API function (OAuth code exchange), never the SPA shell.
+          navigateFallbackDenylist: [/^\/api\//, /^\/auth\/callback/],
           runtimeCaching: [
             // Keep private learner & admin endpoints strictly NetworkOnly to prevent shared-device cache leaks
             {
