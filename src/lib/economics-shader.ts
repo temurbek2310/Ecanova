@@ -194,14 +194,15 @@ void main() {
   float aspect = uResolution.x / max(uResolution.y, 1.0);
   // Subtle UV drift mapped from global scrollY for topographical scrubbing
   float scrollPhase = uScrollY * 0.00045;
-  vec2 st = (vUv - 0.5) * vec2(aspect, 1.0) + vec2(0.0, -scrollPhase * 0.35);
+  vec2 st = (vUv - 0.5) * vec2(aspect, 1.0) + vec2(0.0, scrollPhase * 0.35);
 
   // Slow passive flow accelerated smoothly by scroll velocity
-  float t = uTime * 0.14 + scrollPhase * 0.65;
+  float t = uTime * 0.14 - scrollPhase * 0.65;
   float velocityWarp = clamp(uScrollVelocity, 0.0, 1.8);
 
   // Subtle pointer current distortion
-  vec2 pointerOffset = (uPointer - 0.5) * vec2(aspect, 1.0);
+  // Inverted: the current is centred on the mirrored point and pushes the field away
+  vec2 pointerOffset = -(uPointer - 0.5) * vec2(aspect, 1.0);
   float pointerInfluence = exp(-length(st - pointerOffset) * 2.4) * 0.18;
 
   // Domain-warped 2D Simplex Noise fluid layers
@@ -212,8 +213,8 @@ void main() {
 
   float warpGain = 1.35 + velocityWarp * 0.42;
   vec2 r = vec2(
-    snoise(st * 2.15 + warpGain * q + vec2(1.7, 9.2) + t * 0.4 + pointerInfluence),
-    snoise(st * 2.15 + warpGain * q + vec2(8.3, 2.8) - t * 0.35 - pointerInfluence)
+    snoise(st * 2.15 + warpGain * q + vec2(1.7, 9.2) + t * 0.4 - pointerInfluence),
+    snoise(st * 2.15 + warpGain * q + vec2(8.3, 2.8) - t * 0.35 + pointerInfluence)
   );
 
   float liquidField = snoise(st * 1.85 + (1.25 + velocityWarp * 0.25) * r);

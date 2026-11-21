@@ -110,7 +110,8 @@ export function subscribeGlobalScroll(
 
 /**
  * Maps `window.scrollY` smoothly into Three.js PerspectiveCamera Z-position (`[minZ, baseZ]`).
- * Scrolling down subtly brings the camera closer to the Reactive Data Topography plane.
+ * Inverted: scrolling down subtly pulls the camera AWAY from the Reactive Data Topography plane
+ * (baseZ -> baseZ + (baseZ - minZ)); the 14x14 plane keeps the view fully covered.
  */
 export function computeWebGLCameraZ(params: {
   scrollY: number;
@@ -125,7 +126,7 @@ export function computeWebGLCameraZ(params: {
   const normalized = Math.max(0, Math.min(1, safeY / safeMax));
 
   const eased = 1 - Math.pow(1 - normalized, 1.35);
-  const z = baseZ - (baseZ - minZ) * eased;
+  const z = baseZ + (baseZ - minZ) * eased;
   return Number(z.toFixed(4));
 }
 
@@ -213,7 +214,7 @@ export interface ViscousBackgroundScrollState {
 
 /**
  * Maps viewport pointer coordinates to normalized [-1, 1] space and returns an
- * opposite-direction micro-parallax offset within [-maxOffsetPx, maxOffsetPx].
+ * same-direction micro-parallax offset within [-maxOffsetPx, maxOffsetPx].
  */
 export function computeBackgroundParallaxOffset(params: {
   clientX: number;
@@ -231,9 +232,9 @@ export function computeBackgroundParallaxOffset(params: {
   const normalizedX = Math.max(-1, Math.min(1, (rawX / w) * 2 - 1));
   const normalizedY = Math.max(-1, Math.min(1, (rawY / h) * 2 - 1));
 
-  // Move opposite to cursor for deep-space micro-parallax
-  const x = Number((-normalizedX * maxOffset).toFixed(2));
-  const y = Number((-normalizedY * maxOffset).toFixed(2));
+  // Inverted: the layer now drifts WITH the cursor (was opposite to it)
+  const x = Number((normalizedX * maxOffset).toFixed(2));
+  const y = Number((normalizedY * maxOffset).toFixed(2));
 
   return {
     x: Object.is(x, -0) ? 0 : x,

@@ -15,16 +15,17 @@ import {
 } from './scroll-sync';
 import type { CourseCatalogItem } from '../shared/types';
 
-test('computeWebGLCameraZ maps scrollY monotonically from baseZ down to minZ', () => {
+test('computeWebGLCameraZ maps scrollY monotonically from baseZ outward (inverted depth)', () => {
   const topZ = computeWebGLCameraZ({ scrollY: 0, maxScroll: 2000 });
   const midZ = computeWebGLCameraZ({ scrollY: 1000, maxScroll: 2000 });
   const bottomZ = computeWebGLCameraZ({ scrollY: 2000, maxScroll: 2000 });
   const clampedOverZ = computeWebGLCameraZ({ scrollY: 9999, maxScroll: 2000 });
 
   assert.equal(topZ, DEFAULT_WEBGL_BASE_Z);
-  assert.ok(midZ < topZ && midZ > bottomZ, 'midpoint camera Z should interpolate cleanly');
-  assert.equal(bottomZ, DEFAULT_WEBGL_MIN_Z);
-  assert.equal(clampedOverZ, DEFAULT_WEBGL_MIN_Z);
+  assert.ok(midZ > topZ && midZ < bottomZ, 'midpoint camera Z should interpolate cleanly');
+  const farZ = Number((DEFAULT_WEBGL_BASE_Z + (DEFAULT_WEBGL_BASE_Z - DEFAULT_WEBGL_MIN_Z)).toFixed(4));
+  assert.equal(bottomZ, farZ);
+  assert.equal(clampedOverZ, farZ);
 });
 
 test('computeScrollDistortionBoost stays passive at rest and scales with fast scroll velocity', () => {
@@ -57,7 +58,7 @@ test('stepWebGLScrollState accelerates on fast scroll and interpolates back to p
     );
   }
 
-  assert.ok(state.cameraZ < DEFAULT_WEBGL_BASE_Z, 'camera Z should move forward on scroll');
+  assert.ok(state.cameraZ > DEFAULT_WEBGL_BASE_Z, 'camera Z should move backward on scroll (inverted depth)');
   assert.ok(state.scrollBoost > 0.5, 'fast scrolling should boost fluid distortion');
   assert.ok(state.timeSpeedMultiplier > 2.0, 'fast scrolling should accelerate shader time');
   const activeTimeAfterBurst = state.accumulatedTime;
@@ -156,7 +157,7 @@ test('buildShowcaseCardItems generates 6 horizontal showcase cards from 3 course
   assert.equal(cards[3]?.title, 'Elasticity');
 });
 
-test('computeBackgroundParallaxOffset maps pointer [-1,1] to opposite ±25px range cleanly', () => {
+test('computeBackgroundParallaxOffset maps pointer [-1,1] to same-direction ±25px range cleanly', () => {
   const topLeft = computeBackgroundParallaxOffset({
     clientX: 0,
     clientY: 0,
@@ -166,8 +167,8 @@ test('computeBackgroundParallaxOffset maps pointer [-1,1] to opposite ±25px ran
   });
   assert.equal(topLeft.normalizedX, -1);
   assert.equal(topLeft.normalizedY, -1);
-  assert.equal(topLeft.x, 25);
-  assert.equal(topLeft.y, 25);
+  assert.equal(topLeft.x, -25);
+  assert.equal(topLeft.y, -25);
 
   const center = computeBackgroundParallaxOffset({
     clientX: 720,
@@ -186,8 +187,8 @@ test('computeBackgroundParallaxOffset maps pointer [-1,1] to opposite ±25px ran
     viewportHeight: 900,
     maxOffsetPx: 25,
   });
-  assert.equal(bottomRightClamped.x, -25);
-  assert.equal(bottomRightClamped.y, -25);
+  assert.equal(bottomRightClamped.x, 25);
+  assert.equal(bottomRightClamped.y, 25);
 });
 
 test('stepViscousBackgroundScroll damps scroll jumps heavily without velocity spikes', () => {

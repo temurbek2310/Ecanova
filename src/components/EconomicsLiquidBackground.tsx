@@ -59,7 +59,7 @@ export const GLACIAL_AMBIENT_DURATION_SEC = 24;
  * - Scroll reactivity is driven exclusively by GSAP `ScrollTrigger` (`scrub: 1.6`)
  *   and heavy viscous lerp damping (`stepViscousBackgroundScroll`), eliminating scroll jitter.
  * - Shader `uTime` runs at 0.2x (80% slower) alongside a 24-second `sine.inOut` GSAP glacial drift.
- * - Desktop (`min-width: 769px`) applies opposite-direction mouse micro-parallax (`±25px`)
+ * - Desktop (`min-width: 769px`) applies same-direction (inverted from the old counter-parallax) mouse micro-parallax (`±25px`)
  *   via `gsap.quickTo()` + `matchMedia`, automatically disabled on mobile (`max-width: 768px`).
  */
 export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps> = ({
