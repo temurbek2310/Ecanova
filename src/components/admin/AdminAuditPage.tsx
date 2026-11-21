@@ -45,8 +45,6 @@ export const AdminAuditPage: React.FC<AdminAuditPageProps> = ({ locale }) => {
     void load();
   }, [load]);
 
-  const selectClass = 'rounded-lg border border-line bg-chrome px-2 py-1.5 text-xs text-ink';
-
   return (
     <AdminPanel
       title={copy.audit.title}
@@ -65,11 +63,11 @@ export const AdminAuditPage: React.FC<AdminAuditPageProps> = ({ locale }) => {
           e.preventDefault();
           setAppliedQuery(query.trim());
         }}
-        className="flex flex-wrap items-end gap-2"
+        className="flex flex-wrap items-end gap-3"
       >
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1 text-[13px] text-muted">
           {copy.audit.actionFilter}
-          <select value={action} onChange={(e) => setAction(e.target.value)} className={selectClass}>
+          <select value={action} onChange={(e) => setAction(e.target.value)} className="admin-select">
             <option value="">{copy.all}</option>
             {(data?.actions ?? []).map((value) => (
               <option key={value} value={value}>
@@ -78,9 +76,9 @@ export const AdminAuditPage: React.FC<AdminAuditPageProps> = ({ locale }) => {
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted">
+        <label className="flex flex-col gap-1 text-[13px] text-muted">
           {copy.audit.targetFilter}
-          <select value={targetType} onChange={(e) => setTargetType(e.target.value)} className={selectClass}>
+          <select value={targetType} onChange={(e) => setTargetType(e.target.value)} className="admin-select">
             <option value="">{copy.all}</option>
             {(data?.targetTypes ?? []).map((value) => (
               <option key={value} value={value}>
@@ -98,7 +96,7 @@ export const AdminAuditPage: React.FC<AdminAuditPageProps> = ({ locale }) => {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={copy.audit.searchPlaceholder}
-          className={`${adminInputClass} mt-0 max-w-xs flex-1`}
+          className="admin-input mt-0 max-w-xs flex-1"
         />
         <button type="submit" className={adminButtonClass}>
           <Search className="h-3.5 w-3.5" aria-hidden="true" />
@@ -106,33 +104,33 @@ export const AdminAuditPage: React.FC<AdminAuditPageProps> = ({ locale }) => {
         </button>
       </form>
 
-      <div className="mt-4">
+      <div className="mt-5">
         {!data || data.events.length === 0 ? (
           <AdminEmpty>{loading ? copy.loading : copy.audit.noEvents}</AdminEmpty>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-xs">
-              <thead className="text-muted">
-                <tr className="border-b border-line">
-                  <th scope="col" className="py-2 pr-3 font-semibold">{copy.audit.columns.when}</th>
-                  <th scope="col" className="py-2 pr-3 font-semibold">{copy.audit.columns.actor}</th>
-                  <th scope="col" className="py-2 pr-3 font-semibold">{copy.audit.columns.action}</th>
-                  <th scope="col" className="py-2 pr-3 font-semibold">{copy.audit.columns.target}</th>
-                  <th scope="col" className="py-2 font-semibold">{copy.audit.columns.reason}</th>
+          <div className="overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6">
+            <table className="admin-table" style={{ minWidth: '720px' }}>
+              <thead>
+                <tr>
+                  <th scope="col">{copy.audit.columns.when}</th>
+                  <th scope="col">{copy.audit.columns.actor}</th>
+                  <th scope="col">{copy.audit.columns.action}</th>
+                  <th scope="col">{copy.audit.columns.target}</th>
+                  <th scope="col">{copy.audit.columns.reason}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.events.map((event) => (
-                  <tr key={event.id} className="border-b border-line/60 align-top">
-                    <td className="py-2 pr-3 whitespace-nowrap text-muted">{formatAdminDate(event.createdAt, locale)}</td>
-                    <td className="py-2 pr-3 text-ink">{event.actorDisplayName ?? event.actorUserId ?? copy.audit.system}</td>
-                    <td className="py-2 pr-3 font-mono text-ink">{event.action}</td>
-                    <td className="py-2 pr-3 font-mono text-[11px] text-muted">
+                  <tr key={event.id}>
+                    <td className="whitespace-nowrap text-muted">{formatAdminDate(event.createdAt, locale)}</td>
+                    <td className="text-ink">{event.actorDisplayName ?? event.actorUserId ?? copy.audit.system}</td>
+                    <td className="font-mono text-ink">{event.action}</td>
+                    <td className="font-mono text-[11px] text-muted">
                       {event.targetType}
                       <br />
                       {event.targetId}
                     </td>
-                    <td className="py-2 text-muted">{event.reason}</td>
+                    <td className="text-muted">{event.reason}</td>
                   </tr>
                 ))}
               </tbody>

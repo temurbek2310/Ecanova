@@ -1693,7 +1693,7 @@ export default function App() {
     <div className="relative isolate min-h-screen overflow-x-clip text-ink flex flex-col md:flex-row">
       {/* Economics WebGL Liquid Background (-z-10, decoupled behind UI shell) */}
       <EconomicsLiquidBackground
-        active={activeTab !== 'admin'}
+        active={true}
         theme={theme}
       />
 

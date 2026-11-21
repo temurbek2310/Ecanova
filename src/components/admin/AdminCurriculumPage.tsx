@@ -20,6 +20,7 @@ import {
   adminInputClass,
   adminPrimaryButtonClass,
 } from './AdminLayout';
+import { OverflowMenu, type OverflowMenuItem } from './OverflowMenu';
 
 export interface AdminCurriculumPageProps {
   locale: LocaleCode;
@@ -174,70 +175,90 @@ export const AdminCurriculumPage: React.FC<AdminCurriculumPageProps> = ({
     }
   };
 
-  const actionsFor = (ed: AdminEdition): Array<{ label: string; request: EditionTransitionRequest; primary?: boolean; title?: string }> => {
-    const approveAll = {
-      label: copy.curriculum.approveAll,
-      request: { nextStatus: 'approved' as const, signoffs: ALL_SIGNOFFS },
-      title: copy.curriculum.approveAllHint,
-    };
-    const backToDraft = { label: copy.curriculum.backToDraft, request: { nextStatus: 'draft' as const } };
+  /** Build primary action + overflow secondary actions for each edition row. */
+  const actionsFor = (ed: AdminEdition): {
+    primary: { label: string; request: EditionTransitionRequest; title?: string } | null;
+    overflow: OverflowMenuItem[];
+  } => {
+    const approveAllReq = { nextStatus: 'approved' as const, signoffs: ALL_SIGNOFFS };
+    const backToDraftReq = { nextStatus: 'draft' as const };
+
     switch (ed.status) {
       case 'draft':
-        return [
-          { label: copy.curriculum.sendToReview, request: { nextStatus: 'subject_review' } },
-          { ...approveAll, primary: true },
-        ];
+        return {
+          primary: { label: copy.curriculum.approveAll, request: approveAllReq, title: copy.curriculum.approveAllHint },
+          overflow: [
+            { label: copy.curriculum.sendToReview, onClick: () => void runTransition(ed, { nextStatus: 'subject_review' }), disabled: busyId === ed.id },
+            { label: copy.curriculum.editDraft, icon: <Pencil className="h-3.5 w-3.5" />, onClick: () => setEditing({ editionId: ed.id, title: ed.title, subtitle: ed.subtitle, description: ed.description }), disabled: busyId === ed.id },
+          ],
+        };
       case 'subject_review':
-        return [
-          { label: copy.curriculum.signSubject, request: { nextStatus: 'language_review', signoffType: 'subject' }, primary: true },
-          approveAll,
-          backToDraft,
-        ];
+        return {
+          primary: { label: copy.curriculum.signSubject, request: { nextStatus: 'language_review', signoffType: 'subject' } },
+          overflow: [
+            { label: copy.curriculum.approveAll, onClick: () => void runTransition(ed, approveAllReq), disabled: busyId === ed.id },
+            { label: copy.curriculum.backToDraft, onClick: () => void runTransition(ed, backToDraftReq), disabled: busyId === ed.id },
+          ],
+        };
       case 'language_review':
-        return [
-          { label: copy.curriculum.signLanguage, request: { nextStatus: 'rights_accessibility_review', signoffType: 'language' }, primary: true },
-          approveAll,
-          backToDraft,
-        ];
+        return {
+          primary: { label: copy.curriculum.signLanguage, request: { nextStatus: 'rights_accessibility_review', signoffType: 'language' } },
+          overflow: [
+            { label: copy.curriculum.approveAll, onClick: () => void runTransition(ed, approveAllReq), disabled: busyId === ed.id },
+            { label: copy.curriculum.backToDraft, onClick: () => void runTransition(ed, backToDraftReq), disabled: busyId === ed.id },
+          ],
+        };
       case 'rights_accessibility_review':
-        return [
-          { label: copy.curriculum.signRights, request: { nextStatus: 'approved', signoffType: 'rights' }, primary: true },
-          backToDraft,
-        ];
+        return {
+          primary: { label: copy.curriculum.signRights, request: { nextStatus: 'approved', signoffType: 'rights' } },
+          overflow: [
+            { label: copy.curriculum.backToDraft, onClick: () => void runTransition(ed, backToDraftReq), disabled: busyId === ed.id },
+          ],
+        };
       case 'approved':
-        return [{ label: copy.curriculum.publish, request: { nextStatus: 'published' }, primary: true }, backToDraft];
+        return {
+          primary: { label: copy.curriculum.publish, request: { nextStatus: 'published' } },
+          overflow: [
+            { label: copy.curriculum.backToDraft, onClick: () => void runTransition(ed, backToDraftReq), disabled: busyId === ed.id },
+          ],
+        };
       case 'published':
-        return [{ label: copy.curriculum.retire, request: { nextStatus: 'retired' } }];
+        return {
+          primary: { label: copy.curriculum.retire, request: { nextStatus: 'retired' } },
+          overflow: [],
+        };
       case 'retired':
-        return [
-          { label: copy.curriculum.restoreApproved, request: { nextStatus: 'approved' }, primary: true },
-          backToDraft,
-        ];
+        return {
+          primary: { label: copy.curriculum.restoreApproved, request: { nextStatus: 'approved' } },
+          overflow: [
+            { label: copy.curriculum.backToDraft, onClick: () => void runTransition(ed, backToDraftReq), disabled: busyId === ed.id },
+          ],
+        };
       default:
-        return [];
+        return { primary: null, overflow: [] };
     }
   };
 
   const signoffBadge = (label: string, signed: boolean) => (
-    <span className={signed ? 'text-success' : 'text-muted'}>
+    <span className={`admin-badge ${signed ? '!text-success' : ''}`}>
       {label}: {signed ? copy.curriculum.signed : copy.curriculum.pending}
     </span>
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <AdminPanel
         title={copy.curriculum.title}
         subtitle={copy.curriculum.subtitle}
         testId="admin-curriculum-editions"
         actions={
           <>
-            <label className="flex items-center gap-2 text-xs text-muted">
+            <label className="flex items-center gap-2 text-[13px] text-muted">
               {copy.curriculum.filterStatus}
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as EditorialStatus | 'all')}
-                className="rounded-lg border border-line bg-chrome px-2 py-1.5 text-xs text-ink"
+                className="admin-select"
               >
                 {STATUS_FILTERS.map((status) => (
                   <option key={status} value={status}>
@@ -257,130 +278,118 @@ export const AdminCurriculumPage: React.FC<AdminCurriculumPageProps> = ({
           <AdminEmpty>{loading ? copy.loading : copy.curriculum.noEditions}</AdminEmpty>
         ) : (
           <ul className="space-y-3">
-            {visible.map((ed) => (
-              <li key={ed.id} className="rounded-lg border border-line bg-chrome p-4" data-edition-status={ed.status}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-xs text-muted">
-                      {ed.subject} · {ed.level} · {ed.locale.toUpperCase()} v{ed.version} ·{' '}
-                      <span className="font-semibold text-teal">{statusLabel(ed.status)}</span> ·{' '}
-                      {formatAdminDate(ed.updatedAt, locale)}
+            {visible.map((ed) => {
+              const { primary, overflow } = actionsFor(ed);
+              return (
+                <li key={ed.id} className="admin-card p-5" data-edition-status={ed.status}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted">
+                        <span>{ed.subject} · {ed.level} · {ed.locale.toUpperCase()} v{ed.version}</span>
+                        <span className="admin-badge !text-teal">{statusLabel(ed.status)}</span>
+                        <span>{formatAdminDate(ed.updatedAt, locale)}</span>
+                      </div>
+                      <h3 className="mt-2 text-[14px] font-semibold text-ink">{ed.title}</h3>
+                      {ed.subtitle ? <p className="mt-0.5 text-[13px] text-muted">{ed.subtitle}</p> : null}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <span className={`admin-badge ${ed.provenance ? '!text-success' : '!text-danger-text'}`}>
+                          {copy.curriculum.provenance}: {ed.provenance ? copy.curriculum.verified : copy.curriculum.missing}
+                        </span>
+                        {signoffBadge(copy.curriculum.subjectReview, Boolean(ed.subjectReviewerId))}
+                        {signoffBadge(copy.curriculum.languageReview, Boolean(ed.languageReviewerId))}
+                        {signoffBadge(copy.curriculum.rightsReview, Boolean(ed.rightsReviewerId))}
+                      </div>
                     </div>
-                    <h3 className="mt-1 text-sm font-semibold text-ink">{ed.title}</h3>
-                    {ed.subtitle ? <p className="mt-0.5 text-xs text-muted">{ed.subtitle}</p> : null}
-                    <div className="mt-1.5 flex flex-wrap gap-3 text-[11px]">
-                      <span className={ed.provenance ? 'text-success' : 'text-danger-text'}>
-                        {copy.curriculum.provenance}: {ed.provenance ? copy.curriculum.verified : copy.curriculum.missing}
-                      </span>
-                      {signoffBadge(copy.curriculum.subjectReview, Boolean(ed.subjectReviewerId))}
-                      {signoffBadge(copy.curriculum.languageReview, Boolean(ed.languageReviewerId))}
-                      {signoffBadge(copy.curriculum.rightsReview, Boolean(ed.rightsReviewerId))}
+
+                    <div className="flex items-center gap-2">
+                      {primary && (
+                        <button
+                          type="button"
+                          title={primary.title}
+                          disabled={busyId === ed.id}
+                          onClick={() => void runTransition(ed, primary.request)}
+                          className={adminPrimaryButtonClass}
+                        >
+                          {primary.label}
+                        </button>
+                      )}
+                      <OverflowMenu
+                        items={overflow}
+                        testId={`edition-overflow-${ed.id}`}
+                      />
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    {ed.status === 'draft' && (
-                      <button
-                        type="button"
-                        disabled={busyId === ed.id}
-                        onClick={() =>
-                          setEditing({
-                            editionId: ed.id,
-                            title: ed.title,
-                            subtitle: ed.subtitle,
-                            description: ed.description,
-                          })
-                        }
-                        className={adminButtonClass}
-                      >
-                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                        {copy.curriculum.editDraft}
-                      </button>
-                    )}
-                    {actionsFor(ed).map((action) => (
-                      <button
-                        key={action.label}
-                        type="button"
-                        title={action.title}
-                        disabled={busyId === ed.id}
-                        onClick={() => void runTransition(ed, action.request)}
-                        className={action.primary ? adminPrimaryButtonClass : adminButtonClass}
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {editing?.editionId === ed.id && (
-                  <form onSubmit={saveDraftEdit} className="mt-4 space-y-3 border-t border-line pt-4">
-                    <h4 className="text-xs font-semibold text-ink">{copy.curriculum.editDraftTitle}</h4>
-                    <div>
-                      <label htmlFor={`edit-title-${ed.id}`} className="block text-xs text-muted">
-                        {copy.curriculum.titleLabel}
-                      </label>
-                      <input
-                        id={`edit-title-${ed.id}`}
-                        required
-                        minLength={3}
-                        maxLength={200}
-                        value={editing.title}
-                        onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                        className={adminInputClass}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor={`edit-subtitle-${ed.id}`} className="block text-xs text-muted">
-                        {copy.curriculum.subtitleLabel}
-                      </label>
-                      <input
-                        id={`edit-subtitle-${ed.id}`}
-                        maxLength={300}
-                        value={editing.subtitle}
-                        onChange={(e) => setEditing({ ...editing, subtitle: e.target.value })}
-                        className={adminInputClass}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor={`edit-description-${ed.id}`} className="block text-xs text-muted">
-                        {copy.curriculum.descriptionLabel}
-                      </label>
-                      <textarea
-                        id={`edit-description-${ed.id}`}
-                        rows={4}
-                        maxLength={4000}
-                        value={editing.description}
-                        onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                        className={adminInputClass}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button type="submit" disabled={busyId === ed.id} className={adminPrimaryButtonClass}>
-                        {copy.save}
-                      </button>
-                      <button type="button" onClick={() => setEditing(null)} className={adminButtonClass}>
-                        {copy.cancel}
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </li>
-            ))}
+                  {editing?.editionId === ed.id && (
+                    <form onSubmit={saveDraftEdit} className="mt-5 space-y-4 border-t pt-5" style={{ borderColor: 'var(--admin-card-border)' }}>
+                      <h4 className="text-[13px] font-semibold text-ink">{copy.curriculum.editDraftTitle}</h4>
+                      <div>
+                        <label htmlFor={`edit-title-${ed.id}`} className="block text-[13px] text-muted">
+                          {copy.curriculum.titleLabel}
+                        </label>
+                        <input
+                          id={`edit-title-${ed.id}`}
+                          required
+                          minLength={3}
+                          maxLength={200}
+                          value={editing.title}
+                          onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                          className={adminInputClass}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor={`edit-subtitle-${ed.id}`} className="block text-[13px] text-muted">
+                          {copy.curriculum.subtitleLabel}
+                        </label>
+                        <input
+                          id={`edit-subtitle-${ed.id}`}
+                          maxLength={300}
+                          value={editing.subtitle}
+                          onChange={(e) => setEditing({ ...editing, subtitle: e.target.value })}
+                          className={adminInputClass}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor={`edit-description-${ed.id}`} className="block text-[13px] text-muted">
+                          {copy.curriculum.descriptionLabel}
+                        </label>
+                        <textarea
+                          id={`edit-description-${ed.id}`}
+                          rows={4}
+                          maxLength={4000}
+                          value={editing.description}
+                          onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                          className={adminInputClass}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="submit" disabled={busyId === ed.id} className={adminPrimaryButtonClass}>
+                          {copy.save}
+                        </button>
+                        <button type="button" onClick={() => setEditing(null)} className={adminButtonClass}>
+                          {copy.cancel}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </AdminPanel>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <AdminPanel title={copy.curriculum.createTitle}>
-          <form onSubmit={createDraft} className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
+          <form onSubmit={createDraft} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label htmlFor="draft-course" className="block text-xs text-muted">{copy.curriculum.targetCourse}</label>
+                <label htmlFor="draft-course" className="block text-[13px] text-muted">{copy.curriculum.targetCourse}</label>
                 <select
                   id="draft-course"
                   value={courseId}
                   onChange={(e) => setCourseId(e.target.value)}
-                  className={adminInputClass}
+                  className="admin-select mt-1 w-full"
                 >
                   {courses.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -390,20 +399,20 @@ export const AdminCurriculumPage: React.FC<AdminCurriculumPageProps> = ({
                 </select>
               </div>
               <div>
-                <label htmlFor="draft-locale" className="block text-xs text-muted">{copy.curriculum.editionLocale}</label>
+                <label htmlFor="draft-locale" className="block text-[13px] text-muted">{copy.curriculum.editionLocale}</label>
                 <select
                   id="draft-locale"
                   value={draftLocale}
                   onChange={(e) => setDraftLocale(e.target.value as LocaleCode)}
-                  className={adminInputClass}
+                  className="admin-select mt-1 w-full"
                 >
                   <option value="en">English (en)</option>
-                  <option value="uz">O‘zbekcha (uz)</option>
+                  <option value="uz">O'zbekcha (uz)</option>
                 </select>
               </div>
             </div>
             <div>
-              <label htmlFor="draft-title" className="block text-xs text-muted">{copy.curriculum.titleLabel}</label>
+              <label htmlFor="draft-title" className="block text-[13px] text-muted">{copy.curriculum.titleLabel}</label>
               <input
                 id="draft-title"
                 required
@@ -415,7 +424,7 @@ export const AdminCurriculumPage: React.FC<AdminCurriculumPageProps> = ({
               />
             </div>
             <div>
-              <label htmlFor="draft-subtitle" className="block text-xs text-muted">{copy.curriculum.subtitleLabel}</label>
+              <label htmlFor="draft-subtitle" className="block text-[13px] text-muted">{copy.curriculum.subtitleLabel}</label>
               <input
                 id="draft-subtitle"
                 value={subtitle}
@@ -424,7 +433,7 @@ export const AdminCurriculumPage: React.FC<AdminCurriculumPageProps> = ({
               />
             </div>
             <div>
-              <label htmlFor="draft-source" className="block text-xs text-muted">{copy.curriculum.sourceLicense}</label>
+              <label htmlFor="draft-source" className="block text-[13px] text-muted">{copy.curriculum.sourceLicense}</label>
               <input
                 id="draft-source"
                 value={sourceTitle}
@@ -434,7 +443,7 @@ export const AdminCurriculumPage: React.FC<AdminCurriculumPageProps> = ({
               />
             </div>
             <div>
-              <label htmlFor="draft-lesson-title" className="block text-xs text-muted">{copy.curriculum.initialLesson}</label>
+              <label htmlFor="draft-lesson-title" className="block text-[13px] text-muted">{copy.curriculum.initialLesson}</label>
               <input
                 id="draft-lesson-title"
                 value={lessonTitle}
@@ -448,15 +457,15 @@ export const AdminCurriculumPage: React.FC<AdminCurriculumPageProps> = ({
                 value={lessonBody}
                 onChange={(e) => setLessonBody(e.target.value)}
                 placeholder={copy.curriculum.lessonBodyPlaceholder}
-                className={`${adminInputClass} mt-2`}
+                className="admin-input mt-2"
               />
             </div>
-            <label className="flex items-center gap-2 text-xs text-muted">
+            <label className="flex items-center gap-2 text-[13px] text-muted">
               <input
                 type="checkbox"
                 checked={aiAssisted}
                 onChange={(e) => setAiAssisted(e.target.checked)}
-                className="accent-accent"
+                className="admin-checkbox"
               />
               <span>{copy.curriculum.aiAssisted}</span>
             </label>

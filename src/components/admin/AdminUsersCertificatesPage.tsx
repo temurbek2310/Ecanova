@@ -18,6 +18,7 @@ import {
   adminButtonClass,
   adminDangerButtonClass,
   adminInputClass,
+  adminPrimaryButtonClass,
 } from './AdminLayout';
 
 export interface AdminUsersCertificatesPageProps {
@@ -150,7 +151,7 @@ export const AdminUsersCertificatesPage: React.FC<AdminUsersCertificatesPageProp
   });
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <AdminPanel title={copy.users.title} subtitle={copy.users.subtitle} testId="admin-users">
         <form
           onSubmit={(e) => {
@@ -169,7 +170,7 @@ export const AdminUsersCertificatesPage: React.FC<AdminUsersCertificatesPageProp
             value={userQuery}
             onChange={(e) => setUserQuery(e.target.value)}
             placeholder={copy.users.searchPlaceholder}
-            className={`${adminInputClass} mt-0 max-w-sm flex-1`}
+            className="admin-input mt-0 max-w-sm flex-1"
           />
           <button type="submit" className={adminButtonClass}>
             <Search className="h-3.5 w-3.5" aria-hidden="true" />
@@ -177,23 +178,23 @@ export const AdminUsersCertificatesPage: React.FC<AdminUsersCertificatesPageProp
           </button>
         </form>
 
-        <h3 className="mt-5 text-sm font-semibold text-ink">
+        <h3 className="mt-6 admin-section-title">
           {copy.users.usersHeading} ({users.length})
         </h3>
         {users.length === 0 ? (
-          <div className="mt-3">
+          <div className="mt-4">
             <AdminEmpty>{usersLoading ? copy.loading : copy.users.noUsers}</AdminEmpty>
           </div>
         ) : (
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-xs">
-              <thead className="text-muted">
-                <tr className="border-b border-line">
-                  <th scope="col" className="py-2 pr-3 font-semibold">{copy.users.columns.name}</th>
-                  <th scope="col" className="py-2 pr-3 font-semibold">{copy.users.columns.email}</th>
-                  <th scope="col" className="py-2 pr-3 font-semibold">{copy.users.columns.role}</th>
-                  <th scope="col" className="py-2 pr-3 font-semibold">{copy.users.columns.joined}</th>
-                  <th scope="col" className="py-2 font-semibold">{copy.users.columns.actions}</th>
+          <div className="mt-4 overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6">
+            <table className="admin-table" style={{ minWidth: '640px' }}>
+              <thead>
+                <tr>
+                  <th scope="col">{copy.users.columns.name}</th>
+                  <th scope="col">{copy.users.columns.email}</th>
+                  <th scope="col">{copy.users.columns.role}</th>
+                  <th scope="col">{copy.users.columns.joined}</th>
+                  <th scope="col">{copy.users.columns.actions}</th>
                 </tr>
               </thead>
               <tbody>
@@ -202,38 +203,40 @@ export const AdminUsersCertificatesPage: React.FC<AdminUsersCertificatesPageProp
                   const isAdmin = u.role === 'admin';
                   const selfDemotion = isSelf && isAdmin;
                   return (
-                    <tr key={u.id} className="border-b border-line/60" data-user-role={u.role}>
-                      <td className="py-2 pr-3 font-semibold text-ink">
+                    <tr key={u.id} data-user-role={u.role}>
+                      <td className="font-medium text-ink">
                         {u.displayName}
                         {isSelf ? <span className="ml-1 text-[11px] font-normal text-muted">({copy.users.you})</span> : null}
                       </td>
-                      <td className="py-2 pr-3 text-muted">{u.email}</td>
-                      <td className={`py-2 pr-3 font-semibold ${isAdmin ? 'text-teal' : 'text-ink'}`}>
+                      <td className="text-muted">{u.email}</td>
+                      <td className={`font-semibold ${isAdmin ? 'text-teal' : 'text-ink'}`}>
                         {getRoleDisplayLabel(u.role, locale)}
                       </td>
-                      <td className="py-2 pr-3 text-muted">{formatAdminDate(u.createdAt, locale)}</td>
-                      <td className="py-2">
-                        <button
-                          type="button"
-                          disabled={roleBusyId === u.id || selfDemotion}
-                          title={selfDemotion ? copy.users.selfDemotionHint : undefined}
-                          aria-describedby={selfDemotion ? `self-demotion-${u.id}` : undefined}
-                          onClick={() => void changeRole(u, isAdmin ? 'learner' : 'admin')}
-                          className={adminButtonClass}
-                          data-testid={`role-toggle-${u.id}`}
-                        >
-                          {isAdmin ? (
-                            <ShieldOff className="h-3.5 w-3.5" aria-hidden="true" />
-                          ) : (
-                            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                          )}
-                          {isAdmin ? copy.users.makeLearner : copy.users.makeAdmin}
-                        </button>
-                        {selfDemotion ? (
-                          <span id={`self-demotion-${u.id}`} className="sr-only">
-                            {copy.users.selfDemotionHint}
-                          </span>
-                        ) : null}
+                      <td className="text-muted whitespace-nowrap">{formatAdminDate(u.createdAt, locale)}</td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={roleBusyId === u.id || selfDemotion}
+                            title={selfDemotion ? copy.users.selfDemotionHint : undefined}
+                            aria-describedby={selfDemotion ? `self-demotion-${u.id}` : undefined}
+                            onClick={() => void changeRole(u, isAdmin ? 'learner' : 'admin')}
+                            className={adminButtonClass}
+                            data-testid={`role-toggle-${u.id}`}
+                          >
+                            {isAdmin ? (
+                              <ShieldOff className="h-3.5 w-3.5" aria-hidden="true" />
+                            ) : (
+                              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
+                            {isAdmin ? copy.users.makeLearner : copy.users.makeAdmin}
+                          </button>
+                          {selfDemotion ? (
+                            <span id={`self-demotion-${u.id}`} className="sr-only">
+                              {copy.users.selfDemotionHint}
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -262,7 +265,7 @@ export const AdminUsersCertificatesPage: React.FC<AdminUsersCertificatesPageProp
             value={certQuery}
             onChange={(e) => setCertQuery(e.target.value)}
             placeholder={copy.users.certificateSearchPlaceholder}
-            className={`${adminInputClass} mt-0 max-w-sm flex-1`}
+            className="admin-input mt-0 max-w-sm flex-1"
           />
           <button type="submit" className={adminButtonClass}>
             <Search className="h-3.5 w-3.5" aria-hidden="true" />
@@ -270,28 +273,28 @@ export const AdminUsersCertificatesPage: React.FC<AdminUsersCertificatesPageProp
           </button>
         </form>
 
-        <div className="mt-4 space-y-2.5">
+        <div className="mt-5 space-y-3">
           {certificates.length === 0 ? (
             <AdminEmpty>{certsLoading ? copy.loading : copy.users.noCertificates}</AdminEmpty>
           ) : (
             certificates.map((c) => (
-              <article key={c.id} className="rounded-lg border border-line bg-chrome p-3 text-xs">
-                <div className="flex flex-wrap items-start justify-between gap-2">
+              <article key={c.id} className="admin-card p-4 text-[13px]">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-semibold text-ink">
+                    <div className="font-medium text-ink">
                       {c.recipientDisplayName} · {c.courseTitle}
                     </div>
-                    <div className="mt-1 font-mono text-[11px] text-muted">
+                    <div className="mt-1.5 font-mono text-[11px] text-muted">
                       {c.publicToken} · {c.locale.toUpperCase()} · {formatAdminDate(c.issuedAt, locale)}
                     </div>
                     {c.status === 'revoked' && c.revokeReason ? (
-                      <div className="mt-1 text-[11px] text-danger-text">
+                      <div className="mt-1.5 text-[12px] text-danger-text">
                         {copy.users.revokedOn} {c.revokedAt ? formatAdminDate(c.revokedAt, locale) : ''}: {c.revokeReason}
                       </div>
                     ) : null}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`font-semibold ${c.status === 'valid' ? 'text-success' : 'text-danger-text'}`}>
+                    <span className={`admin-badge ${c.status === 'valid' ? '!text-success' : '!text-danger-text'}`}>
                       {copy.users.certificateStatus[c.status]}
                     </span>
                     {c.status === 'valid' && (
@@ -317,7 +320,7 @@ export const AdminUsersCertificatesPage: React.FC<AdminUsersCertificatesPageProp
 
       {revokeTarget && (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4"
+          className="admin-dialog-overlay"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) closeRevoke();
           }}
@@ -327,16 +330,16 @@ export const AdminUsersCertificatesPage: React.FC<AdminUsersCertificatesPageProp
             aria-modal="true"
             aria-labelledby="revoke-dialog-title"
             onSubmit={confirmRevoke}
-            className="w-full max-w-md space-y-3 rounded-xl border border-line bg-surface p-5 shadow-xl"
+            className="admin-dialog-panel space-y-4"
           >
-            <h2 id="revoke-dialog-title" className="text-base font-semibold text-ink">
+            <h2 id="revoke-dialog-title" className="text-base font-semibold text-ink" style={{ fontFamily: 'var(--font-display)' }}>
               {copy.users.revokeTitle}
             </h2>
-            <p className="text-xs text-muted">
+            <p className="text-[13px] text-muted">
               {copy.users.revokeBody(revokeTarget.recipientDisplayName, revokeTarget.courseTitle)}
             </p>
             <div>
-              <label htmlFor="revoke-reason" className="block text-xs text-muted">
+              <label htmlFor="revoke-reason" className="block text-[13px] text-muted">
                 {copy.users.revokeReasonLabel}
               </label>
               <textarea

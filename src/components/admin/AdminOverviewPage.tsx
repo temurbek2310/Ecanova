@@ -20,10 +20,10 @@ const KpiCard: React.FC<{
   tone?: string;
   testId?: string;
 }> = ({ label, value, detail, tone = 'text-ink', testId }) => (
-  <div className="rounded-lg border border-line bg-chrome p-4" data-testid={testId}>
-    <div className="text-xs text-muted">{label}</div>
-    <div className={`mt-1 font-mono text-2xl font-bold tabular-nums ${tone}`}>{value}</div>
-    {detail ? <div className="mt-1 text-[11px] text-muted">{detail}</div> : null}
+  <div className="admin-metric" data-testid={testId}>
+    <div className="text-[11px] font-medium uppercase tracking-wider text-muted">{label}</div>
+    <div className={`mt-2 font-mono text-2xl font-bold tabular-nums ${tone}`}>{value}</div>
+    {detail ? <div className="mt-2 text-[12px] text-muted leading-relaxed">{detail}</div> : null}
   </div>
 );
 
@@ -57,7 +57,7 @@ export const AdminOverviewPage: React.FC<AdminOverviewPageProps> = ({ locale, on
   const quickLinks: AdminSection[] = ['curriculum', 'moderation', 'users', 'audit'];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <AdminPanel
         title={copy.overview.title}
         subtitle={copy.overview.subtitle}
@@ -71,7 +71,7 @@ export const AdminOverviewPage: React.FC<AdminOverviewPageProps> = ({ locale, on
         {!k ? (
           <AdminEmpty>{loading ? copy.loading : copy.empty}</AdminEmpty>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard
               testId="admin-kpi-editions"
               label={copy.overview.editions}
@@ -110,9 +110,9 @@ export const AdminOverviewPage: React.FC<AdminOverviewPageProps> = ({ locale, on
         )}
       </AdminPanel>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <AdminPanel title={copy.overview.quickLinks}>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             {quickLinks.map((section) => {
               const Icon = ADMIN_SECTION_ICONS[section];
               return (
@@ -120,9 +120,10 @@ export const AdminOverviewPage: React.FC<AdminOverviewPageProps> = ({ locale, on
                   key={section}
                   type="button"
                   onClick={() => onNavigate(section)}
-                  className="flex min-h-[44px] items-center gap-2 rounded-lg border border-line bg-chrome px-3 py-2 text-left text-xs font-semibold text-ink hover:border-teal"
+                  className="admin-card flex min-h-[48px] items-center gap-3 px-4 py-3 text-left text-[13px] font-medium text-ink transition-colors hover:border-teal/50"
+                  style={{ cursor: 'pointer' }}
                 >
-                  <Icon className="h-4 w-4 text-teal" aria-hidden="true" />
+                  <Icon className="h-4 w-4 shrink-0 text-teal" aria-hidden="true" />
                   {getAdminSectionLabel(section, locale)}
                 </button>
               );
@@ -141,14 +142,14 @@ export const AdminOverviewPage: React.FC<AdminOverviewPageProps> = ({ locale, on
           {!data || data.recentAuditEvents.length === 0 ? (
             <AdminEmpty>{loading ? copy.loading : copy.empty}</AdminEmpty>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {data.recentAuditEvents.map((event) => (
-                <li key={event.id} className="rounded-lg border border-line bg-chrome p-3 text-xs">
+                <li key={event.id} className="admin-card p-4 text-[13px]">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-mono font-semibold text-ink">{event.action}</span>
                     <span className="text-[11px] text-muted">{formatAdminDate(event.createdAt, locale)}</span>
                   </div>
-                  <p className="mt-1 text-muted">
+                  <p className="mt-1.5 text-muted">
                     {event.actorDisplayName ?? event.actorUserId ?? copy.audit.system} · {event.reason}
                   </p>
                 </li>

@@ -100,8 +100,8 @@ export const AdminModerationPage: React.FC<AdminModerationPageProps> = ({ locale
     const key = `${kind}:${id}`;
     const busy = busyKey === key;
     return (
-      <div className="mt-3 space-y-2">
-        <label htmlFor={`note-${key}`} className="block text-[11px] text-muted">
+      <div className="mt-4 space-y-3">
+        <label htmlFor={`note-${key}`} className="block text-[12px] text-muted">
           {copy.moderation.noteLabel}
         </label>
         <textarea
@@ -150,7 +150,7 @@ export const AdminModerationPage: React.FC<AdminModerationPageProps> = ({ locale
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <AdminPanel
         title={copy.moderation.title}
         subtitle={copy.moderation.subtitle}
@@ -163,9 +163,8 @@ export const AdminModerationPage: React.FC<AdminModerationPageProps> = ({ locale
                   type="button"
                   aria-pressed={filter === value}
                   onClick={() => setFilter(value)}
-                  className={`min-h-[32px] rounded-lg border px-2.5 py-1 text-xs font-semibold ${
-                    filter === value ? 'border-teal bg-chrome text-teal' : 'border-line text-muted hover:text-ink'
-                  }`}
+                  className="admin-nav-pill"
+                  aria-current={filter === value ? 'page' : undefined}
                 >
                   {value === 'all' ? copy.all : copy.moderation.statuses[value]}
                 </button>
@@ -178,31 +177,31 @@ export const AdminModerationPage: React.FC<AdminModerationPageProps> = ({ locale
           </>
         }
       >
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-2">
           <div data-testid="admin-segment-review-queue">
-            <h3 className="text-sm font-semibold text-ink">
+            <h3 className="admin-section-title">
               {copy.moderation.reviewRequests} ({data?.reviewRequests.length ?? 0})
             </h3>
-            <div className="mt-3 space-y-2.5">
+            <div className="mt-4 space-y-3">
               {!data || data.reviewRequests.length === 0 ? (
                 <AdminEmpty>{loading ? copy.loading : copy.moderation.noReviewRequests}</AdminEmpty>
               ) : (
                 data.reviewRequests.map((rv) => (
-                  <article key={rv.id} className="rounded-lg border border-line bg-chrome p-3 text-xs">
+                  <article key={rv.id} className="admin-card p-4 text-[13px]">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold text-ink">
+                      <span className="font-medium text-ink">
                         {rv.lessonTitle} · <span className="text-teal">{rv.segmentHeading}</span>
                       </span>
-                      <span className={`font-semibold ${statusTone[rv.status]}`}>
+                      <span className={`admin-badge ${statusTone[rv.status]}`}>
                         {copy.moderation.statuses[rv.status]}
                       </span>
                     </div>
-                    <p className="mt-1 text-muted">
+                    <p className="mt-2 text-muted">
                       <span className="font-medium text-ink">{rv.studentDisplayName}:</span> {rv.comment}
                     </p>
                     <p className="mt-1 text-[11px] text-muted">{formatAdminDate(rv.createdAt, locale)}</p>
                     {rv.reviewerNote ? (
-                      <p className="mt-1 text-[11px] text-muted">
+                      <p className="mt-1.5 text-[12px] text-muted">
                         {copy.moderation.existingNote} {rv.reviewerNote}
                       </p>
                     ) : null}
@@ -214,28 +213,28 @@ export const AdminModerationPage: React.FC<AdminModerationPageProps> = ({ locale
           </div>
 
           <div data-testid="admin-issue-report-queue">
-            <h3 className="text-sm font-semibold text-ink">
+            <h3 className="admin-section-title">
               {copy.moderation.issueReports} ({data?.reports.length ?? 0})
             </h3>
-            <div className="mt-3 space-y-2.5">
+            <div className="mt-4 space-y-3">
               {!data || data.reports.length === 0 ? (
                 <AdminEmpty>{loading ? copy.loading : copy.moderation.noReports}</AdminEmpty>
               ) : (
                 data.reports.map((r) => (
-                  <article key={r.id} className="rounded-lg border border-line bg-chrome p-3 text-xs">
+                  <article key={r.id} className="admin-card p-4 text-[13px]">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold text-ink">
+                      <span className="font-medium text-ink">
                         {r.category}
                         {r.segmentHeading ? ` · ${r.segmentHeading}` : ''}
                       </span>
-                      <span className={`font-semibold ${statusTone[r.status]}`}>
+                      <span className={`admin-badge ${statusTone[r.status]}`}>
                         {copy.moderation.statuses[r.status]}
                       </span>
                     </div>
-                    <p className="mt-1 text-muted">{r.description}</p>
+                    <p className="mt-2 text-muted">{r.description}</p>
                     <p className="mt-1 text-[11px] text-muted">{formatAdminDate(r.createdAt, locale)}</p>
                     {r.resolutionNote ? (
-                      <p className="mt-1 text-[11px] text-muted">
+                      <p className="mt-1.5 text-[12px] text-muted">
                         {copy.moderation.existingNote} {r.resolutionNote}
                       </p>
                     ) : null}
