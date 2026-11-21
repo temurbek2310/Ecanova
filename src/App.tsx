@@ -1684,9 +1684,19 @@ export default function App() {
         <LandingPage
           locale={locale}
           onToggleLocale={handleLocaleSwitch}
-          onEnterApp={() => navigateToTab('overview')}
-          onSignIn={() =>
-            navigateToLogin({ tab: 'overview', path: buildPathForTab('overview') }, 'login')
+          isAuthenticated={Boolean(user)}
+          onEnterApp={() => {
+            if (user) {
+              navigateToTab('overview');
+            } else {
+              navigateToLogin({ tab: 'overview', path: buildPathForTab('overview') }, 'login');
+            }
+          }}
+          onSignIn={(redirectTo?: string) =>
+            navigateToLogin(
+              { tab: 'overview', path: redirectTo || buildPathForTab('overview') },
+              'login'
+            )
           }
         />
       </SmoothScroll>
@@ -2024,7 +2034,13 @@ export default function App() {
                 setActiveTab(nextMode);
                 syncBrowserPath(nextMode, { redirectTo: intendedDestination?.path ?? '/overview' });
               }}
-              onBackToOverview={() => navigateToTab('overview')}
+              onBackToOverview={() => {
+                if (user) {
+                  navigateToTab('overview');
+                } else {
+                  navigateToTab('landing');
+                }
+              }}
               onAuthenticated={handleUserAuthenticated}
             />
           )}

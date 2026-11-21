@@ -92,7 +92,7 @@ export type RouteAccessPolicy =
  */
 export const ROUTE_ACCESS_POLICIES: readonly RouteAccessPolicy[] = [
   { id: 'landing', mode: 'public', paths: ['/'] },
-  { id: 'overview', mode: 'public', paths: ['/overview'] },
+  { id: 'overview', mode: 'authenticated', paths: ['/overview'] },
   { id: 'catalog', mode: 'public', paths: ['/catalog', '/courses'] },
   // Course pages (lessons and assessments too) stay public: guests study with
   // local progress, and only saving to the server needs sign-in.

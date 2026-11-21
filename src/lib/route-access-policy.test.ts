@@ -35,9 +35,9 @@ const ALL_ROLES: readonly UserRole[] = ['learner', 'admin'];
 /** Values the database may still hold; they must never unlock admin routes. */
 const LEGACY_ROLES = ['editor', 'reviewer', 'publisher'] as unknown as UserRole[];
 
-const PUBLIC_PATHS = ['/', '/overview', '/catalog', '/courses', '/course/econ-101', '/course/econ-101/lesson/3', '/community'];
+const PUBLIC_PATHS = ['/', '/catalog', '/courses', '/course/econ-101', '/course/econ-101/lesson/3', '/community'];
 const GUEST_ONLY_PATHS = ['/login', '/signin', '/register', '/signup'];
-const AUTHENTICATED_PATHS = ['/achievements', '/xp', '/dashboard', '/profile', '/settings', '/certificates'];
+const AUTHENTICATED_PATHS = ['/overview', '/achievements', '/xp', '/dashboard', '/profile', '/settings', '/certificates'];
 const ADMIN_PATHS = ['/admin', '/admin/curriculum', '/admin/moderation', '/admin/users', '/admin/audit'];
 const STUDIO_PATHS = ['/studio', '/studio/editions/42'];
 // `/admin/queue` is unknown: still admin-only, rendered as the admin overview.

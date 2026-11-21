@@ -34,8 +34,9 @@ export interface LandingPageProps {
   onToggleLocale: (next: LocaleCode) => void;
   /** Navigates to /overview. */
   onEnterApp: () => void;
-  /** Navigates to /login. */
-  onSignIn: () => void;
+  /** Navigates to /login with target redirectTo. */
+  onSignIn: (redirectTo?: string) => void;
+  isAuthenticated?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -580,7 +581,7 @@ const TRACK_IDS = ['track-economics', 'track-mathematics', 'track-business'] as 
 const ROUTES = {
   overview: '/overview',
   catalog: '/catalog',
-  register: '/register',
+  register: '/register?redirectTo=%2Foverview',
   course: (id: string) => `/course/${encodeURIComponent(id)}`,
 } as const;
 
@@ -992,7 +993,13 @@ function mapScrollToProgress(keys: ReadonlyArray<ProgressKey>, y: number): numbe
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
-export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: LandingPageProps) {
+export function LandingPage({
+  locale,
+  onToggleLocale,
+  onEnterApp,
+  onSignIn,
+  isAuthenticated,
+}: LandingPageProps) {
   const copy = COPY[locale];
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef(0);
@@ -1082,11 +1089,13 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
   };
 
   const signInProps = {
-    href: '/login',
+    href: '/login?redirectTo=%2Foverview',
     onClick: (e: ReactMouseEvent<HTMLElement>) => {
       if (!isPlainClick(e)) return;
       e.preventDefault();
-      onSignIn();
+      getActiveLenisInstance()?.scrollTo(0, { immediate: true });
+      window.scrollTo(0, 0);
+      onSignIn('/overview');
     },
   };
 
@@ -1107,11 +1116,11 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
     },
   });
 
-  // Signed-in visitors get "Dashboard / Continue learning" instead of the sign-up funnel. This is the
-  // same cached profile App boots from; re-read when the tab regains focus or another tab signs in/out.
-  const [signedIn, setSignedIn] = useState(() => Boolean(getCachedUserSummary()));
+  // Signed-in visitors get "Dashboard / Continue learning" instead of the sign-up funnel.
+  // Combines the parent's live `isAuthenticated` state with cached storage synchronization.
+  const [cachedUser, setCachedUser] = useState(() => Boolean(getCachedUserSummary()));
   useEffect(() => {
-    const sync = () => setSignedIn(Boolean(getCachedUserSummary()));
+    const sync = () => setCachedUser(Boolean(getCachedUserSummary()));
     window.addEventListener('focus', sync);
     window.addEventListener('storage', sync);
     return () => {
@@ -1119,6 +1128,8 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
       window.removeEventListener('storage', sync);
     };
   }, []);
+
+  const signedIn = typeof isAuthenticated === 'boolean' ? isAuthenticated : cachedUser;
 
   // Each track's real entry course, resolved from the live catalog (falls back to the seed IDs).
   const [catalog, setCatalog] = useState<CourseCatalogItem[] | null>(null);
@@ -1174,8 +1185,12 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
     [catalog, locale],
   );
 
-  /** Primary "into the app" action: overview dashboard for both members and visitors. */
-  const launchProps = enterProps;
+  /**
+   * Primary "into the app" action:
+   * - Already authenticated: enter the app at /overview.
+   * - Unauthenticated: go directly to Sign In / Sign Up with post-auth destination /overview (zero flash of /overview or /catalog).
+   */
+  const launchProps = signedIn ? enterProps : signInProps;
 
   /*
    * Scroll choreography. Everything created here lives in useGSAP's context and is reverted
@@ -1539,7 +1554,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
         return anchorProps('architecture');
       case 'overview':
       case 'command':
-        return enterProps;
+        return signedIn ? enterProps : signInProps;
       case 'signin':
         return signInProps;
       case 'github':

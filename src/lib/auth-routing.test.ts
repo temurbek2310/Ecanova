@@ -19,7 +19,7 @@ test('isProtectedTab and isProtectedPathname identify protected areas accurately
   assert.equal(isProtectedTab('profile'), true);
   assert.equal(isProtectedTab('achievements'), true);
   assert.equal(isProtectedTab('admin'), true);
-  assert.equal(isProtectedTab('overview'), false);
+  assert.equal(isProtectedTab('overview'), true);
   assert.equal(isProtectedTab('catalog'), false);
 
   assert.equal(isProtectedPathname('/profile'), true);
@@ -30,7 +30,7 @@ test('isProtectedTab and isProtectedPathname identify protected areas accurately
   assert.equal(isProtectedPathname('/course/econ-101/assessment'), false);
   assert.equal(isProtectedPathname('/course/econ-101'), false);
   assert.equal(isProtectedPathname('/catalog'), false);
-  assert.equal(isProtectedPathname('/overview'), false);
+  assert.equal(isProtectedPathname('/overview'), true);
 });
 
 test('sanitizeRedirectTo prevents open redirects and login loops', () => {
@@ -168,6 +168,26 @@ test('landing page and default app-entry flow route to /overview instead of /cat
   // App-entry target is /overview (not /catalog)
   assert.equal(buildPathForTab('overview'), '/overview');
 
+  // /overview is strictly protected: unauthenticated users redirect to /login?redirectTo=%2Foverview
+  assert.equal(isProtectedTab('overview'), true);
+  assert.equal(isProtectedPathname('/overview'), true);
+  const unauthOverview = evaluateMiddlewareRouteGuard({
+    pathname: '/overview',
+    isAuthenticated: false,
+  });
+  assert.equal(unauthOverview.action, 'redirect');
+  assert.equal(unauthOverview.destination, '/login?redirectTo=%2Foverview');
+  assert.equal(unauthOverview.reason, 'unauthenticated_protected');
+
+  // Authenticated users on /overview are allowed without flash
+  const authedOverview = evaluateMiddlewareRouteGuard({
+    pathname: '/overview',
+    isAuthenticated: true,
+    userRole: 'learner',
+  });
+  assert.equal(authedOverview.action, 'allow');
+  assert.equal(authedOverview.destination, null);
+
   // /catalog remains a dedicated public catalog route
   assert.equal(buildPathForTab('catalog'), '/catalog');
   assert.equal(isProtectedTab('catalog'), false);
@@ -181,5 +201,45 @@ test('landing page and default app-entry flow route to /overview instead of /cat
   });
   assert.equal(authedGuest.action, 'redirect');
   assert.equal(authedGuest.destination, '/overview');
+
+  // Intended destination from /login with redirectTo preserves /overview
+  const parsedLoginOverview = parseRouteFromLocation('/login', '?redirectTo=%2Foverview');
+  assert.equal(parsedLoginOverview.redirectTo, '/overview');
+  const resolved = resolveDestinationFromPath(parsedLoginOverview.redirectTo);
+  assert.equal(resolved.tab, 'overview');
+  assert.equal(resolved.path, '/overview');
+});
+
+test('unauthenticated Launch App goes directly to Sign In / Sign Up with zero overview/catalog flash', () => {
+  // 1. Landing root is public and parses to landing tab
+  const landingLocation = parseRouteFromLocation('/');
+  assert.equal(landingLocation.tab, 'landing');
+  assert.equal(evaluateMiddlewareRouteGuard({ pathname: '/', isAuthenticated: false }).action, 'allow');
+
+  // 2. Unauthenticated CTA directs to Sign In with post-auth destination /overview
+  const unauthLaunchTarget = buildPathForTab('login', { redirectTo: '/overview' });
+  assert.equal(unauthLaunchTarget, '/login?redirectTo=%2Foverview');
+
+  // 3. Middle-click or direct link to unauthenticated register flow also sets post-auth to /overview
+  const unauthRegisterTarget = buildPathForTab('register', { redirectTo: '/overview' });
+  assert.equal(unauthRegisterTarget, '/register?redirectTo=%2Foverview');
+
+  // 4. Authenticated Launch App goes directly to /overview
+  const authedLaunchTarget = buildPathForTab('overview');
+  assert.equal(authedLaunchTarget, '/overview');
+
+  // 5. Post-auth resolution: after sign-in completes, destination resolves to overview (never catalog)
+  const postAuthDest = resolveDestinationFromPath('/overview');
+  assert.equal(postAuthDest.tab, 'overview');
+  assert.equal(postAuthDest.path, '/overview');
+
+  // 6. Direct /overview attempts while unauthenticated trigger immediate login redirect
+  const directOverviewGuard = evaluateMiddlewareRouteGuard({
+    pathname: '/overview',
+    isAuthenticated: false,
+  });
+  assert.equal(directOverviewGuard.action, 'redirect');
+  assert.equal(directOverviewGuard.destination, '/login?redirectTo=%2Foverview');
+  assert.equal(directOverviewGuard.reason, 'unauthenticated_protected');
 });
 
