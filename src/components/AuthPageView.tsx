@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, Lock, Mail, ShieldCheck, Sparkles, UserCheck } from 'lucide-react';
 import type { AgeBand, LocaleCode, UserSummary } from '../shared/types';
 import { t } from '../lib/i18n';
+import { notificationCopy } from '../lib/notification-copy';
+import { useToastSlot } from '../context/NotificationContext';
 import {
   apiFetch,
   persistCachedUserSummary,
@@ -75,7 +77,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googlePressed, setGooglePressed] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const setErrorMsg = useToastSlot('auth-page-error', notificationCopy(locale).auth.failed);
 
   const destinationPath = intendedDestination?.path || '/overview';
   const destinationLabel = formatDestinationLabel(intendedDestination, locale);
@@ -425,16 +427,6 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
                 />
                 <span>{authStrings.consentText}</span>
               </label>
-            )}
-
-            {errorMsg && (
-              <div
-                role="alert"
-                data-testid="auth-error-alert"
-                className="rounded-xl border-2 border-danger bg-danger-surface/50 px-4 py-2.5 text-xs font-semibold text-danger-text shadow-brutal-sm"
-              >
-                {errorMsg}
-              </div>
             )}
 
             <button

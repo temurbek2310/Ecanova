@@ -12,6 +12,8 @@ import {
   X,
 } from 'lucide-react';
 import type { LocaleCode } from '../shared/types';
+import { notificationCopy } from '../lib/notification-copy';
+import { notify, type NotificationTone } from '../lib/notifications';
 import {
   appendDictatedTranscriptToMarkdown,
   loadLocalLessonNotes,
@@ -76,6 +78,8 @@ interface QuickNotesDrawerProps {
   onClose: () => void;
 }
 
+const DICTATION_NOTIFICATION_ID = 'quick-notes-dictation';
+
 export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
   open,
   courseId,
@@ -93,7 +97,19 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
   const [markdown, setMarkdown] = useState('');
   const [syncState, setSyncState] = useState<'idle' | 'saving' | 'saved_local' | 'synced_profile'>('idle');
   const [isDictating, setIsDictating] = useState(false);
-  const [dictationNotice, setDictationNotice] = useState<string | null>(null);
+  const announceDictation = (message: string | null, tone: NotificationTone = 'info') => {
+    if (!message) {
+      notify.dismiss(DICTATION_NOTIFICATION_ID);
+      return;
+    }
+    const toastCopy = notificationCopy(locale);
+    notify.show({
+      id: DICTATION_NOTIFICATION_ID,
+      tone,
+      title: tone === 'info' ? toastCopy.dictation.title : toastCopy.dictation.errorTitle,
+      message,
+    });
+  };
   const recognitionRef = useRef<SpeechRecognitionInstanceLike | null>(null);
 
   useEffect(() => {
@@ -119,7 +135,7 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
         recognitionRef.current = null;
       }
       setIsDictating(false);
-      setDictationNotice(null);
+      announceDictation(null);
       return;
     }
     const onKeyDown = (e: KeyboardEvent) => {
@@ -154,7 +170,7 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
         recognitionRef.current = null;
       }
       setIsDictating(false);
-      setDictationNotice(
+      announceDictation(
         locale === 'uz'
           ? 'Ovozli diktovka to‘xtatildi.'
           : 'Voice dictation paused.'
@@ -166,7 +182,7 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
     const RecognitionCtor = getBrowserSpeechRecognitionConstructor();
     if (!RecognitionCtor) {
       setIsDictating(true);
-      setDictationNotice(
+      announceDictation(
         locale === 'uz'
           ? 'Ovozli kiritish faol (Web Speech API mikrofoni tinglanmoqda)...'
           : 'Voice-to-Text active (listening via Web Speech API)...'
@@ -201,10 +217,11 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
       };
       recognition.onerror = () => {
         setIsDictating(false);
-        setDictationNotice(
+        announceDictation(
           locale === 'uz'
             ? 'Mikrofon ruxsati talab qilinadi yoki ovoz aniqlanmadi.'
-            : 'Microphone permission required or no speech detected.'
+            : 'Microphone permission required or no speech detected.',
+          'warning'
         );
       };
       recognition.onend = () => {
@@ -213,14 +230,14 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
       recognitionRef.current = recognition;
       recognition.start();
       setIsDictating(true);
-      setDictationNotice(
+      announceDictation(
         locale === 'uz'
           ? `Tinglanmoqda (${recognition.lang})... Konspektingizni gapiring.`
           : `Listening (${recognition.lang})... Dictate your study notes hands-free.`
       );
     } catch {
       setIsDictating(true);
-      setDictationNotice(
+      announceDictation(
         locale === 'uz'
           ? 'Ovozli kiritish rejimi yoqildi.'
           : 'Voice-to-Text dictation mode enabled.'
@@ -379,17 +396,6 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
               )}
             </span>
           </div>
-
-          {dictationNotice && (
-            <div
-              role="status"
-              aria-live="polite"
-              data-testid="quick-notes-voice-status"
-              className="rounded-lg border border-theme-cyan/50 bg-theme-base px-3 py-1.5 text-[11px] font-medium text-theme-cyan"
-            >
-              {dictationNotice}
-            </div>
-          )}
 
           {/* Editor or Rendered Markdown Preview */}
           <div className="flex-1 min-h-0 flex flex-col">

@@ -49,7 +49,7 @@ import { CourseShowcase } from './components/CourseShowcase';
 import { DailyStudyGoalCard } from './components/DailyStudyGoalCard';
 import { EconomicsLiquidBackground } from './components/EconomicsLiquidBackground';
 import { EconomicsSection } from './components/EconomicsSection';
-import { FocusTimerPanel } from './components/FocusTimerPanel';
+import { FocusTimerPanel, useFocusTimerCompletionToast } from './components/FocusTimerPanel';
 import { KineticHeroSection } from './components/KineticHeroSection';
 import { LanguageToggle } from './components/LanguageToggle';
 import { LessonPlayer } from './components/LessonPlayer';
@@ -57,20 +57,22 @@ import { MagneticCourseCard } from './components/MagneticCourseCard';
 import { MathematicsSection } from './components/MathematicsSection';
 import { NeobrutalistSectionDivider } from './components/NeobrutalistSectionDivider';
 import { NodeUnlockOverlay } from './components/NodeUnlockOverlay';
-import { OfflineBanner } from './components/OfflineBanner';
+import { NotificationViewport } from './components/NotificationViewport';
 import { ProfilePoliciesView } from './components/ProfilePoliciesView';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { Sidebar } from './components/Sidebar';
 import { SmoothScroll } from './components/SmoothScroll';
 import { LandingPage } from './components/landing/LandingPage';
 import { StudyProgressChart } from './components/StudyProgressChart';
-import { SyncStatusHUD, dispatchSyncStatusReconcile } from './components/SyncStatusHUD';
+import { SyncStatusHUD } from './components/SyncStatusHUD';
 import { WeaknessDetectionCard } from './components/WeaknessDetectionCard';
 import { dispatchGlobalNodeUnlock } from './context/NodeUnlockContext';
 import { useAmbientFocusAudio } from './hooks/useAmbientFocusAudio';
 import { useCourseOfflineCache } from './hooks/useCourseOfflineCache';
 import { useFocusTimer } from './hooks/useFocusTimer';
 import { mapMilestoneToNodeUnlock } from './lib/node-unlock';
+import { notificationCopy } from './lib/notification-copy';
+import { SYNC_NOTIFICATION_ID, describeError, notify } from './lib/notifications';
 import {
   addRecentSearchQuery,
   filterCatalogCourses,
@@ -180,6 +182,9 @@ type NavTab = AppNavTab;
 
 export default function App() {
   const [locale, setLocale] = useState<LocaleCode>(() => resolveInitialLocale());
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
+  const loadCatalogRef = useRef<() => Promise<void>>(async () => {});
   const [themeSyncWithOs, setThemeSyncWithOs] = useState<boolean>(() => loadSavedThemeSyncOs());
   const [theme, setTheme] = useState<ThemeMode>(() =>
     resolveEffectiveTheme({
@@ -196,6 +201,8 @@ export default function App() {
   const ambientAudio = useAmbientFocusAudio();
   const focusTimer = useFocusTimer(ambientAudio);
   const strings = t(locale);
+  const toastCopy = notificationCopy(locale);
+  useFocusTimerCompletionToast(focusTimer, locale);
 
   useEffect(() => {
     persistLocalePreference(locale);
@@ -240,7 +247,6 @@ export default function App() {
   });
   const [courseDetail, setCourseDetail] = useState<CourseDetailResponse | null>(null);
   const [courseLoading, setCourseLoading] = useState(false);
-  const [courseError, setCourseError] = useState<string | null>(null);
   const [activeLessonIndex, setActiveLessonIndex] = useState<number | 'assessment'>(0);
 
   const [intendedDestination, setIntendedDestination] = useState<IntendedDestination | null>(() => {
@@ -281,7 +287,6 @@ export default function App() {
   // Catalog & filters
   const [courses, setCourses] = useState<CourseCatalogItem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [subjectFilter, setSubjectFilter] = useState<Subject | 'ALL'>('ALL');
   const [levelFilter, setLevelFilter] = useState<CourseLevel | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -304,6 +309,8 @@ export default function App() {
   }, []);
 
   const [enrollments, setEnrollments] = useState<EnrollmentRecord[]>([]);
+  const enrollmentsRef = useRef<EnrollmentRecord[]>([]);
+  enrollmentsRef.current = enrollments;
   const [totalXp, setTotalXp] = useState(0);
   const [xpToday, setXpToday] = useState(0);
   const [studyMinutesToday, setStudyMinutesToday] = useState(0);
@@ -351,18 +358,12 @@ export default function App() {
   // Deep link verification token (?verify=...)
   const [verifyTokenFromUrl, setVerifyTokenFromUrl] = useState<string | null>(null);
   const [sharingProgress, setSharingProgress] = useState(false);
-  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   const [celebrationEvent, setCelebrationEvent] = useState<MilestoneCelebrationEvent | null>(null);
   const prevMilestoneSnapshotRef = useRef<MilestoneSnapshot | null>(null);
   const [bookmarkBusyId, setBookmarkBusyId] = useState<string | null>(null);
   const pendingBookmarkCourseIdRef = useRef<string | null>(null);
   const [syncingSyllabus, setSyncingSyllabus] = useState(false);
   const [localSyllabusCompletedIds, setLocalSyllabusCompletedIds] = useState<string[]>([]);
-  const [syllabusSyncNote, setSyllabusSyncNote] = useState<{
-    kind: 'ok' | 'info' | 'error';
-    text: string;
-    syncedAt?: string;
-  } | null>(null);
 
   const isStaff = Boolean(
     user && isStaffRole(user.role)
@@ -390,7 +391,7 @@ export default function App() {
 
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);
-    setCatalogError(null);
+    notify.dismiss('catalog-load-error');
     try {
       const res = await apiFetch('/api/catalog');
       if (!res.ok) {
@@ -401,11 +402,17 @@ export default function App() {
       setCourses(data.courses);
       window.setTimeout(() => void refreshOfflineCache(), 250);
     } catch (err) {
-      setCatalogError(err instanceof Error ? err.message : 'Catalog load failed.');
+      const catalogCopy = notificationCopy(localeRef.current);
+      notify.error(catalogCopy.catalog.loadFailed, describeError(err, catalogCopy.common.genericError), {
+        id: 'catalog-load-error',
+        action: { label: catalogCopy.common.retry, onAction: () => void loadCatalogRef.current() },
+      });
     } finally {
       setCatalogLoading(false);
     }
   }, [refreshOfflineCache]);
+
+  loadCatalogRef.current = loadCatalog;
 
   const loadLeaderboard = useCallback(async () => {
     try {
@@ -432,13 +439,16 @@ export default function App() {
   }, []);
 
   const loadProtectedData = useCallback(
-    async (options?: { allowCelebrate?: boolean }) => {
+    async (options?: { allowCelebrate?: boolean; throwOnError?: boolean }) => {
       try {
         const [ovRes, certRes, refRes] = await Promise.all([
           apiFetch('/api/me/overview'),
           apiFetch('/api/me/certificates'),
           apiFetch('/api/me/referrals'),
         ]);
+        if (options?.throwOnError && ovRes.status >= 500) {
+          throw new Error(`Server responded with ${ovRes.status}.`);
+        }
         if (ovRes.ok) {
           const ov = (await ovRes.json()) as {
             enrollments: EnrollmentRecord[];
@@ -503,8 +513,9 @@ export default function App() {
           setReferralsCount(rData.referralsCount);
           setClaimedReferralCode(rData.claimedByMe?.code ?? null);
         }
-      } catch {
-        // Offline or unauthenticated
+      } catch (err) {
+        // Offline or unauthenticated; reconnect reconciliation opts in to surfacing the failure.
+        if (options?.throwOnError) throw err;
       }
     },
     [dailyStudyGoalMinutes, locale]
@@ -664,7 +675,7 @@ export default function App() {
       syncBrowserPath('course', { courseId });
       scrollGlobalToTop(true);
       setCourseLoading(true);
-      setCourseError(null);
+      notify.dismiss('course-load-error');
       setActiveLessonIndex(options?.lessonIndex ?? 0);
       try {
         const res = await apiFetch(`/api/courses/${courseId}/editions/${editionLocale}`);
@@ -677,21 +688,42 @@ export default function App() {
         window.setTimeout(() => void refreshOfflineCache(), 250);
         const effectiveUser = options?.authenticatedUser !== undefined ? options.authenticatedUser : user;
         if (effectiveUser) {
-          await apiFetch('/api/enrollments', {
+          const alreadyEnrolled = enrollmentsRef.current.some((e) => e.courseId === courseId);
+          const enrollRes = await apiFetch('/api/enrollments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ courseId, locale: editionLocale }),
           });
+          const enrollCopy = notificationCopy(editionLocale);
+          if (!enrollRes.ok) {
+            const errBody = (await enrollRes.json().catch(() => ({}))) as { error?: string };
+            notify.error(enrollCopy.enrollment.updateFailed, errBody.error ?? null);
+          } else if (!alreadyEnrolled) {
+            notify.success(
+              enrollCopy.enrollment.enrolled,
+              enrollCopy.enrollment.enrolledMessage(data.edition.title)
+            );
+          }
           await loadProtectedData();
         }
       } catch (err) {
-        setCourseError(err instanceof Error ? err.message : 'Unable to load course.');
+        const courseCopy = notificationCopy(editionLocale);
+        notify.error(courseCopy.catalog.courseLoadFailed, describeError(err, courseCopy.common.genericError), {
+          id: 'course-load-error',
+          action: {
+            label: courseCopy.common.retry,
+            onAction: () => void openCourseRef.current(courseId, editionLocale, options),
+          },
+        });
       } finally {
         setCourseLoading(false);
       }
     },
     [locale, strings.editionMissingNote, user, loadProtectedData, refreshOfflineCache, syncBrowserPath]
   );
+
+  const openCourseRef = useRef(openCourse);
+  openCourseRef.current = openCourse;
 
   // If browser booted directly onto /course/:courseId, load it automatically
   useEffect(() => {
@@ -736,11 +768,9 @@ export default function App() {
     const courseId = courseDetail?.course.id;
     if (!courseId) {
       setLocalSyllabusCompletedIds([]);
-      setSyllabusSyncNote(null);
       return;
     }
     setLocalSyllabusCompletedIds(loadLocalCompletedLessonIds(courseId, user?.id));
-    setSyllabusSyncNote(null);
   }, [courseDetail?.course.id, user?.id]);
 
   // Tell the server when a signed-in learner opens a lesson, so completion can be
@@ -767,12 +797,14 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ evidence }),
       });
-    } catch (err) {
-      // Network failure: keep the completion locally so it can sync later.
+    } catch {
+      // Network failure: keep the completion locally so it can sync on reconnect.
       if (activeCourseId) {
         setLocalSyllabusCompletedIds(recordLocalLessonCompletion(activeCourseId, lessonId, user?.id));
+        notify.warning(toastCopy.lesson.savedOffline, toastCopy.lesson.savedOfflineMessage);
+        return;
       }
-      throw err instanceof Error ? err : new Error('Could not record completion.');
+      throw new Error(toastCopy.sync.failedMessage);
     }
     const data = (await res.json().catch(() => ({}))) as {
       error?: string;
@@ -792,6 +824,10 @@ export default function App() {
     if (activeCourseId) {
       setLocalSyllabusCompletedIds(recordLocalLessonCompletion(activeCourseId, lessonId, user?.id));
     }
+    notify.success(
+      toastCopy.lesson.completed,
+      lesson ? toastCopy.lesson.completedMessage(lesson.title) : null
+    );
     await Promise.all([loadProtectedData({ allowCelebrate: true }), loadLeaderboard()]);
   };
 
@@ -803,21 +839,22 @@ export default function App() {
     setLocalSyllabusCompletedIds(localIds);
 
     if (!user) {
-      setSyllabusSyncNote({
-        kind: 'info',
-        text: formatLessonSyncStatusMessage({
+      notify.info(
+        toastCopy.progressSync.guest,
+        formatLessonSyncStatusMessage({
           locale,
           pushedCount: 0,
           pulledCount: 0,
           totalSynced: localIds.length,
           unauthenticated: true,
         }),
-      });
+        { action: { label: toastCopy.common.signIn, onAction: () => setAuthOpen(true) } }
+      );
       return;
     }
 
     setSyncingSyllabus(true);
-    dispatchSyncStatusReconcile();
+    notify.progress(toastCopy.progressSync.syncing, null, { id: SYNC_NOTIFICATION_ID });
     try {
       // Fetch fresh server enrollment state so cross-device completions are pulled cleanly
       const ovRes = await apiFetch('/api/me/overview');
@@ -868,48 +905,66 @@ export default function App() {
       }
       setLocalSyllabusCompletedIds(savedLocal);
 
-      setSyllabusSyncNote({
-        kind: failedPushIds.length > 0 ? 'error' : 'ok',
-        text: formatLessonSyncStatusMessage({
-          locale,
-          pushedCount,
-          pulledCount: plan.missingLocally.length,
-          totalSynced: syncedIds.length,
-          error:
-            failedPushIds.length > 0
-              ? locale === 'uz'
-                ? `${failedPushIds.length} ta dars yuklanmadi`
-                : `${failedPushIds.length} lesson(s) failed to upload`
-              : null,
-        }),
-        syncedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      const summary = formatLessonSyncStatusMessage({
+        locale,
+        pushedCount,
+        pulledCount: plan.missingLocally.length,
+        totalSynced: syncedIds.length,
+        error:
+          failedPushIds.length > 0
+            ? locale === 'uz'
+              ? `${failedPushIds.length} ta dars yuklanmadi`
+              : `${failedPushIds.length} lesson(s) failed to upload`
+            : null,
       });
+      if (failedPushIds.length > 0) {
+        notify.error(toastCopy.progressSync.partial, summary, {
+          id: SYNC_NOTIFICATION_ID,
+          action: { label: toastCopy.common.retry, onAction: () => void handleSyncCourseProgress() },
+        });
+      } else {
+        notify.success(toastCopy.progressSync.synced, summary, { id: SYNC_NOTIFICATION_ID });
+      }
     } catch (err) {
-      setSyllabusSyncNote({
-        kind: 'error',
-        text: formatLessonSyncStatusMessage({
+      notify.error(
+        toastCopy.progressSync.failed,
+        formatLessonSyncStatusMessage({
           locale,
           pushedCount: 0,
           pulledCount: 0,
           totalSynced: localIds.length,
-          error: err instanceof Error ? err.message : 'Sync error',
+          error: describeError(err, toastCopy.common.genericError),
         }),
-      });
+        {
+          id: SYNC_NOTIFICATION_ID,
+          action: { label: toastCopy.common.retry, onAction: () => void handleSyncCourseProgress() },
+        }
+      );
     } finally {
       setSyncingSyllabus(false);
     }
   };
 
   const handlePauseToggle = async (courseId: string, paused: boolean) => {
-    await apiFetch(`/api/enrollments/${courseId}/pause`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paused }),
-    });
+    try {
+      const res = await apiFetch(`/api/enrollments/${courseId}/pause`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused }),
+      });
+      if (!res.ok) {
+        const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errBody.error || toastCopy.common.genericError);
+      }
+      notify.success(paused ? toastCopy.enrollment.paused : toastCopy.enrollment.resumed);
+    } catch (err) {
+      notify.error(toastCopy.enrollment.updateFailed, describeError(err, toastCopy.common.genericError));
+    }
     await loadProtectedData();
   };
 
   const applyBookmarkChange = useCallback(async (courseId: string, bookmarked: boolean) => {
+    const bookmarkCopy = notificationCopy(locale).bookmark;
     setBookmarkBusyId(courseId);
     try {
       const res = await apiFetch(`/api/me/bookmarks/${encodeURIComponent(courseId)}`, {
@@ -923,7 +978,7 @@ export default function App() {
         error?: string;
       };
       if (!res.ok) {
-        throw new Error(data.error || 'Could not update bookmark.');
+        throw new Error(data.error || bookmarkCopy.failed);
       }
       if (data.user) {
         setUser(data.user);
@@ -932,10 +987,13 @@ export default function App() {
           prev ? { ...prev, bookmarkedCourseIds: data.bookmarkedCourseIds! } : prev
         );
       }
+      notify.success(bookmarked ? bookmarkCopy.added : bookmarkCopy.removed);
+    } catch (err) {
+      notify.error(bookmarkCopy.failed, describeError(err, notificationCopy(locale).common.genericError));
     } finally {
       setBookmarkBusyId(null);
     }
-  }, []);
+  }, [locale]);
 
   const handleToggleBookmark = useCallback(
     async (courseId: string) => {
@@ -1106,7 +1164,6 @@ export default function App() {
 
   const handleShareProgress = async () => {
     setSharingProgress(true);
-    setShareFeedback(null);
     try {
       const shareData = buildProgressShareData({
         xpToday: user ? xpToday : 0,
@@ -1116,13 +1173,14 @@ export default function App() {
       });
       const result = await shareProgressWithWebApi(shareData);
       if (result.ok) {
-        setShareFeedback(
+        notify.success(
+          result.method === 'web-share' ? toastCopy.share.shared : toastCopy.share.copied,
           result.method === 'web-share'
             ? strings.shareProgress.sharedWebApi
             : strings.shareProgress.sharedClipboard
         );
       } else if (!result.cancelled) {
-        setShareFeedback(strings.shareProgress.unavailable);
+        notify.warning(toastCopy.share.unavailable, strings.shareProgress.unavailable);
       }
     } finally {
       setSharingProgress(false);
@@ -1140,6 +1198,9 @@ export default function App() {
       setDailyStudyGoalMinutes(authedUser.dailyStudyGoalMinutes);
       setGoalNotificationsEnabled(Boolean(authedUser.studyGoalNotificationsEnabled));
       setAuthOpen(false);
+      notify.success(
+        notificationCopy(authedUser.preferredLocale).profile.signedIn(authedUser.displayName)
+      );
 
       const storedDest = consumeIntendedDestination();
       const targetDest: IntendedDestination =
@@ -1219,8 +1280,8 @@ export default function App() {
       timezone: 'Asia/Tashkent',
     });
     setBadges([]);
-    setShareFeedback(null);
     setCelebrationEvent(null);
+    notify.info(toastCopy.profile.signedOut);
     prevMilestoneSnapshotRef.current = null;
     if (isProtectedTab(activeTab)) {
       setActiveTab('overview');
@@ -1332,6 +1393,8 @@ export default function App() {
       });
 
       setSavedWeaknessNoteIds((prev) => (prev.includes(rec.id) ? prev : [...prev, rec.id]));
+      const notesCopy = notificationCopy(locale).notes;
+      notify.success(notesCopy.saved, rec.lessonTitle);
 
       if (user) {
         try {
@@ -1340,15 +1403,15 @@ export default function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lessonNotes: updatedNotes }),
           });
-          if (res.ok) {
-            const data = (await res.json()) as { user?: UserSummary };
-            if (data.user) {
-              setUser(data.user);
-              persistCachedUserSummary(data.user);
-            }
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = (await res.json()) as { user?: UserSummary };
+          if (data.user) {
+            setUser(data.user);
+            persistCachedUserSummary(data.user);
           }
         } catch {
-          // Local Quick Notes are already persisted in localStorage
+          // Local Quick Notes are already persisted in localStorage; tell the learner it is not synced.
+          notify.warning(notesCopy.syncFailed);
         }
       }
     },
@@ -1425,8 +1488,6 @@ export default function App() {
 
       {/* Main Content Shell */}
       <div className="relative flex flex-1 flex-col min-w-0 overflow-x-clip pb-20 md:pb-0">
-        <OfflineBanner message={strings.offlineBanner} />
-
         {/* Clean Responsive Top Bar (3-col grid centering; backdrop isolated on child layer so mobile fixed CommandBar takeover attaches to viewport) */}
         <header
           data-testid="main-header"
@@ -1719,7 +1780,6 @@ export default function App() {
                 locale={locale}
                 isAuthenticated={Boolean(user)}
                 sharingProgress={sharingProgress}
-                shareFeedback={shareFeedback}
                 activeCoursesCount={enrollments.length}
                 currentStreak={streak.currentStreak}
                 totalXp={totalXp}
@@ -1857,9 +1917,9 @@ export default function App() {
                   <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                     {strings.overview.loadingCourses}
                   </div>
-                ) : catalogError ? (
-                  <div className="rounded-xl border-2 border-danger/60 bg-danger-surface/40 p-6 text-sm text-danger-text shadow-[8px_8px_0px_#000000] backdrop-blur-2xl">
-                    {catalogError}
+                ) : courses.length === 0 ? (
+                  <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+                    {locale === 'uz' ? 'Hozircha ko‘rsatiladigan kurslar yo‘q.' : 'No courses to show yet.'}
                   </div>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-3">
@@ -2408,9 +2468,9 @@ export default function App() {
                 <div className="relative z-10 rounded-xl border-2 border-slate-500 bg-white/25 p-8 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                   {strings.courseDetail.loadingEdition}
                 </div>
-              ) : courseError || !courseDetail ? (
-                <div className="relative z-10 rounded-xl border-2 border-warning/60 bg-white/25 p-6 text-sm text-warning shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:bg-[#101522]/25">
-                  {courseError || strings.editionMissingNote}
+              ) : !courseDetail ? (
+                <div className="relative z-10 rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+                  {strings.editionMissingNote}
                 </div>
               ) : (
                 <div className="relative z-10 space-y-6">
@@ -2652,52 +2712,31 @@ export default function App() {
                                   ? 'Hozir sinxronlash'
                                   : 'Sync Now'}
                               </span>
+                              {(() => {
+                                // Pending local completions shown as a compact badge (no layout-shifting banner).
+                                const pendingLocalCount = reconcileCompletedLessonIds({
+                                  localIds: localSyllabusCompletedIds,
+                                  serverIds: activeEnrollment?.completedLessonIds ?? [],
+                                  validCourseLessonIds: courseDetail.lessons.map((l) => l.id),
+                                }).missingOnServer.length;
+                                if (pendingLocalCount === 0) return null;
+                                return (
+                                  <span
+                                    data-testid="syllabus-sync-pending-badge"
+                                    aria-label={
+                                      locale === 'uz'
+                                        ? `${pendingLocalCount} ta mahalliy dars sinxronlashni kutmoqda`
+                                        : `${pendingLocalCount} local completion pending server sync`
+                                    }
+                                    className="rounded-sm bg-theme-cyan px-1 font-mono text-[10px] tabular-nums text-black"
+                                  >
+                                    {pendingLocalCount}
+                                  </span>
+                                );
+                              })()}
                             </button>
                           </div>
                         </div>
-
-                        {(() => {
-                          const pendingLocalCount = reconcileCompletedLessonIds({
-                            localIds: localSyllabusCompletedIds,
-                            serverIds: activeEnrollment?.completedLessonIds ?? [],
-                            validCourseLessonIds: courseDetail.lessons.map((l) => l.id),
-                          }).missingOnServer.length;
-
-                          if (!syllabusSyncNote && pendingLocalCount === 0) return null;
-
-                          return (
-                            <div
-                              role="status"
-                              data-testid="syllabus-sync-status"
-                              className={`mt-2.5 flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-[11px] ${
-                                syllabusSyncNote?.kind === 'error'
-                                  ? 'border-danger/60 bg-danger-surface/40 text-danger-text'
-                                  : syllabusSyncNote?.kind === 'ok'
-                                  ? 'border-theme-emerald/50 bg-theme-base/70 text-theme-emerald'
-                                  : 'border-theme-border bg-theme-base/70 text-muted'
-                              }`}
-                            >
-                              <span className="min-w-0 leading-snug">
-                                {syllabusSyncNote
-                                  ? `${syllabusSyncNote.text}${
-                                      syllabusSyncNote.syncedAt ? ` · ${syllabusSyncNote.syncedAt}` : ''
-                                    }`
-                                  : locale === 'uz'
-                                  ? `${pendingLocalCount} ta mahalliy dars sinxronlashni kutmoqda`
-                                  : `${pendingLocalCount} local completion pending server sync`}
-                              </span>
-                              {!user && (
-                                <button
-                                  type="button"
-                                  onClick={() => setAuthOpen(true)}
-                                  className="shrink-0 font-semibold text-theme-accent underline"
-                                >
-                                  {strings.signIn}
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })()}
 
                         <div className="mt-3 space-y-1.5">
                           {courseDetail.lessons.map((les, idx) => {
@@ -2979,12 +3018,16 @@ export default function App() {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ weeklyDigestEmailEnabled: enabled }),
                 });
-                if (res.ok) {
-                  const data = (await res.json()) as { user?: UserSummary };
-                  if (data.user) {
-                    setUser(data.user);
-                    persistCachedUserSummary(data.user);
-                  }
+                const data = (await res.json().catch(() => ({}))) as {
+                  user?: UserSummary;
+                  error?: string;
+                };
+                if (!res.ok) {
+                  throw new Error(data.error || toastCopy.profile.digestFailed);
+                }
+                if (data.user) {
+                  setUser(data.user);
+                  persistCachedUserSummary(data.user);
                 }
               }}
               onUpdateProfile={async (patch) => {
@@ -2993,13 +3036,20 @@ export default function App() {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(patch),
                 });
-                const data = (await res.json()) as { user: UserSummary };
+                const data = (await res.json().catch(() => ({}))) as {
+                  user?: UserSummary;
+                  error?: string;
+                };
+                if (!res.ok || !data.user) {
+                  throw new Error(data.error || toastCopy.profile.saveFailed);
+                }
                 setUser(data.user);
                 persistCachedUserSummary(data.user);
                 setLocale(data.user.preferredLocale);
                 await Promise.all([loadProtectedData(), loadLeaderboard()]);
               }}
               onAccountDeleted={async () => {
+                notify.info(toastCopy.profile.deleted);
                 clearClientSessionState();
                 setUser(null);
                 setEnrollments([]);
@@ -3084,7 +3134,13 @@ export default function App() {
       )}
 
       {/* Asynchronous Data Reconciliation HUD (Offline-to-Online Sync Terminal) */}
-      <SyncStatusHUD onReconcile={() => loadProtectedData({ allowCelebrate: true })} />
+      <SyncStatusHUD
+        locale={locale}
+        onReconcile={() => loadProtectedData({ allowCelebrate: true, throwOnError: true })}
+      />
+
+      {/* Unified notification stack (task completion, sync, editorial, certificates…) */}
+      <NotificationViewport locale={locale} />
 
       {/* Competency Node Unlock Overlay (Glass-Brutalism Milestone Celebration) */}
       <NodeUnlockOverlay />

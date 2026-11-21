@@ -17,6 +17,9 @@ import {
 } from '../shared/econova-rules';
 import { t } from '../lib/i18n';
 import { apiFetch } from '../lib/auth-client';
+import { notificationCopy } from '../lib/notification-copy';
+import { describeError, notify } from '../lib/notifications';
+import { describeEditorialTransitionOutcome } from '../lib/editorial-notifications';
 import { AiCompanionPanel } from './AiCompanionPanel';
 
 interface AdminOverviewData {
@@ -75,6 +78,7 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
   currentUser,
 }) => {
   const strings = t(locale);
+  const toastCopy = notificationCopy(locale);
   const canRevokeCertificates = hasAnyRole(currentUser.role, DESTRUCTIVE_ACTION_ROLES);
   const transitionGate = (
     ed: CourseEditionSummary,
@@ -99,8 +103,6 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
   };
   const [data, setData] = useState<AdminOverviewData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   // Create Draft Edition form
   const [courseId, setCourseId] = useState(courses[0]?.id || 'course-econ-beg');
@@ -118,14 +120,16 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
 
   const loadOverview = async () => {
     setLoading(true);
-    setErrorMsg(null);
     try {
       const res = await apiFetch('/api/admin/overview');
       const json = (await res.json()) as AdminOverviewData & { error?: string };
       if (!res.ok) throw new Error(json.error || 'Could not load staff overview.');
       setData(json);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to load editorial data.');
+      notify.error(toastCopy.editorial.loadFailed, describeError(err, toastCopy.common.genericError), {
+        id: 'editorial-load-error',
+        action: { label: toastCopy.common.retry, onAction: () => void loadOverview() },
+      });
     } finally {
       setLoading(false);
     }
@@ -140,8 +144,7 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
     nextStatus: EditorialStatus,
     signoffType?: EditorialSignoffType
   ) => {
-    setActionMsg(null);
-    setErrorMsg(null);
+    const previousStatus = data?.editions.find((ed) => ed.id === editionId)?.status ?? null;
     try {
       const res = await apiFetch(`/api/admin/editions/${editionId}/transition`, {
         method: 'POST',
@@ -150,18 +153,23 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
       });
       const out = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(out.error || 'Transition blocked.');
-      setActionMsg(`Edition updated to ${nextStatus}.`);
+      const outcome = describeEditorialTransitionOutcome({
+        copy: toastCopy,
+        statusLabel: strings.editorial[nextStatus] ?? nextStatus,
+        previousStatus,
+        nextStatus,
+        signoffType: signoffType ?? null,
+      });
+      notify.success(outcome.title, outcome.message);
       await loadOverview();
       await onCatalogRefresh();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Action failed.');
+      notify.error(toastCopy.editorial.blocked, describeError(err, toastCopy.common.genericError));
     }
   };
 
   const handleCreateDraft = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg(null);
-    setActionMsg(null);
     try {
       const res = await apiFetch('/api/admin/editions/draft', {
         method: 'POST',
@@ -185,16 +193,18 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
       setSourceTitle('');
       setLessonTitle('');
       setLessonBody('');
-      setActionMsg(`Created Draft v${out.version} (${draftLocale.toUpperCase()}). Requires Subject, Language, and Rights reviews before publishing.`);
+      notify.success(
+        toastCopy.editorial.draftCreated(out.version ?? '?', draftLocale.toUpperCase()),
+        toastCopy.editorial.draftCreatedMessage
+      );
       await loadOverview();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Draft creation failed.');
+      notify.error(toastCopy.editorial.draftFailed, describeError(err, toastCopy.common.genericError));
     }
   };
 
   const handleRevokeCertificate = async (certId: string) => {
     const reason = revokeReasons[certId] || '';
-    setErrorMsg(null);
     try {
       const res = await apiFetch(`/api/admin/certificates/${certId}/revoke`, {
         method: 'POST',
@@ -203,33 +213,44 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
       });
       const out = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(out.error || 'Revocation failed.');
-      setActionMsg('Certificate revoked and logged to audit trail.');
+      notify.success(toastCopy.certificate.revoked, toastCopy.certificate.revokedMessage);
       await loadOverview();
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Revocation failed.');
+      notify.error(toastCopy.certificate.revokeFailed, describeError(err, toastCopy.common.genericError));
     }
   };
 
-  const handleResolveReport = async (reportId: string) => {
-    await apiFetch(`/api/admin/reports/${reportId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'resolved', resolutionNote: 'Reviewed and logged by editorial operations.' }),
-    });
-    await loadOverview();
+  const patchAndNotify = async (url: string, body: unknown, successTitle: string) => {
+    try {
+      const res = await apiFetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const out = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(out.error || toastCopy.common.genericError);
+      }
+      notify.success(successTitle);
+      await loadOverview();
+    } catch (err) {
+      notify.error(toastCopy.editorial.resolveFailed, describeError(err, toastCopy.common.genericError));
+    }
   };
 
-  const handleResolveReviewRequest = async (reviewId: string) => {
-    await apiFetch(`/api/admin/reviews/${reviewId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        status: 'resolved',
-        reviewerNote: 'Reviewed and clarified by human subject reviewer.',
-      }),
-    });
-    await loadOverview();
-  };
+  const handleResolveReport = (reportId: string) =>
+    patchAndNotify(
+      `/api/admin/reports/${reportId}`,
+      { status: 'resolved', resolutionNote: 'Reviewed and logged by editorial operations.' },
+      toastCopy.editorial.reportResolved
+    );
+
+  const handleResolveReviewRequest = (reviewId: string) =>
+    patchAndNotify(
+      `/api/admin/reviews/${reviewId}`,
+      { status: 'resolved', reviewerNote: 'Reviewed and clarified by human subject reviewer.' },
+      toastCopy.editorial.reviewResolved
+    );
 
   if (loading && !data) {
     return (
@@ -281,17 +302,6 @@ export const AdminStudioView: React.FC<AdminStudioViewProps> = ({
           </div>
         )}
       </header>
-
-      {errorMsg && (
-        <div role="alert" className="rounded-lg border border-danger/50 bg-danger-surface/40 px-4 py-3 text-xs text-danger-text">
-          {errorMsg}
-        </div>
-      )}
-      {actionMsg && (
-        <div role="status" className="rounded-lg border border-success/40 bg-chrome px-4 py-3 text-xs text-success">
-          {actionMsg}
-        </div>
-      )}
 
       {/* Editorial Queue & Publication Gate */}
       <section className="rounded-xl border border-line bg-surface p-5 sm:p-6">

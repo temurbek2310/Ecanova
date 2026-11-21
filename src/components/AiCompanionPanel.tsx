@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image as ImageIcon, MessageSquare, Send, X } from 'lucide-react';
 import type { LocaleCode } from '../shared/types';
 import { t } from '../lib/i18n';
 import { apiFetch } from '../lib/auth-client';
+import { notificationCopy } from '../lib/notification-copy';
+import { useToastSlot } from '../context/NotificationContext';
+import { notify } from '../lib/notifications';
 
 interface ChatTurn {
   role: 'user' | 'model';
@@ -28,6 +31,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
   embedded = false,
 }) => {
   const compStrings = t(locale).companion;
+  const toastCopy = notificationCopy(locale);
   const [mode, setMode] = useState<'study_tutor' | 'editorial_draft'>(
     isStaff ? defaultMode : 'study_tutor'
   );
@@ -35,7 +39,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
   const [history, setHistory] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const setErrorMsg = useToastSlot('ai-companion-error', toastCopy.companion.requestFailed, 'warning');
 
   // Editorial Diagram Image Generator (1K / 2K / 4K)
   const [imgPrompt, setImgPrompt] = useState('');
@@ -46,7 +50,16 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
     captionText: string;
     provenanceNote: string;
   } | null>(null);
-  const [imgError, setImgError] = useState<string | null>(null);
+  const setImgError = useToastSlot('ai-companion-diagram-error', toastCopy.companion.diagramFailed, 'warning');
+
+  // Capability notice: shown once as a toast when the panel opens without AI configured.
+  useEffect(() => {
+    if (aiConfigured) return;
+    notify.info(toastCopy.companion.unavailable, toastCopy.companion.unavailableMessage, {
+      id: 'ai-companion-unconfigured',
+      durationMs: 9000,
+    });
+  }, [aiConfigured, toastCopy]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,17 +162,6 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
         )}
       </div>
 
-      {!aiConfigured && (
-        <div
-          role="status"
-          className="mt-3 rounded-lg border border-warning/40 bg-chrome px-3.5 py-2.5 text-xs leading-relaxed text-warning"
-        >
-          {locale === 'uz'
-            ? 'Sun’iy intellekt funksiyalari AI Studio Settings > Secrets bo‘limida GEMINI_API_KEY sozlanmaguncha o‘chirilgan. Barcha asosiy darslar, testlar va sertifikatlar to‘liq ishlaydi.'
-            : 'AI features are disabled until GEMINI_API_KEY is configured in AI Studio Settings > Secrets. All core courses, lessons, assessments, and certificates work without AI.'}
-        </div>
-      )}
-
       {/* Role & Model Controls */}
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
         {isStaff && (
@@ -234,12 +236,6 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
         )}
       </div>
 
-      {errorMsg && (
-        <div role="alert" className="mt-2 rounded-lg border border-warning/40 bg-chrome px-3 py-2 text-xs text-warning">
-          {errorMsg}
-        </div>
-      )}
-
       <form onSubmit={handleSend} className="mt-3 flex gap-2">
         <input
           type="text"
@@ -303,7 +299,6 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
               {imgLoading ? compStrings.generating : compStrings.generateVisualBtn}
             </button>
           </div>
-          {imgError && <p className="text-xs text-warning">{imgError}</p>}
           {imgResult && (
             <div className="rounded-lg border border-line bg-chrome p-3">
               <img

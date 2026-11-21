@@ -13,7 +13,6 @@ interface KineticHeroSectionProps {
   locale: LocaleCode;
   isAuthenticated: boolean;
   sharingProgress: boolean;
-  shareFeedback: string | null;
   activeCoursesCount: number;
   currentStreak: number;
   totalXp: number;
@@ -28,7 +27,6 @@ export const KineticHeroSection: React.FC<KineticHeroSectionProps> = ({
   locale,
   isAuthenticated,
   sharingProgress,
-  shareFeedback,
   activeCoursesCount,
   currentStreak,
   totalXp,
@@ -229,16 +227,6 @@ export const KineticHeroSection: React.FC<KineticHeroSectionProps> = ({
           </button>
         </div>
 
-        {shareFeedback && (
-          <p
-            role="status"
-            aria-live="polite"
-            data-testid="share-progress-feedback"
-            className="mt-3 text-xs font-medium text-teal"
-          >
-            {shareFeedback}
-          </p>
-        )}
       </div>
 
       {/* Learner Telemetry Strip (when authenticated) */}

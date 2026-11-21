@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { ArrowRight, X } from 'lucide-react';
 import type { AgeBand, LocaleCode, UserSummary } from '../shared/types';
 import { t } from '../lib/i18n';
+import { notificationCopy } from '../lib/notification-copy';
+import { useToastSlot } from '../context/NotificationContext';
 import {
   apiFetch,
   persistCachedUserSummary,
@@ -40,7 +42,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googlePressed, setGooglePressed] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const setErrorMsg = useToastSlot('auth-modal-error', notificationCopy(locale).auth.failed);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -312,15 +314,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               />
               <span>{authStrings.consentText}</span>
             </label>
-          )}
-
-          {errorMsg && (
-            <div
-              role="alert"
-              className="rounded-xl border-2 border-danger bg-danger-surface/40 px-3 py-2 text-xs font-semibold text-danger-text"
-            >
-              {errorMsg}
-            </div>
           )}
 
           <button

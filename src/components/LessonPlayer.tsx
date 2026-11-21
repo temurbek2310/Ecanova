@@ -29,6 +29,8 @@ import {
 } from '../lib/read-aloud';
 import { buildLessonShareData, shareProgressWithWebApi } from '../lib/share-progress';
 import { apiFetch } from '../lib/auth-client';
+import { notificationCopy } from '../lib/notification-copy';
+import { describeError, notify } from '../lib/notifications';
 import { FocusTimerPanel } from './FocusTimerPanel';
 import { InteractiveTerminologyText } from './InteractiveTerminologyText';
 import { QuickNotesDrawer } from './QuickNotesDrawer';
@@ -73,12 +75,8 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const [isSpeechPaused, setIsSpeechPaused] = useState(false);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const toastCopy = notificationCopy(locale);
   const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [shareStatus, setShareStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(
-    null
-  );
-  const shareTimerRef = useRef<number | null>(null);
   const isReadingAloudRef = useRef(false);
   const playbackRateRef = useRef(playbackRate);
 
@@ -106,9 +104,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   );
   const [reviewComment, setReviewComment] = useState('');
   const [reviewBusy, setReviewBusy] = useState(false);
-  const [reviewStatus, setReviewStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(
-    null
-  );
 
   // Report-an-issue modal state
   const [reportOpen, setReportOpen] = useState(false);
@@ -116,12 +111,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     'accuracy' | 'translation' | 'accessibility' | 'rights' | 'safety'
   >('accuracy');
   const [reportText, setReportText] = useState('');
-  const [reportStatus, setReportStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    setShareStatus(null);
     setReviewSegmentHeading(lesson.bodyBlocks[0]?.heading || lesson.title);
-    setReviewStatus(null);
     isReadingAloudRef.current = false;
     setIsReadingAloud(false);
     setIsSpeechPaused(false);
@@ -131,9 +123,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     }
     return () => {
       isReadingAloudRef.current = false;
-      if (shareTimerRef.current !== null) {
-        window.clearTimeout(shareTimerRef.current);
-      }
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
@@ -287,12 +276,11 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       onRequireAuth();
       return;
     }
-    setErrorMsg(null);
     setSubmitting(true);
     try {
       await onCompleteLesson(lesson.id);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Unable to save progress.');
+      notify.error(toastCopy.lesson.completeFailed, describeError(err, toastCopy.common.genericError));
     } finally {
       setSubmitting(false);
     }
@@ -300,7 +288,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setReportStatus(null);
     try {
       const res = await apiFetch('/api/reports', {
         method: 'POST',
@@ -315,20 +302,16 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error || 'Could not submit report.');
       setReportText('');
-      setReportStatus(
-        locale === 'uz'
-          ? 'Rahmat! Xabaringiz tahririyat ko‘rib chiqish navbatiga yuborildi.'
-          : 'Thank you. Your report has been logged for human editorial review.'
-      );
+      setReportOpen(false);
+      notify.success(toastCopy.review.reportSent, toastCopy.review.reportSentMessage);
     } catch (err) {
-      setReportStatus(err instanceof Error ? err.message : 'Submission failed.');
+      notify.error(toastCopy.review.reportFailed, describeError(err, toastCopy.common.genericError));
     }
   };
 
   const handleRequestReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setReviewBusy(true);
-    setReviewStatus(null);
     try {
       const res = await apiFetch('/api/reviews/request', {
         method: 'POST',
@@ -346,27 +329,19 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         throw new Error(data.error || 'Could not submit review request.');
       }
       setReviewComment('');
-      setReviewStatus({
-        kind: 'ok',
-        text:
-          locale === 'uz'
-            ? 'So‘rov yuborildi! Ekspert muharrirlar ushbu dars qismini ko‘rib chiqadi.'
-            : 'Review notification dispatched! Human reviewers can now inspect this segment in the Editorial Studio.',
-      });
+      setReviewOpen(false);
+      notify.success(
+        toastCopy.review.reviewSent,
+        `${reviewSegmentHeading} · ${toastCopy.review.reviewSentMessage}`
+      );
     } catch (err) {
-      setReviewStatus({
-        kind: 'error',
-        text: err instanceof Error ? err.message : 'Could not send review request.',
-      });
+      notify.error(toastCopy.review.reviewFailed, describeError(err, toastCopy.common.genericError));
     } finally {
       setReviewBusy(false);
     }
   };
 
   const handleShareLesson = async () => {
-    if (shareTimerRef.current !== null) {
-      window.clearTimeout(shareTimerRef.current);
-    }
     const payload = buildLessonShareData({
       courseTitle,
       lessonTitle: lesson.title,
@@ -378,28 +353,23 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       return;
     }
     if (res.ok) {
-      setShareStatus({
-        kind: 'ok',
-        text:
-          res.method === 'web-share'
-            ? locale === 'uz'
-              ? 'Dars ma’lumoti ulashish oynasi orqali yuborildi.'
-              : 'Lesson shared via your device share sheet.'
-            : locale === 'uz'
-            ? 'Dars havolasi va matni buferga nusxalandi.'
-            : 'Lesson details copied to clipboard.',
-      });
+      notify.success(
+        res.method === 'web-share' ? toastCopy.share.shared : toastCopy.share.copied,
+        res.method === 'web-share'
+          ? locale === 'uz'
+            ? 'Dars ma’lumoti ulashish oynasi orqali yuborildi.'
+            : 'Lesson shared via your device share sheet.'
+          : locale === 'uz'
+          ? 'Dars havolasi va matni buferga nusxalandi.'
+          : 'Lesson details copied to clipboard.'
+      );
     } else {
-      setShareStatus({
-        kind: 'error',
-        text:
-          res.reason ||
-          (locale === 'uz' ? 'Darsni ulashib bo‘lmadi.' : 'Unable to share lesson right now.'),
-      });
+      notify.error(
+        toastCopy.share.unavailable,
+        res.reason ||
+          (locale === 'uz' ? 'Darsni ulashib bo‘lmadi.' : 'Unable to share lesson right now.')
+      );
     }
-    shareTimerRef.current = window.setTimeout(() => {
-      setShareStatus(null);
-    }, 3000);
   };
 
   return (
@@ -486,7 +456,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
               type="button"
               onClick={() => {
                 setReviewSegmentHeading(lesson.bodyBlocks[0]?.heading || lesson.title);
-                setReviewStatus(null);
                 setReviewOpen(true);
               }}
               data-testid="lesson-request-review-btn"
@@ -530,18 +499,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
               lessonTitle={lesson.title}
             />
           )}
-        {shareStatus && (
-          <p
-            role={shareStatus.kind === 'error' ? 'alert' : 'status'}
-            aria-live="polite"
-            data-testid="share-lesson-status"
-            className={`no-print mt-2 text-xs ${
-              shareStatus.kind === 'error' ? 'text-danger-text' : 'text-teal'
-            }`}
-          >
-            {shareStatus.text}
-          </p>
-        )}
       </header>
 
       {/* Learning Objectives */}
@@ -813,7 +770,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                     type="button"
                     onClick={() => {
                       setReviewSegmentHeading(block.heading);
-                      setReviewStatus(null);
                       setReviewOpen(true);
                     }}
                     data-testid={`segment-request-review-btn-${i}`}
@@ -876,14 +832,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         </footer>
       )}
 
-      {errorMsg && (
-        <div
-          role="alert"
-          className="rounded-lg border border-danger/50 bg-danger-surface/40 px-4 py-2.5 text-xs text-danger-text"
-        >
-          {errorMsg}
-        </div>
-      )}
 
       {/* Action Bar */}
       <div
@@ -1022,17 +970,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                   />
                 </div>
 
-                {reviewStatus && (
-                  <p
-                    role={reviewStatus.kind === 'error' ? 'alert' : 'status'}
-                    data-testid="request-review-status"
-                    className={`text-xs font-medium ${
-                      reviewStatus.kind === 'error' ? 'text-danger-text' : 'text-theme-cyan'
-                    }`}
-                  >
-                    {reviewStatus.text}
-                  </p>
-                )}
 
                 <div className="flex justify-end gap-2 pt-2">
                   <button
@@ -1136,7 +1073,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                     className="mt-1 w-full rounded-lg border border-line bg-chrome px-3 py-2 text-sm text-ink"
                   />
                 </div>
-                {reportStatus && <p className="text-xs text-teal">{reportStatus}</p>}
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     type="button"

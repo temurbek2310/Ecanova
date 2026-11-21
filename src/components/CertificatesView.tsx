@@ -21,6 +21,8 @@ import {
 } from '../lib/geometric-nova';
 import { t } from '../lib/i18n';
 import { apiFetch } from '../lib/auth-client';
+import { notificationCopy } from '../lib/notification-copy';
+import { describeError, notify } from '../lib/notifications';
 import { GeometricNova } from './GeometricNova';
 
 interface CertificatesViewProps {
@@ -43,22 +45,16 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
   onRequireAuth,
 }) => {
   const strings = t(locale);
+  const toastCopy = notificationCopy(locale);
   const [previewCert, setPreviewCert] = useState<CertificateRecord | null>(null);
   const [sharePreviewCert, setSharePreviewCert] = useState<CertificateRecord | null>(null);
   const [statusModalCert, setStatusModalCert] = useState<CertificateRecord | null>(null);
   const [serverVerification, setServerVerification] = useState<CertificateServerVerification | null>(null);
   const [serverVerifyLoading, setServerVerifyLoading] = useState(false);
-  const [serverVerifyError, setServerVerifyError] = useState<string | null>(null);
   const [verifyInput, setVerifyInput] = useState(initialVerifyToken || '');
   const [verifyResult, setVerifyResult] = useState<CertificateVerificationResult | null>(null);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [copyFeedback, setCopyFeedback] = useState<{
-    certId: string;
-    kind: 'ok' | 'error';
-    text: string;
-  } | null>(null);
-  const [exportFeedback, setExportFeedback] = useState<string | null>(null);
   const [novaBurstKey, setNovaBurstKey] = useState(0);
   const copyTimerRef = useRef<number | null>(null);
   const certificateStageRef = useRef<HTMLElement | null>(null);
@@ -76,25 +72,33 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
   }, [milestoneReached]);
 
   const handleExportAllJson = () => {
-    const payload = triggerCertificatesJsonDownload(certificates, window.location.origin);
-    setExportFeedback(
-      locale === 'uz'
-        ? `${payload.totalCertificates} ta sertifikat JSON formatida eksport qilindi.`
-        : `Exported ${payload.totalCertificates} certificate record(s) with verification URLs as JSON.`
-    );
+    try {
+      const payload = triggerCertificatesJsonDownload(certificates, window.location.origin);
+      notify.success(
+        toastCopy.certificate.exported,
+        locale === 'uz'
+          ? `${payload.totalCertificates} ta sertifikat JSON formatida eksport qilindi.`
+          : `Exported ${payload.totalCertificates} certificate record(s) with verification URLs as JSON.`
+      );
+    } catch (err) {
+      notify.error(toastCopy.certificate.exportFailed, describeError(err, toastCopy.common.genericError));
+    }
   };
 
   const handleExportPdf = (cert: CertificateRecord) => {
-    const { fileName } = exportCertificateToPdf(
-      cert,
-      window.location.origin,
-      strings.nonAccreditationNotice
-    );
-    setExportFeedback(
-      locale === 'uz'
-        ? `PDF hujjat yaratildi: ${fileName}`
-        : `Generated high-resolution PDF: ${fileName}`
-    );
+    try {
+      const { fileName } = exportCertificateToPdf(
+        cert,
+        window.location.origin,
+        strings.nonAccreditationNotice
+      );
+      notify.success(
+        toastCopy.certificate.exported,
+        locale === 'uz' ? `PDF hujjat yaratildi: ${fileName}` : `Generated high-resolution PDF: ${fileName}`
+      );
+    } catch (err) {
+      notify.error(toastCopy.certificate.exportFailed, describeError(err, toastCopy.common.genericError));
+    }
   };
 
   useEffect(() => {
@@ -113,6 +117,23 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
       const res = await apiFetch(`/api/verify/${encodeURIComponent(clean)}`);
       const data = (await res.json()) as CertificateVerificationResult;
       setVerifyResult(data);
+      if (data.verificationStatus === 'valid') {
+        notify.success(
+          toastCopy.certificate.verified,
+          data.certificate
+            ? toastCopy.certificate.verifiedMessage(
+                data.certificate.recipientDisplayName,
+                data.certificate.courseTitle
+              )
+            : null
+        );
+      } else if (data.verificationStatus === 'revoked') {
+        notify.warning(toastCopy.certificate.revokedFound, data.certificate?.courseTitle ?? null);
+      } else {
+        notify.warning(toastCopy.certificate.notFound, strings.certificates.notFoundNotice);
+      }
+    } catch (err) {
+      notify.error(toastCopy.certificate.verifyFailed, describeError(err, toastCopy.common.genericError));
     } finally {
       setVerifyLoading(false);
     }
@@ -126,11 +147,24 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
   }, [initialVerifyToken]);
 
   const handleToggleShare = async (certId: string, enable: boolean) => {
-    await apiFetch(`/api/me/certificates/${certId}/share`, {
-      method: enable ? 'POST' : 'DELETE',
-    });
-    await onRefreshCertificates();
-    setSharePreviewCert(null);
+    try {
+      const res = await apiFetch(`/api/me/certificates/${certId}/share`, {
+        method: enable ? 'POST' : 'DELETE',
+      });
+      if (!res.ok) {
+        const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errBody.error || toastCopy.common.genericError);
+      }
+      if (enable) {
+        notify.success(toastCopy.certificate.shareEnabled, toastCopy.certificate.shareEnabledMessage);
+      } else {
+        notify.info(toastCopy.certificate.shareDisabled);
+      }
+      await onRefreshCertificates();
+      setSharePreviewCert(null);
+    } catch (err) {
+      notify.error(toastCopy.certificate.shareFailed, describeError(err, toastCopy.common.genericError));
+    }
   };
 
   const handleCopyVerificationUrl = async (cert: CertificateRecord) => {
@@ -143,26 +177,15 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
     );
     if (!result.ok) {
       setCopiedId(null);
-      setCopyFeedback({
-        certId: cert.id,
-        kind: 'error',
-        text: result.error || 'Could not copy link.',
-      });
+      notify.error(toastCopy.share.copyFailed, result.error || null);
       return;
     }
 
     setCopiedId(cert.id);
-    setCopyFeedback({
-      certId: cert.id,
-      kind: 'ok',
-      text: cert.shareEnabled
-        ? locale === 'uz'
-          ? 'Tekshiruv havolasi buferga nusxalandi.'
-          : 'Verification link copied to clipboard.'
-        : locale === 'uz'
-        ? 'Havola nusxalandi. Tashqi tekshiruv uchun "Ulashishni yoqish" tugmasini bosing.'
-        : 'Verification URL copied. Enable Share Link when you want others to verify it.',
-    });
+    notify.success(
+      toastCopy.certificate.linkCopied,
+      cert.shareEnabled ? cert.courseTitle : toastCopy.certificate.linkCopiedPrivateMessage
+    );
     copyTimerRef.current = window.setTimeout(() => {
       setCopiedId(null);
     }, 2500);
@@ -171,7 +194,6 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
   const fetchServerVerification = async (cert: CertificateRecord) => {
     setStatusModalCert(cert);
     setServerVerifyLoading(true);
-    setServerVerifyError(null);
     setServerVerification(null);
     try {
       const res = await apiFetch(`/api/me/certificates/${encodeURIComponent(cert.id)}/verify`);
@@ -181,9 +203,12 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
       }
       setServerVerification(data);
     } catch (err) {
-      setServerVerifyError(
-        err instanceof Error ? err.message : 'Unable to verify certificate with server.'
-      );
+      // Close the modal and report through the HUD with a retry action.
+      setStatusModalCert(null);
+      notify.error(toastCopy.certificate.verifyFailed, describeError(err, toastCopy.common.genericError), {
+        id: `cert-server-verify-${cert.id}`,
+        action: { label: toastCopy.common.retry, onAction: () => void fetchServerVerification(cert) },
+      });
     } finally {
       setServerVerifyLoading(false);
     }
@@ -379,16 +404,6 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
           </div>
         </div>
 
-        {exportFeedback && (
-          <p
-            role="status"
-            aria-live="polite"
-            data-testid="certificates-export-feedback"
-            className="no-print rounded-lg border border-teal/40 bg-chrome px-3.5 py-2 text-xs text-teal"
-          >
-            {exportFeedback}
-          </p>
-        )}
 
         {!isAuthenticated ? (
           <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-5 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
@@ -546,18 +561,6 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                     )}
                   </div>
 
-                  {copyFeedback?.certId === cert.id && (
-                    <p
-                      role={copyFeedback.kind === 'error' ? 'alert' : 'status'}
-                      aria-live="polite"
-                      data-testid={`copy-cert-feedback-${cert.id}`}
-                      className={`text-[11px] ${
-                        copyFeedback.kind === 'error' ? 'text-danger-text' : 'text-teal'
-                      }`}
-                    >
-                      {copyFeedback.text}
-                    </p>
-                  )}
                 </div>
               </div>
             ))}
@@ -707,18 +710,6 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                 {locale === 'uz'
                   ? 'Server ma’lumotlar bazasidan tasdiq vaqti tekshirilmoqda...'
                   : 'Verifying certificate record against server database...'}
-              </div>
-            ) : serverVerifyError ? (
-              <div role="alert" className="mt-4 space-y-3 rounded-lg border border-danger/50 bg-danger-surface/30 p-4 text-xs text-danger-text">
-                <p>{serverVerifyError}</p>
-                <button
-                  type="button"
-                  onClick={() => void fetchServerVerification(statusModalCert)}
-                  className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 font-medium text-ink"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>{locale === 'uz' ? 'Qayta urinish' : 'Retry'}</span>
-                </button>
               </div>
             ) : serverVerification ? (
               <div className="mt-4 space-y-4">

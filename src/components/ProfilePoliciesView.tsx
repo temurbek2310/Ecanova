@@ -17,6 +17,8 @@ import {
 import type { CourseCatalogItem, EnrollmentRecord, LocaleCode, UserSummary, XpLedgerEntry } from '../shared/types';
 import { t } from '../lib/i18n';
 import { apiFetch } from '../lib/auth-client';
+import { notificationCopy } from '../lib/notification-copy';
+import { describeError, notify } from '../lib/notifications';
 import { resolveBookmarkedCourses } from '../lib/course-bookmarks';
 import {
   resolveCachedCourseDetails,
@@ -96,6 +98,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
   onRequireAuth,
 }) => {
   const strings = t(locale);
+  const toastCopy = notificationCopy(locale);
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [preferredLocale, setPreferredLocale] = useState<LocaleCode>(user?.preferredLocale || locale);
   const [timezone, setTimezone] = useState(user?.timezone || 'Asia/Tashkent');
@@ -105,13 +108,9 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
     Boolean(user?.weeklyDigestEmailEnabled)
   );
   const [digestBusy, setDigestBusy] = useState(false);
-  const [digestMsg, setDigestMsg] = useState<string | null>(null);
-  const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [clearingKey, setClearingKey] = useState<string | null>(null);
-  const [cacheStatusMsg, setCacheStatusMsg] = useState<string | null>(null);
   const [notifBusy, setNotifBusy] = useState(false);
-  const [notifMsg, setNotifMsg] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
 
   const weeklyDigest = useMemo(
     () =>
@@ -128,7 +127,6 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
     const next = !weeklyDigestEnabled;
     setWeeklyDigestEnabled(next);
     setDigestBusy(true);
-    setDigestMsg(null);
     try {
       if (onToggleWeeklyDigestEmail) {
         await onToggleWeeklyDigestEmail(next);
@@ -142,15 +140,10 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           weeklyDigestEmailEnabled: next,
         });
       }
-      setDigestMsg(
-        next
-          ? locale === 'uz'
-            ? 'Haftalik o‘quv xulosasi (Email Digest) yoqildi.'
-            : 'Weekly email study summary enabled for your account.'
-          : locale === 'uz'
-          ? 'Haftalik email xulosasi o‘chirildi.'
-          : 'Weekly email study summary turned off.'
-      );
+      notify.success(next ? toastCopy.profile.digestOn : toastCopy.profile.digestOff);
+    } catch (err) {
+      setWeeklyDigestEnabled(!next);
+      notify.error(toastCopy.profile.digestFailed, describeError(err, toastCopy.common.genericError));
     } finally {
       setDigestBusy(false);
     }
@@ -174,10 +167,11 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
 
   const handleClearCourseCache = async (entry: CachedCourseEntry) => {
     setClearingKey(entry.key);
-    setCacheStatusMsg(null);
     try {
       await onClearCourseCache(entry.courseId, entry.locale);
-      setCacheStatusMsg(strings.offlineManager.clearedNotice);
+      notify.success(toastCopy.profile.cacheCleared, strings.offlineManager.clearedNotice);
+    } catch (err) {
+      notify.error(toastCopy.profile.cacheClearFailed, describeError(err, toastCopy.common.genericError));
     } finally {
       setClearingKey(null);
     }
@@ -185,34 +179,47 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatusMsg(null);
-    await onUpdateProfile({
-      displayName,
-      preferredLocale,
-      timezone,
-      leaderboardOptIn,
-      leaderboardPseudonym: pseudonym,
-    });
-    setStatusMsg(strings.profile.savedStatus);
+    try {
+      await onUpdateProfile({
+        displayName,
+        preferredLocale,
+        timezone,
+        leaderboardOptIn,
+        leaderboardPseudonym: pseudonym,
+      });
+      // The saved locale may differ from the current one; confirm in the language now active.
+      const savedCopy = notificationCopy(preferredLocale);
+      notify.success(savedCopy.profile.saved, t(preferredLocale).profile.savedStatus);
+    } catch (err) {
+      notify.error(toastCopy.profile.saveFailed, describeError(err, toastCopy.common.genericError));
+    }
   };
 
   const handleExport = async () => {
-    const res = await apiFetch('/api/me/export');
-    const data = await res.json();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `econova-my-data-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const res = await apiFetch('/api/me/export');
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error || toastCopy.common.genericError);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `econova-my-data-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      notify.success(toastCopy.profile.exported, a.download);
+    } catch (err) {
+      notify.error(toastCopy.profile.exportFailed, describeError(err, toastCopy.common.genericError));
+    }
   };
 
   const handleDelete = async () => {
-    const res = await apiFetch('/api/me/account', { method: 'DELETE' });
-    const out = (await res.json()) as { error?: string };
-    if (!res.ok) {
-      setStatusMsg(out.error || strings.profile.deleteError);
+    try {
+      const res = await apiFetch('/api/me/account', { method: 'DELETE' });
+      const out = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(out.error || strings.profile.deleteError);
+    } catch (err) {
+      notify.error(toastCopy.profile.deleteFailed, describeError(err, strings.profile.deleteError));
       return;
     }
     await onAccountDeleted();
@@ -223,22 +230,18 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
 
   const handleToggleNotifications = async () => {
     setNotifBusy(true);
-    setNotifMsg(null);
     try {
       const next = !goalNotificationsEnabled;
       const result = await onToggleGoalNotifications(next);
       if (result.error) {
-        setNotifMsg({ kind: 'error', text: result.error });
+        notify.warning(toastCopy.studyGoal.remindersFailed, result.error);
       } else if (result.enabled) {
-        setNotifMsg({ kind: 'info', text: strings.notifications.enabledNotice });
+        notify.success(toastCopy.studyGoal.remindersOn, strings.notifications.enabledNotice);
       } else {
-        setNotifMsg({ kind: 'info', text: strings.notifications.disabledNotice });
+        notify.info(toastCopy.studyGoal.remindersOff, strings.notifications.disabledNotice);
       }
     } catch (err) {
-      setNotifMsg({
-        kind: 'error',
-        text: err instanceof Error ? err.message : 'Could not update notification preferences.',
-      });
+      notify.error(toastCopy.studyGoal.remindersFailed, describeError(err, toastCopy.common.genericError));
     } finally {
       setNotifBusy(false);
     }
@@ -246,17 +249,15 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
 
   const handleTestNotification = async () => {
     setNotifBusy(true);
-    setNotifMsg(null);
     try {
       const res = await onSendTestNotification();
       if (res.sent) {
-        setNotifMsg({ kind: 'info', text: strings.notifications.testSent });
+        notify.success(toastCopy.studyGoal.testSent, strings.notifications.testSent);
       } else {
-        setNotifMsg({
-          kind: 'error',
-          text: res.reason || strings.notifications.deniedHelp,
-        });
+        notify.warning(toastCopy.studyGoal.testFailed, res.reason || strings.notifications.deniedHelp);
       }
+    } catch (err) {
+      notify.error(toastCopy.studyGoal.testFailed, describeError(err, toastCopy.common.genericError));
     } finally {
       setNotifBusy(false);
     }
@@ -492,16 +493,6 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
         </button>
       </div>
 
-      {digestMsg && (
-        <p
-          role="status"
-          aria-live="polite"
-          data-testid="weekly-digest-feedback"
-          className="text-xs font-medium text-theme-cyan"
-        >
-          {digestMsg}
-        </p>
-      )}
     </section>
   );
 
@@ -695,8 +686,6 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
             <span>{strings.profile.optInLeaderboardLabel}</span>
           </label>
 
-          {statusMsg && <p className="text-xs text-teal">{statusMsg}</p>}
-
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
             <button
               type="submit"
@@ -845,26 +834,13 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
         </div>
 
         {notificationPermission === 'denied' && (
-          <p role="alert" className="text-xs text-warning">
-            {strings.notifications.deniedHelp}
-          </p>
+          <p className="text-xs text-muted">{strings.notifications.deniedHelp}</p>
         )}
 
         {notificationPermission === 'unsupported' && (
           <p className="text-xs text-muted">{strings.notifications.unsupportedHelp}</p>
         )}
 
-        {notifMsg && (
-          <p
-            role={notifMsg.kind === 'error' ? 'alert' : 'status'}
-            className={`text-xs font-medium ${
-              notifMsg.kind === 'error' ? 'text-danger-text' : 'text-teal'
-            }`}
-            data-testid="notification-feedback-msg"
-          >
-            {notifMsg.text}
-          </p>
-        )}
       </section>
 
       {/* Offline Cache Manager */}
@@ -890,11 +866,6 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           </span>
         </div>
 
-        {cacheStatusMsg && (
-          <p className="text-xs font-medium text-teal" role="status" aria-live="polite">
-            {cacheStatusMsg}
-          </p>
-        )}
 
         {swStatus === 'unsupported' || swStatus === 'error' ? (
           <div className="rounded-lg border border-line bg-chrome p-4 text-xs text-muted">

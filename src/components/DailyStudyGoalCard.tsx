@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Target } from 'lucide-react';
 import type { LocaleCode } from '../shared/types';
 import { t } from '../lib/i18n';
+import { notificationCopy } from '../lib/notification-copy';
+import { describeError, notify } from '../lib/notifications';
+import { useToastSlot } from '../context/NotificationContext';
 import {
   DAILY_GOAL_PRESETS,
   MAX_DAILY_GOAL_MINUTES,
@@ -34,10 +37,10 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
   onRequireAuth,
 }) => {
   const strings = t(locale);
+  const toastCopy = notificationCopy(locale);
+  const setErrorMsg = useToastSlot('daily-goal-validation', toastCopy.validation.invalidGoal, 'warning');
   const [inputValue, setInputValue] = useState(String(targetMinutes));
   const [saving, setSaving] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [savedNotice, setSavedNotice] = useState(false);
 
   useEffect(() => {
     setInputValue(String(targetMinutes));
@@ -51,10 +54,9 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
 
   const commitGoal = async (rawValue: unknown) => {
     setErrorMsg(null);
-    setSavedNotice(false);
     const parsed = parseDailyGoalMinutes(rawValue);
     if (!parsed.valid) {
-      setErrorMsg(parsed.error || 'Invalid study goal.');
+      setErrorMsg(toastCopy.validation.goalRange(MIN_DAILY_GOAL_MINUTES, MAX_DAILY_GOAL_MINUTES));
       return;
     }
 
@@ -62,9 +64,9 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
     try {
       await onUpdateTarget(parsed.value);
       setInputValue(String(parsed.value));
-      setSavedNotice(true);
+      notify.success(toastCopy.studyGoal.saved, toastCopy.studyGoal.savedMessage(parsed.value));
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Unable to save study goal.');
+      notify.error(toastCopy.studyGoal.failed, describeError(err, toastCopy.common.genericError));
     } finally {
       setSaving(false);
     }
@@ -243,8 +245,6 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
               value={inputValue}
               onChange={(e) => {
                 setInputValue(e.target.value);
-                if (errorMsg) setErrorMsg(null);
-                if (savedNotice) setSavedNotice(false);
               }}
               className="mt-1 h-[38px] w-full rounded-lg border border-line bg-chrome px-3 font-mono text-xs tabular-nums text-ink focus:border-accent focus:outline-none"
             />
@@ -258,17 +258,6 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
           </button>
         </form>
 
-        {errorMsg && (
-          <p role="alert" className="text-xs text-danger-text">
-            {errorMsg}
-          </p>
-        )}
-
-        {savedNotice && !errorMsg && (
-          <p className="text-xs font-medium text-success" data-testid="daily-goal-saved-notice">
-            {strings.dailyGoal.savedNotice}
-          </p>
-        )}
 
         {!isAuthenticated && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-chrome px-3 py-2 text-[11px]">

@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle,
-  Award,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -16,6 +14,9 @@ import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import type { AssessmentPublic, LocaleCode } from '../shared/types';
 import { formatTemplate, t } from '../lib/i18n';
 import { apiFetch } from '../lib/auth-client';
+import { notificationCopy } from '../lib/notification-copy';
+import { describeError, notify } from '../lib/notifications';
+import { useToastSlot } from '../context/NotificationContext';
 import { recordQuizAttemptWeaknesses } from '../lib/study-features';
 
 export type SlideDirection = 'forward' | 'backward';
@@ -267,10 +268,20 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
 
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const setErrorMsg = useToastSlot(
+    'assessment-validation',
+    notificationCopy(locale).validation.incompleteAssessment,
+    'warning'
+  );
+  const onViewCertificatesRef = useRef(onViewCertificates);
+  onViewCertificatesRef.current = onViewCertificates;
   const [result, setResult] = useState<AssessmentAttemptFeedback | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(totalDurationSeconds);
-  const [autoSubmittedNotice, setAutoSubmittedNotice] = useState<string | null>(null);
+  const setAutoSubmittedNotice = useToastSlot(
+    'assessment-timeout',
+    notificationCopy(locale).assessment.timeUp,
+    'warning'
+  );
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [slideDirection, setSlideDirection] = useState<SlideDirection>('forward');
   const [navigationStepCount, setNavigationStepCount] = useState(0);
@@ -355,6 +366,47 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
         if (!res.ok) throw new Error(data.error || 'Could not grade assessment.');
         setResult(data);
 
+        // The score summary lives in the HUD toast; no inline result banner pushes the questions down.
+        const toastCopy = notificationCopy(locale);
+        const scoreLine = formatTemplate(t(locale).assessment.scoreSummary, {
+          scorePercent: data.scorePercent,
+          correctCount: data.correctCount,
+          totalQuestions: data.totalQuestions,
+        });
+        const xpLine =
+          data.xpAwarded > 0
+            ? formatTemplate(t(locale).assessment.xpAwardedBadge, { xp: data.xpAwarded })
+            : data.xpNote;
+        if (data.passed) {
+          notify.success(toastCopy.assessment.passed, `${scoreLine} · ${xpLine}`, {
+            id: 'assessment-result',
+            durationMs: 8000,
+            action:
+              data.certificateToken && !data.certificateIssuedNow
+                ? { label: toastCopy.common.view, onAction: () => onViewCertificatesRef.current() }
+                : null,
+          });
+        } else {
+          notify.warning(
+            isAutoTimeout ? toastCopy.assessment.timeUp : toastCopy.assessment.notPassed,
+            `${scoreLine} · ${xpLine}`,
+            { id: 'assessment-result', durationMs: 9000 }
+          );
+        }
+        if (data.certificateIssuedNow) {
+          notify.success(
+            toastCopy.assessment.certificateIssued,
+            toastCopy.assessment.certificateIssuedMessage,
+            {
+              durationMs: 8000,
+              action: {
+                label: toastCopy.common.view,
+                onAction: () => onViewCertificatesRef.current(),
+              },
+            }
+          );
+        }
+
         // Record any missed question topics for the Overview Weakness Detection card
         const missed = data.questionFeedback
           .filter((fb) => !fb.isCorrect)
@@ -377,7 +429,11 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
 
         await onAttemptCompleted();
       } catch (err) {
-        setErrorMsg(err instanceof Error ? err.message : 'Grading request failed.');
+        const toastCopy = notificationCopy(locale);
+        notify.error(
+          toastCopy.assessment.submitFailed,
+          describeError(err, toastCopy.common.genericError)
+        );
       } finally {
         setSubmitting(false);
       }
@@ -476,18 +532,6 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Auto-Submission Notification Banner when Timer Expires */}
-        {autoSubmittedNotice && (
-          <div
-            role="alert"
-            data-testid="assessment-timeout-banner"
-            className="flex items-start gap-2.5 rounded-xl border-2 border-warning bg-chrome p-3.5 text-xs font-medium text-warning shadow-brutal-sm"
-          >
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
-            <span>{autoSubmittedNotice}</span>
-          </div>
-        )}
 
         {/* Subtle Framer Motion Progress Bar Transition & Sequential Question Navigator */}
         <div
@@ -624,68 +668,6 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
         </div>
       </header>
 
-      <AnimatePresence mode="sync">
-        {result && (
-          <motion.div
-            key="assessment-result-banner"
-            layout
-            initial={{ opacity: 0, y: -10, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-            role="status"
-            className={`rounded-xl border p-4 ${
-              result.passed
-                ? 'border-success/50 bg-chrome'
-                : 'border-warning/50 bg-chrome'
-            }`}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className={`text-sm font-semibold ${result.passed ? 'text-success' : 'text-warning'}`}>
-                  {result.passed
-                    ? locale === 'uz'
-                      ? 'Baholashdan muvaffaqiyatli o‘tdingiz'
-                      : 'Assessment Passed'
-                    : locale === 'uz'
-                    ? 'O‘tish baliga yetmadi — qayta urinib ko‘ring'
-                    : 'Below Passing Threshold — Review Explanations & Retry'}
-                </div>
-                <p className="mt-1 font-mono text-xs tabular-nums text-muted">
-                  {formatTemplate(t(locale).assessment.scoreSummary, {
-                    scorePercent: result.scorePercent,
-                    correctCount: result.correctCount,
-                    totalQuestions: result.totalQuestions,
-                  })}{' '}
-                  ·{' '}
-                  {result.xpAwarded > 0
-                    ? formatTemplate(t(locale).assessment.xpAwardedBadge, { xp: result.xpAwarded })
-                    : result.xpNote}
-                </p>
-              </div>
-
-              {result.certificateToken && (
-                <button
-                  type="button"
-                  onClick={onViewCertificates}
-                  className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-teal px-4 py-2 text-xs font-semibold text-teal-ink hover:bg-teal-hover"
-                >
-                  <Award className="h-4 w-4" aria-hidden="true" />
-                  <span>{locale === 'uz' ? 'Sertifikatni ko‘rish' : 'View Course Certificate'}</span>
-                </button>
-              )}
-            </div>
-            {result.certificateIssuedNow && (
-              <p className="mt-2 text-xs text-teal">
-                {locale === 'uz'
-                  ? 'Tabriklaymiz! Ushbu kurs bo‘yicha shaxsiy tasdiqlanadigan sertifikatingiz yaratildi.'
-                  : 'Course completion criteria met! Your verifiable course-specific certificate has been issued.'}
-              </p>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <LayoutGroup id={`assessment-questions-${assessment.id}`}>
         <form onSubmit={handleSubmit} className="space-y-5">
           <div data-testid="assessment-question-list" className="space-y-4">
@@ -781,12 +763,6 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
               })}
             </AnimatePresence>
           </div>
-
-          {errorMsg && (
-            <div role="alert" className="rounded-lg border border-danger/50 bg-danger-surface/40 px-4 py-2.5 text-xs text-danger-text">
-              {errorMsg}
-            </div>
-          )}
 
           <div data-print-hide="assessment-actions" className="no-print flex flex-wrap items-center justify-between gap-3 pt-2">
             <div className="flex items-center gap-1.5 text-xs text-muted">

@@ -5,6 +5,8 @@ import type { LocaleCode } from '../shared/types';
 import type { AmbientFocusAudioController } from '../hooks/useAmbientFocusAudio';
 import type { FocusTimerController } from '../hooks/useFocusTimer';
 import { useEconovaGSAP } from '../hooks/useEconovaGSAP';
+import { notificationCopy } from '../lib/notification-copy';
+import { notify } from '../lib/notifications';
 import { FocusTimerPanel } from './FocusTimerPanel';
 import {
   AMBIENT_PRESET_ORDER,
@@ -131,6 +133,14 @@ export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
     resetDefaults,
   } = audio;
 
+  const toastCopy = notificationCopy(locale);
+
+  // Playback errors surface as HUD toasts rather than an inline box that shifts the panel.
+  useEffect(() => {
+    if (!errorMessage) return;
+    notify.error(toastCopy.audio.failed, errorMessage, { id: 'ambient-audio-error' });
+  }, [errorMessage, toastCopy]);
+
   const cutoffHz = computeFilterCutoffHz(settings.warmth, settings.preset);
   const volumePercent = Math.round(settings.volume * 100);
   const densityPercent = Math.round(settings.density * 100);
@@ -208,18 +218,6 @@ export const AudioSettingsPanel: React.FC<AudioSettingsPanelProps> = ({
           </button>
         </div>
       </div>
-
-      {!isSupported && (
-        <p className="mt-3 rounded-lg border-2 border-amber-500/60 bg-amber-500/10 px-3 py-2 text-xs text-ink">
-          {copy.unsupportedNotice}
-        </p>
-      )}
-
-      {errorMessage && (
-        <p className="mt-3 rounded-lg border-2 border-rose-500/70 bg-rose-500/10 px-3 py-2 text-xs text-ink">
-          {errorMessage}
-        </p>
-      )}
 
       {/* Subtle Real-Time Acoustic Field Strip */}
       <div

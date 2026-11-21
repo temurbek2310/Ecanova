@@ -1,9 +1,8 @@
-import React, { useId, useRef } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import gsap from 'gsap';
 import {
   Bell,
   BellOff,
-  CheckCircle2,
   Coffee,
   Pause,
   Play,
@@ -17,6 +16,8 @@ import type { LocaleCode } from '../shared/types';
 import type { AmbientFocusAudioController } from '../hooks/useAmbientFocusAudio';
 import type { FocusTimerController } from '../hooks/useFocusTimer';
 import { useEconovaGSAP } from '../hooks/useEconovaGSAP';
+import { notificationCopy } from '../lib/notification-copy';
+import { notify } from '../lib/notifications';
 import {
   FOCUS_DURATION_OPTIONS,
   getBreakMinutesForSession,
@@ -49,7 +50,7 @@ interface FocusTimerCopy {
   lessonContextLabel: string;
 }
 
-function getFocusTimerCopy(locale: LocaleCode): FocusTimerCopy {
+export function getFocusTimerCopy(locale: LocaleCode): FocusTimerCopy {
   if (locale === 'uz') {
     return {
       title: 'Fokus taymeri',
@@ -459,34 +460,6 @@ export const FocusTimerPanel: React.FC<FocusTimerPanelProps> = ({
         </div>
       </div>
 
-      {/* Completion Action Banner */}
-      {isCompleted && (
-        <div
-          role="status"
-          data-testid={`${testPrefix}-completed-banner`}
-          className="rounded-lg border-2 border-black bg-[#6FE0A1]/20 p-3 dark:border-[#6FE0A1]"
-        >
-          <div className="flex items-start gap-2 text-xs font-semibold text-ink">
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-[#6FE0A1]" aria-hidden="true" />
-            <span>
-              {isBreak ? copy.completedBannerBreak : copy.completedBannerFocus}
-            </span>
-          </div>
-          <div className="mt-2.5 flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                timer.selectPhase(isBreak ? 'focus' : 'break');
-                timer.start();
-              }}
-              className="inline-flex min-h-[34px] flex-1 items-center justify-center gap-1.5 rounded-lg border-2 border-black bg-[#5DE1D2] px-3 py-1 text-xs font-bold text-black shadow-[2px_2px_0px_#000000]"
-            >
-              {isBreak ? copy.nextFocus : `${copy.startBreak} (${timer.breakMinutes}m)`}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Session Duration Selector (25m / 50m) */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs">
@@ -663,3 +636,44 @@ export const FocusTimerPanel: React.FC<FocusTimerPanelProps> = ({
     </section>
   );
 };
+
+export const FOCUS_TIMER_COMPLETE_NOTIFICATION_ID = 'focus-timer-complete';
+
+/**
+ * Announces a finished focus/break session as a HUD toast with the follow-up
+ * action, once per completion, regardless of which timer panel is mounted.
+ */
+export function useFocusTimerCompletionToast(timer: FocusTimerController, locale: LocaleCode): void {
+  const timerRef = useRef(timer);
+  timerRef.current = timer;
+  const wasCompletedRef = useRef(timer.status === 'completed');
+
+  useEffect(() => {
+    const isCompleted = timer.status === 'completed';
+    if (isCompleted && !wasCompletedRef.current) {
+      const copy = getFocusTimerCopy(locale);
+      const toastCopy = notificationCopy(locale);
+      const isBreak = timer.phase === 'break';
+      notify.success(
+        isBreak ? toastCopy.focus.breakComplete : toastCopy.focus.focusComplete,
+        isBreak ? copy.completedBannerBreak : copy.completedBannerFocus,
+        {
+          id: FOCUS_TIMER_COMPLETE_NOTIFICATION_ID,
+          durationMs: 12000,
+          action: {
+            label: isBreak ? copy.nextFocus : `${copy.startBreak} (${timer.breakMinutes}m)`,
+            onAction: () => {
+              const current = timerRef.current;
+              current.selectPhase(current.phase === 'break' ? 'focus' : 'break');
+              current.start();
+            },
+          },
+        }
+      );
+    }
+    if (!isCompleted && wasCompletedRef.current) {
+      notify.dismiss(FOCUS_TIMER_COMPLETE_NOTIFICATION_ID);
+    }
+    wasCompletedRef.current = isCompleted;
+  }, [timer.status, timer.phase, timer.breakMinutes, locale]);
+}

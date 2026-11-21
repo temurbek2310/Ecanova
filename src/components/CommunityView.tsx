@@ -15,6 +15,8 @@ import type {
   UserSummary,
 } from '../shared/types';
 import { t } from '../lib/i18n';
+import { notificationCopy } from '../lib/notification-copy';
+import { describeError, notify } from '../lib/notifications';
 import type { WeekWindow } from '../lib/quiz-leaderboard';
 import { FloatingWatermark } from './FloatingWatermark';
 import { RankingMatrix } from './RankingMatrix';
@@ -51,18 +53,18 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   onRequireAuth,
 }) => {
   const strings = t(locale);
+  const toastCopy = notificationCopy(locale);
   const [activeLeaderboardTab, setActiveLeaderboardTab] = useState<'cohort' | 'quiz'>('cohort');
   const [selectedQuizCourseId, setSelectedQuizCourseId] = useState<string>('all');
   const [pseudonym, setPseudonym] = useState(user?.leaderboardPseudonym || 'ECONOVAScholar');
   const [claimInput, setClaimInput] = useState('');
-  const [feedback, setFeedback] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const handleOptToggle = async (next: boolean) => {
-    setFeedback(null);
     try {
       await onToggleLeaderboardOptIn(next, pseudonym);
-      setFeedback(
+      notify.success(
+        next ? toastCopy.community.joined : toastCopy.community.left,
         next
           ? locale === 'uz'
             ? 'Siz tanlagan taxallus bilan reytingga qo‘shildingiz.'
@@ -72,23 +74,23 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
           : 'You are hidden from public cohort and quiz rankings.'
       );
     } catch (err) {
-      setFeedback(err instanceof Error ? err.message : 'Update failed.');
+      notify.error(toastCopy.community.updateFailed, describeError(err, toastCopy.common.genericError));
     }
   };
 
   const handleClaim = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
     try {
       await onClaimReferral(claimInput);
       setClaimInput('');
-      setFeedback(
+      notify.success(
+        toastCopy.community.referralApplied,
         locale === 'uz'
-          ? 'Taklif kodi qo‘llanildi! Naqd pulsiz XP hisoblandi.'
-          : 'Referral code applied! Eligible non-cash XP credited.'
+          ? 'Naqd pulsiz XP hisoblandi.'
+          : 'Eligible non-cash XP credited.'
       );
     } catch (err) {
-      setFeedback(err instanceof Error ? err.message : 'Could not apply code.');
+      notify.error(toastCopy.community.referralFailed, describeError(err, toastCopy.common.genericError));
     }
   };
 
@@ -218,14 +220,6 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
           </div>
         )}
 
-        {feedback && (
-          <div
-            role="status"
-            className="mt-3 rounded-lg border border-teal/40 bg-chrome px-3.5 py-2 text-xs text-teal"
-          >
-            {feedback}
-          </div>
-        )}
 
         {/* TAB 1: COHORT XP LEADERBOARD */}
         {activeLeaderboardTab === 'cohort' && (
@@ -331,10 +325,16 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                 {referralCode && (
                   <button
                     type="button"
-                    onClick={() => {
-                      navigator.clipboard?.writeText(referralCode);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
+                    onClick={async () => {
+                      try {
+                        if (!navigator.clipboard) throw new Error(toastCopy.share.copyFailed);
+                        await navigator.clipboard.writeText(referralCode);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                        notify.success(toastCopy.share.copied, referralCode);
+                      } catch (err) {
+                        notify.error(toastCopy.share.copyFailed, describeError(err, toastCopy.common.genericError));
+                      }
                     }}
                     className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-line bg-elevated px-3 py-1.5 text-xs text-ink"
                   >

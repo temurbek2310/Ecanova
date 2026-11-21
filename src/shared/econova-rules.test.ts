@@ -185,12 +185,13 @@ test('canTransitionEditorialState restores a retired edition to approved only wi
   assert.match(noLanguage.reason ?? '', /Restore to Draft/);
   assert.doesNotMatch(noLanguage.reason ?? '', /subject review/, 'only missing gates are named');
 
-  const none = canTransitionEditorialState('retired', 'approved', {
+  const noSignoffs = {
     hasProvenance: false,
     hasSubjectReview: false,
     hasLanguageReview: false,
     hasRightsAccessibilityReview: false,
-  });
+  };
+  const none = canTransitionEditorialState('retired', 'approved', noSignoffs);
   assert.equal(none.allowed, false);
   assert.match(
     none.reason ?? '',
@@ -198,7 +199,7 @@ test('canTransitionEditorialState restores a retired edition to approved only wi
   );
 
   // Draft stays the always-available way back; other exits from retired are refused.
-  assert.equal(canTransitionEditorialState('retired', 'draft', none).allowed, true);
+  assert.equal(canTransitionEditorialState('retired', 'draft', noSignoffs).allowed, true);
   const toPublished = canTransitionEditorialState('retired', 'published', complete);
   assert.equal(toPublished.allowed, false);
   assert.match(toPublished.reason ?? '', /only be restored to Approved or Draft/);
