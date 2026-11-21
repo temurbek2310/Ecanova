@@ -248,7 +248,7 @@ const COPY: Record<LocaleCode, LandingCopy> = {
       architecture: 'Architecture',
       start: 'Get Started',
       signIn: 'Sign In',
-      launch: 'Launch App',
+      launch: 'Open App',
       dashboard: 'Dashboard',
     },
     hero: {
@@ -1075,6 +1075,8 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
     onClick: (e: ReactMouseEvent<HTMLElement>) => {
       if (!isPlainClick(e)) return;
       e.preventDefault();
+      getActiveLenisInstance()?.scrollTo(0, { immediate: true });
+      window.scrollTo(0, 0);
       onEnterApp();
     },
   };
@@ -1172,8 +1174,8 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
     [catalog, locale],
   );
 
-  /** Primary "into the app" action: dashboard for members, the public course catalog for visitors. */
-  const launchProps = signedIn ? enterProps : routeProps(ROUTES.catalog);
+  /** Primary "into the app" action: overview dashboard for both members and visitors. */
+  const launchProps = enterProps;
 
   /*
    * Scroll choreography. Everything created here lives in useGSAP's context and is reverted

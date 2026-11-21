@@ -161,3 +161,25 @@ test('installAuthFetchInterceptor never throws when window.fetch is a getter-onl
   });
 });
 
+test('landing page and default app-entry flow route to /overview instead of /catalog', () => {
+  const parsedRoot = parseRouteFromLocation('/');
+  assert.equal(parsedRoot.tab, 'landing');
+
+  // App-entry target is /overview (not /catalog)
+  assert.equal(buildPathForTab('overview'), '/overview');
+
+  // /catalog remains a dedicated public catalog route
+  assert.equal(buildPathForTab('catalog'), '/catalog');
+  assert.equal(isProtectedTab('catalog'), false);
+  assert.equal(isProtectedPathname('/catalog'), false);
+
+  // Default redirect when authenticated on guest route is /overview
+  const authedGuest = evaluateMiddlewareRouteGuard({
+    pathname: '/login',
+    isAuthenticated: true,
+    userRole: 'learner',
+  });
+  assert.equal(authedGuest.action, 'redirect');
+  assert.equal(authedGuest.destination, '/overview');
+});
+
