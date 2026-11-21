@@ -170,6 +170,41 @@ test('canTransitionEditorialState prevents publishing unreviewed AI or draft con
   assert.equal(approvedToPublish.allowed, true);
 });
 
+test('canTransitionEditorialState restores a retired edition to approved only with every sign-off', () => {
+  const complete = {
+    hasProvenance: true,
+    hasSubjectReview: true,
+    hasLanguageReview: true,
+    hasRightsAccessibilityReview: true,
+  };
+  assert.deepEqual(canTransitionEditorialState('retired', 'approved', complete), { allowed: true });
+
+  const noLanguage = canTransitionEditorialState('retired', 'approved', { ...complete, hasLanguageReview: false });
+  assert.equal(noLanguage.allowed, false);
+  assert.match(noLanguage.reason ?? '', /language review sign-off/);
+  assert.match(noLanguage.reason ?? '', /Restore to Draft/);
+  assert.doesNotMatch(noLanguage.reason ?? '', /subject review/, 'only missing gates are named');
+
+  const none = canTransitionEditorialState('retired', 'approved', {
+    hasProvenance: false,
+    hasSubjectReview: false,
+    hasLanguageReview: false,
+    hasRightsAccessibilityReview: false,
+  });
+  assert.equal(none.allowed, false);
+  assert.match(
+    none.reason ?? '',
+    /source provenance record, subject review sign-off, language review sign-off, rights\/accessibility review sign-off/
+  );
+
+  // Draft stays the always-available way back; other exits from retired are refused.
+  assert.equal(canTransitionEditorialState('retired', 'draft', none).allowed, true);
+  const toPublished = canTransitionEditorialState('retired', 'published', complete);
+  assert.equal(toPublished.allowed, false);
+  assert.match(toPublished.reason ?? '', /only be restored to Approved or Draft/);
+  assert.equal(canTransitionEditorialState('retired', 'subject_review', complete).allowed, false);
+});
+
 test('evaluateCertificateVerification distinguishes valid, revoked, and not_found', () => {
   assert.equal(evaluateCertificateVerification(null).verificationStatus, 'not_found');
 

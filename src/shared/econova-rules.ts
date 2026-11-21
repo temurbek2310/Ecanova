@@ -242,6 +242,31 @@ export function canTransitionEditorialState(
     return { allowed: true };
   }
 
+  // A retired edition sits outside the review pipeline. It can go back to draft
+  // (handled above) or straight to approved, but only if every sign-off it earned
+  // before retirement is still on record; otherwise it must be re-reviewed from draft.
+  if (current === 'retired') {
+    if (next !== 'approved') {
+      return {
+        allowed: false,
+        reason: 'A retired edition can only be restored to Approved or Draft.',
+      };
+    }
+    const missing = [
+      !signoffs.hasProvenance && 'source provenance record',
+      !signoffs.hasSubjectReview && 'subject review sign-off',
+      !signoffs.hasLanguageReview && 'language review sign-off',
+      !signoffs.hasRightsAccessibilityReview && 'rights/accessibility review sign-off',
+    ].filter((item): item is string => Boolean(item));
+    if (missing.length > 0) {
+      return {
+        allowed: false,
+        reason: `Cannot restore to Approved without: ${missing.join(', ')}. Restore to Draft and complete the review first.`,
+      };
+    }
+    return { allowed: true };
+  }
+
   const order: EditorialStatus[] = [
     'draft',
     'subject_review',
