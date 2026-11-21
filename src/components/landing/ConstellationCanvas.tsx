@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import * as THREE from 'three';
+import { ENTRANCE_SHAPES_MS, resolveIntroProgress, type LandingEntrance } from '../../lib/landing-entrance';
 
 /**
  * ECONOVA landing — full-viewport WebGL constellation.
@@ -32,6 +33,8 @@ import * as THREE from 'three';
 
 interface ConstellationCanvasProps {
   progressRef: MutableRefObject<number>;
+  /** Shared entrance clock: shapes start scattered and assemble on the first rendered frame. */
+  entrance?: LandingEntrance;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1051,6 +1054,7 @@ uniform vec3 uRayD;
 uniform float uRepel; // 0..1 cursor influence
 uniform float uScroll; // smoothed page progress 0..1 (0 under reduced motion)
 uniform float uFgMaxPx; // near-lens point-size ceiling for the foreground layer (CSS px)
+uniform float uIntro; // entrance 0 (scattered) → 1 (assembled); linear, eased per particle below
 
 varying vec3 vColor;
 varying float vAlpha;
@@ -1203,6 +1207,26 @@ void main() {
   vec3 fore = vec3(fxy, cameraPosition.z - fd);
   vec3 w = mix(q, mix(deep, fore, fg), amb);
 
+  // Entrance: formation glyphs start dispersed across the viewport (random direction, radius and depth,
+  // a little swirl) and converge with a staggered quintic ease-out; ambient layers just fade in.
+  float introE = 1.0;
+  if (uIntro < 1.0 && amb < 0.5) {
+    float h1 = fract(sin(phase * 91.7 + 1.3) * 43758.5453);
+    float h2 = fract(sin(phase * 47.3 + 7.1) * 24634.6345);
+    float h3 = fract(sin(phase * 13.9 + 3.7) * 15731.7431);
+    float local = clamp((uIntro - h3 * 0.24) / 0.76, 0.0, 1.0);
+    introE = 1.0 - pow(1.0 - local, 5.0);
+    float ang = h1 * 6.2831853;
+    float rad = mix(0.3, 1.15, sqrt(h2));
+    float camDist = max(cameraPosition.z - w.z, 1.0);
+    vec3 scattered = vec3(vec2(cos(ang), sin(ang)) * rad * uAmbHalf * camDist, w.z + (h3 - 0.5) * 7.0);
+    // Curve the approach: rotate the remaining travel around the formation centre as it closes in.
+    float swirlA = (1.0 - introE) * (h2 - 0.5) * 2.2;
+    vec2 rel = mix(scattered.xy, w.xy, introE) - uOffset.xy;
+    vec2 curved = mat2(cos(swirlA), sin(swirlA), -sin(swirlA), cos(swirlA)) * rel + uOffset.xy;
+    w = vec3(curved, mix(scattered.z, w.z, introE));
+  }
+
   // Cursor flow: push perpendicular to the mouse ray with a gaussian falloff (springiness is CPU-side).
   vec3 v = w - uRayO;
   vec3 perp = v - uRayD * dot(v, uRayD);
@@ -1243,7 +1267,8 @@ void main() {
   // Per-particle 3D tetrahedron: a distinct phase-seeded orientation plus a slow multi-axis
   // zero-gravity tumble (uTime is frozen at 0 under prefers-reduced-motion → static pose).
   float sp = aMeta.z;
-  mat3 tr = tumble(vec3(tw * 1.37 + t * sp * 0.61, tw * 2.11 - t * sp * 0.43, tw * 0.73 + t * sp));
+  float introSpin = (1.0 - introE) * 4.0;
+  mat3 tr = tumble(vec3(tw * 1.37 + t * sp * 0.61 + introSpin, tw * 2.11 - t * sp * 0.43 - introSpin * 0.7, tw * 0.73 + t * sp));
   vec3 e0 = tr * T0;
   vec3 e1 = tr * T1;
   vec3 e2 = tr * T2;
@@ -1259,7 +1284,7 @@ void main() {
     float a = mix(mix(0.15, 0.28, r2), mix(0.18, 0.32, r2), fg);
     // Foreground: fade in at the far end of the corridor, dissolve smoothly before the near plane.
     float fgFade = smoothstep(FG_NEAR, FG_NEAR_FADE_START, dist) * smoothstep(FG_FAR, FG_FAR - FG_FAR_FADE, fd);
-    vAlpha = a * twinkle * mix(nearFade, fgFade, fg);
+    vAlpha = a * twinkle * mix(nearFade, fgFade, fg) * smoothstep(0.0, 0.75, uIntro);
     vGlow = mix(0.2, 0.05, fg);
     vColor = zoneColor(vec3(p.xy * 0.9, fg * 0.6), 0.25, t);
   } else {
@@ -1268,7 +1293,7 @@ void main() {
     float bottom = 1.0 - 0.6 * smoothstep(-0.55, -1.0, p.y);
     // Gyroscope rings (groups 1..3) soften their additive intensity while stage 0 is showing.
     float ringSoft = 1.0 - RING_SOFTEN * step(0.5, group) * uW[0];
-    vAlpha = a * uBrightness * twinkle * bottom * nearFade * ringSoft;
+    vAlpha = a * uBrightness * twinkle * bottom * nearFade * ringSoft * mix(0.3, 1.0, introE);
     vGlow = mix(0.08, 0.5, rim) * ringSoft;
     vColor = zoneColor(p, rimC, t);
   }
@@ -1491,6 +1516,7 @@ function createParticles(mobile: boolean, pixelRatio: number, maxPoint: number, 
       uRepel: { value: 0 },
       uScroll: { value: 0 },
       uFgMaxPx: { value: mobile ? FG_MAX_PX_MOBILE : FG_MAX_PX_DESKTOP },
+      uIntro: { value: 1 },
     },
     transparent: true,
     depthTest: false,
@@ -1507,7 +1533,7 @@ function createParticles(mobile: boolean, pixelRatio: number, maxPoint: number, 
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
 
-export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
+export function ConstellationCanvas({ progressRef, entrance }: ConstellationCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1752,6 +1778,11 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
       let elapsed = 0;
       let last = performance.now();
       let raf = 0;
+      // Entrance: on the first rendered frame the shapes either start the shared clock, join it if the
+      // DOM sequence only just began, or (canvas booted late) run their own scatter so they still
+      // visibly assemble behind the already-revealed copy.
+      let introDone = !entrance || entrance.skip || reduced;
+      let introStart: number | null = null;
 
       const frame = (now: number) => {
         raf = requestAnimationFrame(frame);
@@ -1917,6 +1948,29 @@ export function ConstellationCanvas({ progressRef }: ConstellationCanvasProps) {
         u.uRepel.value = reduced ? 0 : repel;
 
         u.uTime.value = time;
+        if (introDone || reduced) {
+          u.uIntro.value = 1;
+          introDone = true;
+        } else {
+          const nowMs = performance.now();
+          if (introStart === null) {
+            const shared = entrance!.startedAt;
+            if (shared === null) {
+              introStart = entrance!.start(nowMs);
+              container.dataset.intro = 'synced';
+            } else if (nowMs - shared < ENTRANCE_SHAPES_MS * 0.35) {
+              introStart = shared;
+              container.dataset.intro = 'joined';
+            } else {
+              introStart = nowMs;
+              container.dataset.intro = 'late';
+            }
+          }
+          const p = resolveIntroProgress(nowMs, introStart, entrance!.skip);
+          u.uIntro.value = p;
+          if (p >= 1) introDone = true;
+          dirty = true;
+        }
         u.uScale.value = blend(scaleScratch);
         u.uSizeMul.value = blend(STAGE_TRI_SIZE);
         (u.uOffset.value as THREE.Vector3).set(offsetX, offsetY, 0);

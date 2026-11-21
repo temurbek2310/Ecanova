@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -6,6 +6,12 @@ import { ArrowUpRight, Command, FileCheck2, Languages, RefreshCw } from 'lucide-
 import type { LucideIcon } from 'lucide-react';
 import { useEconovaGSAP } from '@/hooks/useEconovaGSAP';
 import { getActiveLenisInstance } from '../../lib/scroll-sync';
+import {
+  ENTRANCE_CANVAS_WAIT_MS,
+  ENTRANCE_DOM_END_S,
+  ENTRANCE_TIMELINE,
+  createLandingEntrance,
+} from '../../lib/landing-entrance';
 import { applyDocumentLocale, persistLocalePreference } from '../../lib/i18n';
 import { apiFetch, getCachedUserSummary } from '../../lib/auth-client';
 import type { CourseCatalogItem, CourseLevel, LocaleCode, Subject } from '../../shared/types';
@@ -990,6 +996,8 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
   const copy = COPY[locale];
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef(0);
+  // One shared entrance clock per landing mount (canvas shapes → navbar → hero).
+  const [entrance] = useState(createLandingEntrance);
 
   // Persist through the app's shared i18n helper (`econova_locale` in localStorage + cookie), so the
   // landing and the dashboard always agree and a reload restores the choice via resolveInitialLocale.
@@ -1285,16 +1293,8 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
           const { isDesktop = false, allowMotion = false } = mmContext.conditions ?? {};
           if (!allowMotion) return;
 
-          /* 2a. Hero mount entrance: masked line snap, then crisp staggered rises. */
-          const heroBadge = one('[data-hero-badge]');
-          const heroLines = all('[data-hero-line]');
-          const heroRise = all('[data-hero-rise]');
-          const intro = gsap.timeline({ defaults: { ease: 'power3.out' }, delay: 0.1 });
-          if (heroBadge) intro.from(heroBadge, { y: 20, opacity: 0, duration: 0.6 }, 0);
-          if (heroLines.length) {
-            intro.from(heroLines, { yPercent: 110, opacity: 0, duration: 0.9, stagger: 0.1, ease: 'power4.out' }, 0.08);
-          }
-          if (heroRise.length) intro.from(heroRise, { y: 20, opacity: 0, duration: 0.6, stagger: 0.08 }, 0.45);
+          /* 2a. Hero mount entrance now lives in the once-per-mount entrance timeline below, so a
+             breakpoint change (which re-runs this matchMedia block) can never replay it. */
 
           /* 2b. Hero scroll-out: copy column lifts and dims so the eye moves to the gyroscope. */
           const hero = one('[data-hero]');
@@ -1426,6 +1426,97 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
     { dependencies: [] },
   );
 
+  /*
+   * Mount entrance (plays once per landing mount; see src/lib/landing-entrance.ts for the timeline):
+   * shapes assemble on the canvas, then the navbar and its items, then the hero copy. The DOM side
+   * is hidden synchronously before first paint and always completes to opacity 1 / no transform:
+   * reduced motion and background tabs skip it, a hidden tab mid-entrance jumps to the end, and a
+   * wall-clock fail-safe finishes it even if animation frames are throttled. Locale switches and
+   * other re-renders never touch these inline styles, so nothing replays or flashes.
+   */
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || document.hidden || entrance.startedAt !== null) {
+      entrance.skip = entrance.skip || reduced || document.hidden;
+      root.dataset.entrance = 'skipped';
+      return;
+    }
+    root.dataset.entrance = 'pending';
+
+    const q = (sel: string) => Array.from(root.querySelectorAll<HTMLElement>(sel));
+    const nav = q('[data-entrance-nav]');
+    const navItems = q('[data-nav-group] > *');
+    const badge = q('[data-hero-badge]');
+    const lines = q('[data-hero-line]');
+    const rise = q('[data-hero-rise]');
+    const targets = [...nav, ...navItems, ...badge, ...lines, ...rise];
+    const T = ENTRANCE_TIMELINE;
+    const lift = T.heroLift;
+
+    // Hide synchronously (before first paint). GSAP renders `fromTo` start values lazily on its next
+    // tick, which could otherwise let one frame of fully visible copy through before the entrance.
+    for (const el of targets) {
+      el.style.opacity = '0';
+      el.style.visibility = 'hidden';
+    }
+
+    const finish = () => {
+      gsap.set(targets, { clearProps: 'opacity,visibility,transform' });
+      root.dataset.entrance = 'done';
+    };
+    const tl = gsap.timeline({ paused: true, defaults: { ease: 'power3.out', lazy: false }, onComplete: finish });
+    tl.fromTo(nav, { autoAlpha: 0, y: T.nav.y }, { autoAlpha: 1, y: 0, duration: T.nav.duration, ease: 'power2.out' }, T.nav.at)
+      .fromTo(
+        navItems,
+        { autoAlpha: 0, y: T.navItems.y },
+        { autoAlpha: 1, y: 0, duration: T.navItems.duration, stagger: T.navItems.stagger },
+        T.navItems.at,
+      )
+      .fromTo(badge, { autoAlpha: 0, y: lift }, { autoAlpha: 1, y: 0, duration: T.heroBadge.duration }, T.heroBadge.at)
+      .fromTo(
+        lines,
+        { autoAlpha: 0, y: lift },
+        { autoAlpha: 1, y: 0, duration: T.heroLines.duration, stagger: T.heroLines.stagger },
+        T.heroLines.at,
+      )
+      .fromTo(
+        rise,
+        { autoAlpha: 0, y: lift },
+        { autoAlpha: 1, y: 0, duration: T.heroRise.duration, stagger: T.heroRise.stagger },
+        T.heroRise.at,
+      );
+
+    // Join the shared clock at the right offset, whoever (canvas or fallback) starts it.
+    const play = (startedAt: number) => {
+      const offset = Math.max(0, (performance.now() - startedAt) / 1000);
+      root.dataset.entrance = 'playing';
+      tl.seek(Math.min(offset, tl.duration()), false).play();
+    };
+    entrance.onStart.add(play);
+    const waitTimer = window.setTimeout(() => entrance.start(), ENTRANCE_CANVAS_WAIT_MS);
+    const failSafe = window.setTimeout(
+      () => tl.progress(1),
+      ENTRANCE_CANVAS_WAIT_MS + ENTRANCE_DOM_END_S * 1000 + 1200,
+    );
+    const onVisibility = () => {
+      if (document.hidden) tl.progress(1);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      entrance.onStart.delete(play);
+      window.clearTimeout(waitTimer);
+      window.clearTimeout(failSafe);
+      document.removeEventListener('visibilitychange', onVisibility);
+      tl.kill();
+      finish();
+    };
+    // `entrance` is created once per mount (useState initialiser); the entrance must never re-run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [econ, math, biz] = copy.chapters;
   const chapters: Array<{ anchor: string; chapter: Chapter; accent: string; right: boolean }> = [
     { anchor: 'econ', chapter: econ, accent: CHAPTER_ACCENTS[0], right: false },
@@ -1464,21 +1555,21 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
   return (
     <div ref={rootRef} lang={locale} className="econova-landing relative min-h-screen overflow-x-clip">
       <Suspense fallback={null}>
-        <ConstellationCanvas progressRef={scrollProgressRef} />
+        <ConstellationCanvas progressRef={scrollProgressRef} entrance={entrance} />
       </Suspense>
 
       {/* ---------------- Sticky Glass-Brutalist navbar ---------------- */}
-      <header className="lp-nav sticky top-0 z-30">
+      <header data-entrance-nav className="lp-nav sticky top-0 z-30">
         <nav
           aria-label={copy.a11y.primaryNav}
           className="lp-gutter mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr]"
         >
-          <div className="flex items-center">
+          <div data-nav-group className="flex items-center">
             <Logo onClick={toTop} compact />
           </div>
 
           {/* Centre links from lg up: below 1024px the right-hand controls (longest in O‘Z) need the room. */}
-          <div className="hidden items-center gap-1 lg:flex">
+          <div data-nav-group className="hidden items-center gap-1 lg:flex">
             <a {...anchorProps('tracks')} className="lp-nav__link inline-flex">
               <Bi locale={locale} pick={(c) => c.nav.tracks} />
             </a>
@@ -1490,7 +1581,7 @@ export function LandingPage({ locale, onToggleLocale, onEnterApp, onSignIn }: La
             </a>
           </div>
 
-          <div className="flex items-center justify-end gap-3">
+          <div data-nav-group className="flex items-center justify-end gap-3">
             <LocaleSwitch locale={locale} label={copy.a11y.language} onChange={setLocale} />
             {!signedIn && (
               <a {...signInProps} className="lp-nav__link hidden sm:inline-flex">
