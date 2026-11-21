@@ -5,6 +5,7 @@ import {
   type MiddlewareGuardDecision,
 } from './lib/auth-routing';
 import type { UserRole } from './shared/types';
+import { normalizeUserRole } from './shared/econova-rules';
 
 export const SESSION_COOKIE_NAME = 'econova_session';
 
@@ -68,7 +69,7 @@ export function decodeUnverifiedSessionPayload(
     return {
       userId: parsed.userId,
       exp: parsed.exp,
-      role: parsed.role,
+      role: parsed.role === undefined ? undefined : normalizeUserRole(parsed.role),
     };
   } catch {
     return null;

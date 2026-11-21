@@ -5,7 +5,7 @@ import gsap from 'gsap';
 import { Flame, MessageSquare } from 'lucide-react';
 import { useEconovaGSAP } from '../hooks/useEconovaGSAP';
 import { getShortcutLabelForTab } from '../lib/keyboard-shortcuts';
-import type { AppNavTab } from '../lib/auth-routing';
+import type { AdminSection, AppNavTab } from '../lib/auth-routing';
 import type { LocaleCode } from '../shared/types';
 import { FloatingWatermark } from './FloatingWatermark';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -16,8 +16,18 @@ export interface SidebarNavItem {
   icon: React.ReactNode;
 }
 
+export interface SidebarAdminNav {
+  heading: string;
+  items: Array<{ section: AdminSection; label: string; icon: React.ReactNode }>;
+  /** Highlighted admin page, or null when the admin console is not open. */
+  activeSection: AdminSection | null;
+  onNavigate: (section: AdminSection) => void;
+}
+
 export interface SidebarProps {
   activeTab: AppNavTab;
+  /** Admin console links. Passed only for admins; learners never see it. */
+  adminNav?: SidebarAdminNav | null;
   locale: LocaleCode;
   navItems: SidebarNavItem[];
   streakFlame: {
@@ -32,6 +42,7 @@ export interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
+  adminNav = null,
   locale,
   navItems,
   streakFlame,
@@ -278,6 +289,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
         </nav>
+
+        {adminNav && adminNav.items.length > 0 && (
+          <nav aria-label={adminNav.heading} data-testid="sidebar-admin-nav" className="space-y-1.5">
+            <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted">
+              {adminNav.heading}
+            </div>
+            {adminNav.items.map((item) => {
+              const isActive = adminNav.activeSection === item.section;
+              return (
+                <button
+                  key={item.section}
+                  type="button"
+                  data-admin-nav-section={item.section}
+                  onClick={() => adminNav.onNavigate(item.section)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex w-full min-h-[38px] items-center gap-2.5 rounded-lg border-2 px-3 py-1.5 text-sm font-semibold whitespace-nowrap ${
+                    isActive
+                      ? 'border-theme-border bg-theme-base text-theme-accent shadow-brutal-sm'
+                      : 'border-transparent text-muted hover:text-ink'
+                  }`}
+                >
+                  {item.icon}
+                  <span className="truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        )}
       </div>
 
       <div className="relative z-10 space-y-3 border-t-2 border-theme-border pt-4">

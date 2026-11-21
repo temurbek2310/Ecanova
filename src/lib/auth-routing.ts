@@ -1,5 +1,5 @@
 import type { LocaleCode, UserRole } from '../shared/types';
-import { STAFF_ROLES } from '../shared/econova-rules.ts';
+import { ADMIN_ROLES } from '../shared/econova-rules.ts';
 
 export type AppNavTab =
   | 'landing'
@@ -13,6 +13,25 @@ export type AppNavTab =
   | 'admin'
   | 'login'
   | 'register';
+
+/** The five admin console pages, each with its own URL under `/admin`. */
+export type AdminSection = 'overview' | 'curriculum' | 'moderation' | 'users' | 'audit';
+
+export const ADMIN_SECTIONS: readonly AdminSection[] = [
+  'overview',
+  'curriculum',
+  'moderation',
+  'users',
+  'audit',
+];
+
+export const ADMIN_SECTION_PATHS: Readonly<Record<AdminSection, string>> = {
+  overview: '/admin',
+  curriculum: '/admin/curriculum',
+  moderation: '/admin/moderation',
+  users: '/admin/users',
+  audit: '/admin/audit',
+};
 
 export interface IntendedDestination {
   tab: Exclude<AppNavTab, 'login' | 'register' | 'landing'>;
@@ -54,6 +73,11 @@ export type RouteAccessPolicy =
       mode: 'role_protected';
       /** Roles allowed in. A missing or null role is always denied. */
       allowedRoles: readonly UserRole[];
+      /**
+       * Optional canonical path. Users who pass the role check are redirected
+       * there (reason `route_alias`), keeping the locale prefix and query.
+       */
+      canonicalPath?: string;
     });
 
 /**
@@ -62,9 +86,9 @@ export type RouteAccessPolicy =
  * (App.tsx: first load, tab clicks, back/forward, post-login redirects) all
  * decide through `evaluateMiddlewareRouteGuard`, which reads only this list.
  *
- * Adding a per-role workspace is one entry, for example:
- *   { id: 'review_desk', mode: 'role_protected', paths: ['/studio/review'],
- *     allowedRoles: ['reviewer', 'admin'] }
+ * Adding a role-specific workspace is one entry, for example:
+ *   { id: 'admin_reports', mode: 'role_protected', paths: ['/admin/reports'],
+ *     allowedRoles: ADMIN_ROLES }
  */
 export const ROUTE_ACCESS_POLICIES: readonly RouteAccessPolicy[] = [
   { id: 'landing', mode: 'public', paths: ['/'] },
@@ -80,7 +104,21 @@ export const ROUTE_ACCESS_POLICIES: readonly RouteAccessPolicy[] = [
     mode: 'authenticated',
     paths: ['/achievements', '/xp', '/dashboard', '/profile', '/settings', '/certificates'],
   },
-  { id: 'staff_studio', mode: 'role_protected', paths: ['/admin', '/studio'], allowedRoles: STAFF_ROLES },
+  // Admin console. `/admin` also covers unknown `/admin/*` sub-paths, which
+  // render the admin overview.
+  { id: 'admin_overview', mode: 'role_protected', paths: ['/admin'], allowedRoles: ADMIN_ROLES },
+  { id: 'admin_curriculum', mode: 'role_protected', paths: ['/admin/curriculum'], allowedRoles: ADMIN_ROLES },
+  { id: 'admin_moderation', mode: 'role_protected', paths: ['/admin/moderation'], allowedRoles: ADMIN_ROLES },
+  { id: 'admin_users', mode: 'role_protected', paths: ['/admin/users'], allowedRoles: ADMIN_ROLES },
+  { id: 'admin_audit', mode: 'role_protected', paths: ['/admin/audit'], allowedRoles: ADMIN_ROLES },
+  // Legacy Editorial Studio URL: still role-checked, then sent to Curriculum.
+  {
+    id: 'studio_alias',
+    mode: 'role_protected',
+    paths: ['/studio'],
+    allowedRoles: ADMIN_ROLES,
+    canonicalPath: ADMIN_SECTION_PATHS.curriculum,
+  },
 ];
 
 /** Any URL carrying a certificate verification token renders the public verifier. */
@@ -436,7 +474,52 @@ export function formatDestinationLabel(
     admin: 'Tahririyat studiyasi',
   };
 
+  if (resolved.tab === 'admin') {
+    const queryIndex = resolved.path.indexOf('?');
+    const section = parseAdminSection(queryIndex >= 0 ? resolved.path.slice(0, queryIndex) : resolved.path);
+    return ADMIN_SECTION_LABELS[locale === 'uz' ? 'uz' : 'en'][section];
+  }
   return locale === 'uz' ? labelsUz[resolved.tab] : labelsEn[resolved.tab];
+}
+
+const ADMIN_SECTION_LABELS: Readonly<Record<LocaleCode, Record<AdminSection, string>>> = {
+  en: {
+    overview: 'Admin Overview',
+    curriculum: 'Curriculum & Editorial',
+    moderation: 'Moderation',
+    users: 'Users & Certificates',
+    audit: 'Audit Log',
+  },
+  uz: {
+    overview: 'Admin paneli',
+    curriculum: 'O‘quv dasturi va tahririyat',
+    moderation: 'Moderatsiya',
+    users: 'Foydalanuvchilar va sertifikatlar',
+    audit: 'Audit jurnali',
+  },
+};
+
+export function getAdminSectionLabel(section: AdminSection, locale: LocaleCode): string {
+  return ADMIN_SECTION_LABELS[locale === 'uz' ? 'uz' : 'en'][section];
+}
+
+/**
+ * Admin page for a pathname. `/studio` (legacy alias) maps to Curriculum and
+ * unknown `/admin/*` sub-paths to the admin Overview.
+ */
+export function parseAdminSection(pathname: string): AdminSection {
+  const clean = normalizeRoutePath(pathname);
+  if (clean === '/studio' || clean.startsWith('/studio/')) return 'curriculum';
+  for (const section of ADMIN_SECTIONS) {
+    if (section === 'overview') continue;
+    const path = ADMIN_SECTION_PATHS[section];
+    if (clean === path || clean.startsWith(`${path}/`)) return section;
+  }
+  return 'overview';
+}
+
+export function buildAdminSectionPath(section: AdminSection): string {
+  return ADMIN_SECTION_PATHS[section] ?? ADMIN_SECTION_PATHS.overview;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -455,7 +538,8 @@ export type MiddlewareGuardReason =
   | 'authenticated'
   | 'unauthenticated_protected'
   | 'already_authenticated'
-  | 'insufficient_role';
+  | 'insufficient_role'
+  | 'route_alias';
 
 export interface MiddlewareGuardDecision {
   action: 'allow' | 'redirect';
@@ -522,6 +606,14 @@ export function evaluateMiddlewareRouteGuard(
       }
       if (policy.mode === 'role_protected' && !roleSatisfiesPolicy(policy, input.userRole)) {
         return { ...base, action: 'redirect', destination: homePath, reason: 'insufficient_role' };
+      }
+      if (policy.mode === 'role_protected' && policy.canonicalPath) {
+        return {
+          ...base,
+          action: 'redirect',
+          destination: sanitizeRedirectTo(`${localePrefix}${policy.canonicalPath}${search}`, homePath),
+          reason: 'route_alias',
+        };
       }
       return { ...base, action: 'allow', destination: null, reason: 'authenticated' };
     }

@@ -379,30 +379,26 @@ export function evaluateCertificateVerification(
   };
 }
 
-// --- Role-based access control (RBAC) for editorial governance ---
-// Internal role strings stay exactly as stored in `users.role`; display labels
-// ("Student", "Moderator", Uzbek equivalents) are presentation only.
+// --- Role-based access control (RBAC) ---
+// Two active roles: `learner` (Student / Talaba) and `admin` (Administrator).
+// The database may still hold legacy staff values ('editor', 'reviewer',
+// 'publisher') because its CHECK constraint was never narrowed; every read of
+// `users.role` goes through `normalizeUserRole`, so only an exact 'admin' is
+// privileged and anything else is a learner.
 
-export const STAFF_ROLES: readonly UserRole[] = ['editor', 'reviewer', 'publisher', 'admin'];
+/** Every role a user can hold today. */
+export const PLATFORM_ROLES: readonly UserRole[] = ['learner', 'admin'];
 
-/** Roles allowed to record each human review signoff on an edition. */
-export const SIGNOFF_ROLES: Readonly<Record<EditorialSignoffType, readonly UserRole[]>> = {
-  subject: ['reviewer', 'admin'],
-  language: ['reviewer', 'admin'],
-  rights: ['reviewer', 'admin'],
-};
+/** Roles allowed into the admin console and every `/api/admin/*` endpoint. */
+export const ADMIN_ROLES: readonly UserRole[] = ['admin'];
 
-/** Roles allowed to release, retire, restore or pull back an approved/published edition. */
-export const RELEASE_ROLES: readonly UserRole[] = ['publisher', 'admin'];
+/** Maps any stored role value onto the active model: only `'admin'` is privileged. */
+export function normalizeUserRole(raw: unknown): UserRole {
+  return raw === 'admin' ? 'admin' : 'learner';
+}
 
-/** Roles allowed to advance an edition out of a review stage. */
-export const REVIEW_ADVANCE_ROLES: readonly UserRole[] = ['reviewer', 'admin'];
-
-/** Roles allowed to run destructive actions such as revoking a learner certificate. */
-export const DESTRUCTIVE_ACTION_ROLES: readonly UserRole[] = ['publisher', 'admin'];
-
-export function isStaffRole(role: UserRole | null | undefined): boolean {
-  return Boolean(role && STAFF_ROLES.includes(role));
+export function isAdminRole(role: unknown): boolean {
+  return role === 'admin';
 }
 
 export function hasAnyRole(
@@ -413,34 +409,59 @@ export function hasAnyRole(
 }
 
 const ROLE_DISPLAY_LABELS: Readonly<Record<LocaleCode, Record<UserRole, string>>> = {
-  en: {
-    learner: 'Student',
-    editor: 'Editor',
-    reviewer: 'Moderator',
-    publisher: 'Publisher',
-    admin: 'Admin',
-  },
-  uz: {
-    learner: 'Talaba',
-    editor: 'Muharrir',
-    reviewer: 'Moderator',
-    publisher: 'Nashr etuvchi',
-    admin: 'Administrator',
-  },
+  en: { learner: 'Student', admin: 'Administrator' },
+  uz: { learner: 'Talaba', admin: 'Administrator' },
 };
 
 export function getRoleDisplayLabel(role: UserRole, locale: LocaleCode): string {
-  return ROLE_DISPLAY_LABELS[locale]?.[role] ?? role;
+  return ROLE_DISPLAY_LABELS[locale]?.[normalizeUserRole(role)] ?? role;
+}
+
+export type RoleChangeDecision =
+  | { allowed: true; nextRole: UserRole; changed: boolean }
+  | { allowed: false; status: 400 | 403; reason: string };
+
+/**
+ * Decides whether `actor` may set `targetUserId`'s role to `requestedRole`.
+ * Only admins may change roles, only to 'learner' or 'admin', and an admin can
+ * never remove their own admin role (so the platform cannot lose its last
+ * operator by accident).
+ */
+export function authorizeRoleChange(input: {
+  actorId: string;
+  actorRole: UserRole | null | undefined;
+  targetUserId: string;
+  requestedRole: unknown;
+  currentRole: unknown;
+}): RoleChangeDecision {
+  if (!isAdminRole(input.actorRole)) {
+    return { allowed: false, status: 403, reason: 'Administrator permission required.' };
+  }
+  if (input.requestedRole !== 'learner' && input.requestedRole !== 'admin') {
+    return { allowed: false, status: 400, reason: "Role must be 'learner' or 'admin'." };
+  }
+  const nextRole = input.requestedRole;
+  if (input.actorId === input.targetUserId && nextRole !== 'admin') {
+    return {
+      allowed: false,
+      status: 403,
+      reason: 'You cannot remove your own administrator role.',
+    };
+  }
+  return { allowed: true, nextRole, changed: normalizeUserRole(input.currentRole) !== nextRole };
 }
 
 export interface EditorialTransitionAuthorizationInput {
   actorId: string;
-  actorRole: UserRole;
+  actorRole: UserRole | null | undefined;
   currentStatus: EditorialStatus;
   targetStatus: EditorialStatus;
+  /** A single sign-off recorded with this transition. */
   signoffType?: EditorialSignoffType | null;
-  /** Reviewer IDs already recorded on the edition, before this request. */
-  reviewers: {
+  /** Several sign-offs recorded at once (e.g. "approve" from any review stage). */
+  signoffTypes?: readonly EditorialSignoffType[] | null;
+  /** Reviewer IDs already recorded on the edition, before this request (kept for provenance). */
+  reviewers?: {
     subject: string | null;
     language: string | null;
     rights: string | null;
@@ -448,107 +469,36 @@ export interface EditorialTransitionAuthorizationInput {
 }
 
 export type EditorialTransitionAuthorization =
-  | { allowed: true }
+  | { allowed: true; signoffs: EditorialSignoffType[] }
   | { allowed: false; reason: string };
 
-const REVIEW_STAGES: readonly EditorialStatus[] = [
-  'subject_review',
-  'language_review',
-  'rights_accessibility_review',
-];
+const SIGNOFF_TYPES: readonly EditorialSignoffType[] = ['subject', 'language', 'rights'];
 
-function formatRoles(roles: readonly UserRole[]): string {
-  return roles.join(' or ');
+export function isEditorialSignoffType(value: unknown): value is EditorialSignoffType {
+  return typeof value === 'string' && (SIGNOFF_TYPES as readonly string[]).includes(value);
 }
 
 /**
- * Decides whether an actor may record a signoff and/or move an edition to a new
- * status. This is the role layer only; `canTransitionEditorialState` still
- * enforces workflow order and required signoffs.
- *
- * - Review signoffs need reviewer/admin, and a non-admin may hold only one of the
- *   three signoff slots on an edition (distinct reviewers).
- * - Publishing, retiring, restoring a retired edition, or pulling an approved or
- *   published edition back to draft needs publisher/admin.
- * - A non-admin publisher cannot publish an edition they signed off themselves.
- * - Admins are explicitly authorized to act alone.
+ * Role layer for editorial actions. An administrator may run the whole
+ * lifecycle alone (draft, sign-offs, approve, publish, retire, restore);
+ * learners may run none of it. Sign-offs are still recorded per slot with the
+ * acting admin's ID and every transition is audit-logged by the server, and
+ * `canTransitionEditorialState` still enforces workflow order and gates.
  */
 export function authorizeEditorialTransition(
   input: EditorialTransitionAuthorizationInput
 ): EditorialTransitionAuthorization {
-  const { actorId, actorRole, currentStatus, targetStatus, signoffType, reviewers } = input;
-
-  if (!isStaffRole(actorRole)) {
-    return { allowed: false, reason: 'Staff editorial permission required.' };
+  if (!isAdminRole(input.actorRole)) {
+    return { allowed: false, reason: 'Administrator permission required.' };
   }
-
-  const isAdmin = actorRole === 'admin';
-  const after = { ...reviewers };
-
-  if (signoffType) {
-    const permitted = Object.prototype.hasOwnProperty.call(SIGNOFF_ROLES, signoffType)
-      ? SIGNOFF_ROLES[signoffType]
-      : null;
-    if (!permitted) {
-      return { allowed: false, reason: 'Unknown signoff type.' };
-    }
-    if (!hasAnyRole(actorRole, permitted)) {
-      return {
-        allowed: false,
-        reason: `The ${signoffType} review signoff requires the ${formatRoles(permitted)} role.`,
-      };
-    }
-    if (!isAdmin) {
-      const otherSlots = (Object.keys(reviewers) as EditorialSignoffType[]).filter(
-        (slot) => slot !== signoffType && reviewers[slot] === actorId
-      );
-      if (otherSlots.length > 0) {
-        return {
-          allowed: false,
-          reason: `Each review signoff must come from a different reviewer; you already signed the ${otherSlots.join(', ')} review.`,
-        };
-      }
-    }
-    after[signoffType] = actorId;
-  }
-
-  if (targetStatus === currentStatus) {
-    return { allowed: true };
-  }
-
-  const isRelease =
-    targetStatus === 'published' ||
-    targetStatus === 'retired' ||
-    (targetStatus === 'approved' && currentStatus === 'retired') ||
-    (targetStatus === 'draft' && (currentStatus === 'approved' || currentStatus === 'published'));
-
-  if (isRelease) {
-    if (!hasAnyRole(actorRole, RELEASE_ROLES)) {
-      return {
-        allowed: false,
-        reason: `Moving an edition to ${targetStatus} from ${currentStatus} requires the ${formatRoles(RELEASE_ROLES)} role.`,
-      };
-    }
-    if (targetStatus === 'published' && !isAdmin) {
-      const signedByActor = Object.values(after).some((id) => id === actorId);
-      if (signedByActor) {
-        return {
-          allowed: false,
-          reason: 'The publisher must be independent of the edition reviewers.',
-        };
-      }
-    }
-    return { allowed: true };
-  }
-
-  if (REVIEW_STAGES.includes(currentStatus) && targetStatus !== 'draft') {
-    if (!hasAnyRole(actorRole, REVIEW_ADVANCE_ROLES)) {
-      return {
-        allowed: false,
-        reason: `Advancing an edition out of ${currentStatus} requires the ${formatRoles(REVIEW_ADVANCE_ROLES)} role.`,
-      };
+  const requested = [
+    ...(input.signoffType ? [input.signoffType] : []),
+    ...(input.signoffTypes ?? []),
+  ];
+  for (const signoff of requested) {
+    if (!isEditorialSignoffType(signoff)) {
+      return { allowed: false, reason: 'Unknown signoff type. Expected subject, language or rights.' };
     }
   }
-
-  return { allowed: true };
+  return { allowed: true, signoffs: [...new Set(requested)] };
 }

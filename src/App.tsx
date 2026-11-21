@@ -34,7 +34,8 @@ import {
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { AchievementsView } from './components/AchievementsView';
-import { AdminStudioView } from './components/AdminStudioView';
+import { AdminConsole } from './components/admin/AdminConsole';
+import { ADMIN_SECTION_ICONS } from './components/admin/AdminLayout';
 import { AiCompanionPanel } from './components/AiCompanionPanel';
 import { AssessmentView } from './components/AssessmentView';
 import { HeaderAudioControl } from './components/AudioSettingsPanel';
@@ -93,8 +94,13 @@ import {
 } from './lib/auth-client';
 import { scrollGlobalToTop } from './lib/scroll-sync';
 import {
+  ADMIN_SECTIONS,
+  buildAdminSectionPath,
   buildPathForTab,
   evaluateMiddlewareRouteGuard,
+  getAdminSectionLabel,
+  parseAdminSection,
+  type AdminSection,
   formatDestinationLabel,
   isSessionDependentRoute,
   parseRouteFromLocation,
@@ -154,7 +160,7 @@ import {
   shouldTriggerStudyGoalReminder,
   type BrowserNotificationPermission,
 } from './lib/study-notifications';
-import { formatLocalDateKey, isStaffRole } from './shared/econova-rules';
+import { formatLocalDateKey, isAdminRole } from './shared/econova-rules';
 import {
   applyDocumentTheme,
   detectSystemColorScheme,
@@ -279,6 +285,11 @@ export default function App() {
     if (typeof window === 'undefined') return 'overview';
     return parseRouteFromLocation(window.location.pathname, window.location.search).tab;
   });
+  // Which admin page (/admin, /admin/curriculum, …) is open while activeTab is 'admin'.
+  const [adminSection, setAdminSection] = useState<AdminSection>(() => {
+    if (typeof window === 'undefined') return 'overview';
+    return parseAdminSection(window.location.pathname);
+  });
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -368,9 +379,8 @@ export default function App() {
   const [syncingSyllabus, setSyncingSyllabus] = useState(false);
   const [localSyllabusCompletedIds, setLocalSyllabusCompletedIds] = useState<string[]>([]);
 
-  const isStaff = Boolean(
-    user && isStaffRole(user.role)
-  );
+  // Only an exact 'admin' role unlocks the admin console and its navigation.
+  const isAdmin = Boolean(user && isAdminRole(user.role));
 
   const loadHealth = useCallback(async () => {
     try {
@@ -598,6 +608,9 @@ export default function App() {
         void openCourseRef.current(parsed.courseId, locale);
         return;
       }
+      if (parsed.tab === 'admin') {
+        setAdminSection(parseAdminSection(pathname));
+      }
       setActiveTab(parsed.tab);
     },
     [locale]
@@ -673,10 +686,32 @@ export default function App() {
     [activateLocation, showInsufficientRoleNotice]
   );
 
+  /** Opens one admin page, through the same route policy as every other navigation. */
+  const navigateToAdminSection = useCallback(
+    (section: AdminSection) => {
+      const path = buildAdminSectionPath(section);
+      if (authHydrated && !enforceRouteAccess({ pathname: path, search: '' }, user, 'push')) {
+        scrollGlobalToTop(true);
+        return;
+      }
+      setAdminSection(section);
+      setActiveTab('admin');
+      if (`${window.location.pathname}${window.location.search}` !== path) {
+        window.history.pushState({}, '', path);
+      }
+      scrollGlobalToTop(true);
+    },
+    [authHydrated, user, enforceRouteAccess]
+  );
+
   const navigateToTab = useCallback(
     (nextTab: NavTab) => {
       if (nextTab === 'login' || nextTab === 'register') {
         navigateToLogin(undefined, nextTab);
+        return;
+      }
+      if (nextTab === 'admin') {
+        navigateToAdminSection('overview');
         return;
       }
       // Before the session is verified, the tab shows its loading state and the
@@ -701,7 +736,15 @@ export default function App() {
       syncBrowserPath(nextTab);
       scrollGlobalToTop(true);
     },
-    [authHydrated, user, selectedCourseId, enforceRouteAccess, navigateToLogin, syncBrowserPath]
+    [
+      authHydrated,
+      user,
+      selectedCourseId,
+      enforceRouteAccess,
+      navigateToAdminSection,
+      navigateToLogin,
+      syncBrowserPath,
+    ]
   );
 
   const navigateToTabRef = useRef(navigateToTab);
@@ -1389,6 +1432,9 @@ export default function App() {
           syncBrowserPath('course', { courseId: cid, replace: true });
         }
       } else {
+        if (targetDest.tab === 'admin') {
+          setAdminSection(parseAdminSection(targetPathname));
+        }
         setActiveTab(targetDest.tab);
         if (targetDest.tab === 'certificates') {
           setVerifyTokenFromUrl(new URLSearchParams(targetSearch).get('verify')?.trim() || null);
@@ -1504,7 +1550,7 @@ export default function App() {
         defaultPrevented: event.defaultPrevented,
         isEditableTarget: isEditable,
         hasOpenDialog: inDialog,
-        isStaff,
+        isStaff: isAdmin,
       });
 
       if (nextTab) {
@@ -1516,7 +1562,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [authOpen, companionOpen, cheatSheetOpen, isStaff]);
+  }, [authOpen, companionOpen, cheatSheetOpen, isAdmin]);
 
   const streakFlame = evaluateStreakFlameState({
     currentStreak: streak.currentStreak,
@@ -1576,8 +1622,8 @@ export default function App() {
   );
 
   const shortcutCheatSheet = React.useMemo(
-    () => getKeyboardShortcutCheatSheet(locale, isStaff),
-    [locale, isStaff]
+    () => getKeyboardShortcutCheatSheet(locale, isAdmin),
+    [locale, isAdmin]
   );
 
   const navItems: Array<{ id: NavTab; label: string; icon: React.ReactNode }> = [
@@ -1589,13 +1635,24 @@ export default function App() {
     { id: 'profile', label: strings.nav.profile, icon: <Shield className="h-4 w-4" aria-hidden="true" /> },
   ];
 
-  if (isStaff) {
-    navItems.push({
-      id: 'admin',
-      label: strings.nav.admin,
-      icon: <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />,
-    });
-  }
+  const adminNavItems = isAdmin
+    ? ADMIN_SECTIONS.map((section) => {
+        const Icon = ADMIN_SECTION_ICONS[section];
+        return {
+          section,
+          label: getAdminSectionLabel(section, locale),
+          icon: <Icon className="h-4 w-4" aria-hidden="true" />,
+        };
+      })
+    : [];
+  const adminNav = isAdmin
+    ? {
+        heading: locale === 'uz' ? 'Administrator' : 'Admin',
+        items: adminNavItems,
+        activeSection: activeTab === 'admin' ? adminSection : null,
+        onNavigate: navigateToAdminSection,
+      }
+    : null;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1645,6 +1702,7 @@ export default function App() {
         activeTab={activeTab}
         locale={locale}
         navItems={navItems}
+        adminNav={adminNav}
         streakFlame={streakFlame}
         installAppLabel={strings.installApp}
         onNavigateTab={navigateToTab}
@@ -1694,6 +1752,8 @@ export default function App() {
             <span className="hidden text-xs font-semibold text-muted truncate md:inline max-w-[180px] lg:max-w-[260px]">
               {activeTab === 'course' && courseDetail
                 ? `${strings.subjects[courseDetail.course.subject]} / ${courseDetail.edition.title}`
+                : activeTab === 'admin'
+                ? getAdminSectionLabel(adminSection, locale)
                 : navItems.find((n) => n.id === activeTab)?.label || 'ECONOVA'}
             </span>
           </div>
@@ -1806,6 +1866,25 @@ export default function App() {
                   }}
                   className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold ${
                     activeTab === item.id
+                      ? 'border-theme-accent bg-theme-base text-theme-accent shadow-brutal-sm'
+                      : 'border-theme-border bg-theme-base text-muted'
+                  }`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              ))}
+              {adminNavItems.map((item) => (
+                <button
+                  key={`admin-${item.section}`}
+                  type="button"
+                  data-admin-nav-section={item.section}
+                  onClick={() => {
+                    navigateToAdminSection(item.section);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold ${
+                    activeTab === 'admin' && adminSection === item.section
                       ? 'border-theme-accent bg-theme-base text-theme-accent shadow-brutal-sm'
                       : 'border-theme-border bg-theme-base text-muted'
                   }`}
@@ -3244,13 +3323,15 @@ export default function App() {
           )}
 
           {/* STAFF EDITORIAL & CONTENT GOVERNANCE STUDIO */}
-          {activeTab === 'admin' && isStaff && user && (
-            <AdminStudioView
+          {activeTab === 'admin' && isAdmin && user && (
+            <AdminConsole
               locale={locale}
+              section={adminSection}
+              onNavigate={navigateToAdminSection}
               courses={courses}
               aiConfigured={health.aiConfigured}
               onCatalogRefresh={loadCatalog}
-              currentUser={{ id: user.id, role: user.role }}
+              currentUser={{ id: user.id, role: user.role, displayName: user.displayName }}
             />
           )}
           </>
@@ -3299,7 +3380,7 @@ export default function App() {
           <div className="w-full max-w-lg">
             <AiCompanionPanel
               locale={locale}
-              isStaff={isStaff}
+              isStaff={isAdmin}
               aiConfigured={health.aiConfigured}
               onClose={() => setCompanionOpen(false)}
             />

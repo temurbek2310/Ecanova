@@ -18,7 +18,6 @@ import {
   verifySessionToken,
   requireAdmin,
   requireRole,
-  requireStaffRole,
   type AuthenticatedRequest,
 } from './auth.ts';
 
@@ -118,7 +117,7 @@ test('production refuses to start without a real SESSION_SECRET', () => {
   }
 });
 
-// --- RBAC guards: requireRole / requireStaffRole over a real Express server ---
+// --- RBAC guards: requireRole / requireAdmin over a real Express server ---
 
 async function withGuardServer(run: (baseUrl: string) => Promise<void>): Promise<void> {
   const app = express();
@@ -136,9 +135,13 @@ async function withGuardServer(run: (baseUrl: string) => Promise<void>): Promise
   const ok = (_req: Request, res: Response) => {
     res.json({ ok: true });
   };
-  app.get('/release', requireRole('publisher', 'admin'), ok);
-  app.get('/staff', requireStaffRole, ok);
+  app.get('/learner-or-admin', requireRole('learner', 'admin'), ok);
   app.get('/system', requireAdmin, ok);
+  // Mirrors server.ts: one prefix gate in front of every /api/admin/* route,
+  // so even a route registered without its own guard is admin-only.
+  app.use('/api/admin', requireAdmin);
+  app.get('/api/admin/unguarded-example', ok);
+  app.patch('/api/admin/users/:userId/role', requireAdmin, ok);
 
   const server = await new Promise<Server>((resolve) => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s));
@@ -159,28 +162,41 @@ async function statusFor(url: string, role?: string): Promise<number> {
 
 test('requireRole: 401 unauthenticated, 403 wrong role, 200 allowed role', async () => {
   await withGuardServer(async (base) => {
-    assert.equal(await statusFor(`${base}/release`), 401);
-    assert.equal(await statusFor(`${base}/release`, 'learner'), 403);
-    assert.equal(await statusFor(`${base}/release`, 'editor'), 403);
-    assert.equal(await statusFor(`${base}/release`, 'reviewer'), 403);
-    assert.equal(await statusFor(`${base}/release`, 'publisher'), 200);
-    assert.equal(await statusFor(`${base}/release`, 'admin'), 200);
+    assert.equal(await statusFor(`${base}/learner-or-admin`), 401);
+    assert.equal(await statusFor(`${base}/learner-or-admin`, 'learner'), 200);
+    assert.equal(await statusFor(`${base}/learner-or-admin`, 'admin'), 200);
+    assert.equal(await statusFor(`${base}/learner-or-admin`, 'superuser'), 403);
   });
 });
 
-test('requireAdmin allows only admin; requireStaffRole keeps all four staff roles', async () => {
+test('requireAdmin allows only an exact admin role (legacy staff roles are refused)', async () => {
   await withGuardServer(async (base) => {
     assert.equal(await statusFor(`${base}/system`), 401);
-    for (const role of ['learner', 'editor', 'reviewer', 'publisher']) {
+    for (const role of ['learner', 'editor', 'reviewer', 'publisher', 'Admin', 'ADMIN']) {
       assert.equal(await statusFor(`${base}/system`, role), 403, role);
     }
     assert.equal(await statusFor(`${base}/system`, 'admin'), 200);
+  });
+});
 
-    assert.equal(await statusFor(`${base}/staff`), 401);
-    assert.equal(await statusFor(`${base}/staff`, 'learner'), 403);
-    for (const role of ['editor', 'reviewer', 'publisher', 'admin']) {
-      assert.equal(await statusFor(`${base}/staff`, role), 200, role);
-    }
+test('the /api/admin prefix gate covers routes that forgot their own guard', async () => {
+  await withGuardServer(async (base) => {
+    assert.equal(await statusFor(`${base}/api/admin/unguarded-example`), 401);
+    assert.equal(await statusFor(`${base}/api/admin/unguarded-example`, 'learner'), 403);
+    assert.equal(await statusFor(`${base}/api/admin/unguarded-example`, 'editor'), 403);
+    assert.equal(await statusFor(`${base}/api/admin/unguarded-example`, 'admin'), 200);
+
+    const patchStatus = async (role?: string) => {
+      const res = await fetch(`${base}/api/admin/users/usr-x/role`, {
+        method: 'PATCH',
+        headers: role ? { 'x-test-role': role } : {},
+      });
+      await res.arrayBuffer();
+      return res.status;
+    };
+    assert.equal(await patchStatus(), 401);
+    assert.equal(await patchStatus('learner'), 403);
+    assert.equal(await patchStatus('admin'), 200);
   });
 });
 

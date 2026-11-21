@@ -5,6 +5,7 @@ import {
   type IntendedDestination,
 } from './auth-routing';
 import { resolveMvpApiFallbackPayload } from './mvp-api-stubs';
+import { normalizeUserRole } from '../shared/econova-rules';
 
 /**
  * Session model: the server keeps the session in an HttpOnly `econova_session`
@@ -62,7 +63,8 @@ export function getCachedUserSummary(): UserSummary | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as UserSummary;
     if (parsed && typeof parsed.id === 'string' && typeof parsed.email === 'string') {
-      return parsed;
+      // Profiles cached by older builds may carry legacy staff roles.
+      return { ...parsed, role: normalizeUserRole(parsed.role) };
     }
   } catch {
     // Ignore parse error

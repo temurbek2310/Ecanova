@@ -149,6 +149,18 @@ export interface NotificationCopy {
   auth: {
     failed: string;
   };
+  admin: {
+    loadFailed: string;
+    draftUpdated: string;
+    draftUpdateFailed: string;
+    approvedAll: string;
+    approvedAllMessage: string;
+    moderationUpdated: string;
+    roleUpdated: (displayName: string, roleLabel: string) => string;
+    roleUpdateFailed: string;
+    selfDemotionBlocked: string;
+    revokeReasonRequired: string;
+  };
   access: {
     insufficientRole: string;
     /** `destinationLabel` is null when the page is unknown (e.g. after a server redirect). */
@@ -281,7 +293,7 @@ const EN: NotificationCopy = {
     reportResolved: 'Issue report resolved',
     reviewResolved: 'Review request resolved',
     resolveFailed: 'Could not resolve item',
-    loadFailed: 'Could not load Editorial Studio',
+    loadFailed: 'Could not load curriculum',
   },
   profile: {
     saved: 'Profile updated',
@@ -321,6 +333,18 @@ const EN: NotificationCopy = {
   },
   auth: {
     failed: 'Authentication failed',
+  },
+  admin: {
+    loadFailed: 'Could not load admin data',
+    draftUpdated: 'Draft updated',
+    draftUpdateFailed: 'Could not update draft',
+    approvedAll: 'Edition approved',
+    approvedAllMessage: 'Subject, language and rights sign-offs were recorded under your account.',
+    moderationUpdated: 'Moderation status updated',
+    roleUpdated: (displayName, roleLabel) => `${displayName} is now ${roleLabel}`,
+    roleUpdateFailed: 'Could not change role',
+    selfDemotionBlocked: 'You cannot remove your own administrator role.',
+    revokeReasonRequired: 'Enter an audit reason of at least 5 characters.',
   },
   access: {
     insufficientRole: 'Access restricted',
@@ -457,7 +481,7 @@ const UZ: NotificationCopy = {
     reportResolved: 'Xabar hal qilindi',
     reviewResolved: 'Ko‘rib chiqish so‘rovi hal qilindi',
     resolveFailed: 'Elementni hal qilib bo‘lmadi',
-    loadFailed: 'Tahririyat studiyasini yuklab bo‘lmadi',
+    loadFailed: 'O‘quv dasturini yuklab bo‘lmadi',
   },
   profile: {
     saved: 'Profil yangilandi',
@@ -497,6 +521,18 @@ const UZ: NotificationCopy = {
   },
   auth: {
     failed: 'Kirish amalga oshmadi',
+  },
+  admin: {
+    loadFailed: 'Admin ma’lumotlarini yuklab bo‘lmadi',
+    draftUpdated: 'Qoralama yangilandi',
+    draftUpdateFailed: 'Qoralamani yangilab bo‘lmadi',
+    approvedAll: 'Nashr tasdiqlandi',
+    approvedAllMessage: 'Mavzu, til va huquq tasdiqlari sizning hisobingiz nomidan qayd etildi.',
+    moderationUpdated: 'Moderatsiya holati yangilandi',
+    roleUpdated: (displayName, roleLabel) => `${displayName} endi: ${roleLabel}`,
+    roleUpdateFailed: 'Rolni o‘zgartirib bo‘lmadi',
+    selfDemotionBlocked: 'O‘zingizning administrator rolingizni olib tashlay olmaysiz.',
+    revokeReasonRequired: 'Kamida 5 belgidan iborat audit sababini kiriting.',
   },
   access: {
     insufficientRole: 'Kirish cheklangan',

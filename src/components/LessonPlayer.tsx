@@ -97,7 +97,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const [notesOpen, setNotesOpen] = useState(false);
   const [focusBarOpen, setFocusBarOpen] = useState(false);
 
-  // Request Review modal state (student segment review notification to AdminStudioView)
+  // Request Review modal state (student segment review notification to the admin Moderation page)
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewSegmentHeading, setReviewSegmentHeading] = useState<string>(
     lesson.bodyBlocks[0]?.heading || lesson.title
@@ -906,7 +906,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         onClose={() => setNotesOpen(false)}
       />
 
-      {/* Request Human Review Modal (Segment Comment / Question -> AdminStudioView) */}
+      {/* Request Human Review Modal (Segment Comment / Question -> admin Moderation page) */}
       {reviewOpen &&
         typeof document !== 'undefined' &&
         createPortal(

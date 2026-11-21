@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ADMIN_ROLES,
   authorizeEditorialTransition,
+  authorizeRoleChange,
   calculateAssessmentScore,
   calculateEligibleXp,
   canTransitionEditorialState,
@@ -10,7 +12,9 @@ import {
   evaluateCourseCompletion,
   evaluateStreakUpdate,
   getRoleDisplayLabel,
-  STAFF_ROLES,
+  isAdminRole,
+  normalizeUserRole,
+  PLATFORM_ROLES,
 } from './econova-rules.ts';
 import type { EditorialSignoffType, EditorialStatus, QuestionWithKey } from './types.ts';
 
@@ -242,169 +246,99 @@ test('evaluateCertificateVerification distinguishes valid, revoked, and not_foun
   assert.ok(valid.certificate?.nonAccreditationNotice.includes('not academic credit'));
 });
 
-// --- RBAC: editorial signoff role enforcement ---
+// --- RBAC: two roles (learner, admin) ---
 
 const noReviewers = { subject: null, language: null, rights: null };
+const LEGACY_ROLES = ['editor', 'reviewer', 'publisher'] as const;
 
-test('signoffs require reviewer or admin; editors and publishers cannot sign', () => {
-  for (const signoffType of ['subject', 'language', 'rights'] as const) {
-    for (const role of ['editor', 'publisher'] as const) {
-      const v = authorizeEditorialTransition({
-        actorId: `usr-${role}`,
-        actorRole: role,
-        currentStatus: 'subject_review',
-        targetStatus: 'subject_review',
-        signoffType,
-        reviewers: noReviewers,
-      });
-      assert.equal(v.allowed, false, `${role} ${signoffType}`);
-    }
-    for (const role of ['reviewer', 'admin'] as const) {
-      const v = authorizeEditorialTransition({
-        actorId: `usr-${role}`,
-        actorRole: role,
-        currentStatus: 'subject_review',
-        targetStatus: 'subject_review',
-        signoffType,
-        reviewers: noReviewers,
-      });
-      assert.equal(v.allowed, true, `${role} ${signoffType}`);
-    }
+test('platform roles are exactly learner and admin; only admin is privileged', () => {
+  assert.deepEqual([...PLATFORM_ROLES], ['learner', 'admin']);
+  assert.deepEqual([...ADMIN_ROLES], ['admin']);
+  assert.equal(isAdminRole('admin'), true);
+  for (const role of ['learner', ...LEGACY_ROLES, 'Admin', 'ADMIN', '', null, undefined, 42]) {
+    assert.equal(isAdminRole(role), false, String(role));
   }
 });
 
-test('learners and unknown signoff types are rejected', () => {
-  assert.equal(
-    authorizeEditorialTransition({
-      actorId: 'usr-l',
-      actorRole: 'learner',
+test('normalizeUserRole keeps admin and maps every other stored value to learner', () => {
+  assert.equal(normalizeUserRole('admin'), 'admin');
+  assert.equal(normalizeUserRole('learner'), 'learner');
+  for (const legacy of [...LEGACY_ROLES, 'Admin', ' admin', 'superuser', '', null, undefined, {}]) {
+    assert.equal(normalizeUserRole(legacy), 'learner', JSON.stringify(legacy));
+  }
+});
+
+test('role display labels: Student / Talaba and Administrator', () => {
+  assert.equal(getRoleDisplayLabel('learner', 'en'), 'Student');
+  assert.equal(getRoleDisplayLabel('learner', 'uz'), 'Talaba');
+  assert.equal(getRoleDisplayLabel('admin', 'en'), 'Administrator');
+  assert.equal(getRoleDisplayLabel('admin', 'uz'), 'Administrator');
+  // A legacy value that slipped through is shown as a learner.
+  assert.equal(getRoleDisplayLabel('editor' as never, 'en'), 'Student');
+});
+
+test('learners and legacy staff roles cannot run any editorial action', () => {
+  for (const role of ['learner', ...LEGACY_ROLES, null, undefined]) {
+    const v = authorizeEditorialTransition({
+      actorId: 'usr-x',
+      actorRole: role as never,
       currentStatus: 'draft',
       targetStatus: 'subject_review',
       reviewers: noReviewers,
-    }).allowed,
-    false
-  );
-  assert.equal(
-    authorizeEditorialTransition({
+    });
+    assert.equal(v.allowed, false, String(role));
+    assert.match(v.allowed ? '' : v.reason, /Administrator/);
+  }
+});
+
+test('unknown signoff types are rejected even for admins', () => {
+  for (const bad of ['toString', 'publisher', '']) {
+    const single = authorizeEditorialTransition({
       actorId: 'usr-a',
       actorRole: 'admin',
       currentStatus: 'subject_review',
       targetStatus: 'subject_review',
-      signoffType: 'toString' as never,
+      signoffType: bad as never,
       reviewers: noReviewers,
-    }).allowed,
-    false
-  );
-});
-
-test('a non-admin reviewer cannot hold two signoff slots on one edition', () => {
-  const v = authorizeEditorialTransition({
-    actorId: 'usr-rev1',
-    actorRole: 'reviewer',
-    currentStatus: 'language_review',
-    targetStatus: 'rights_accessibility_review',
-    signoffType: 'language',
-    reviewers: { subject: 'usr-rev1', language: null, rights: null },
-  });
-  assert.equal(v.allowed, false);
-  assert.match(v.allowed ? '' : v.reason, /different reviewer/);
-
-  // A second, distinct reviewer may sign.
-  assert.equal(
-    authorizeEditorialTransition({
-      actorId: 'usr-rev2',
-      actorRole: 'reviewer',
-      currentStatus: 'language_review',
-      targetStatus: 'rights_accessibility_review',
-      signoffType: 'language',
-      reviewers: { subject: 'usr-rev1', language: null, rights: null },
-    }).allowed,
-    true
-  );
-});
-
-test('editors can submit drafts but cannot advance review stages, publish or retire', () => {
-  const base = { actorId: 'usr-ed', actorRole: 'editor' as const, reviewers: noReviewers };
-  const allowed = (currentStatus: EditorialStatus, targetStatus: EditorialStatus) =>
-    authorizeEditorialTransition({ ...base, currentStatus, targetStatus }).allowed;
-
-  assert.equal(allowed('draft', 'subject_review'), true);
-  assert.equal(allowed('subject_review', 'language_review'), false);
-  assert.equal(allowed('approved', 'published'), false);
-  assert.equal(allowed('published', 'retired'), false);
-  assert.equal(allowed('published', 'draft'), false);
-  // Sending an in-review edition back to draft stays open to editors.
-  assert.equal(allowed('language_review', 'draft'), true);
-});
-
-test('publishing needs publisher/admin, and a non-admin publisher must be independent of reviewers', () => {
-  const signed = { subject: 'usr-r1', language: 'usr-r2', rights: 'usr-r3' };
-  assert.equal(
-    authorizeEditorialTransition({
-      actorId: 'usr-r1',
-      actorRole: 'reviewer',
-      currentStatus: 'approved',
-      targetStatus: 'published',
-      reviewers: signed,
-    }).allowed,
-    false
-  );
-  assert.equal(
-    authorizeEditorialTransition({
-      actorId: 'usr-pub',
-      actorRole: 'publisher',
-      currentStatus: 'approved',
-      targetStatus: 'published',
-      reviewers: signed,
-    }).allowed,
-    true
-  );
-  const selfReviewed = authorizeEditorialTransition({
-    actorId: 'usr-pub',
-    actorRole: 'publisher',
-    currentStatus: 'approved',
-    targetStatus: 'published',
-    reviewers: { ...signed, rights: 'usr-pub' },
-  });
-  assert.equal(selfReviewed.allowed, false);
-  assert.match(selfReviewed.allowed ? '' : selfReviewed.reason, /independent/);
-
-  // Publishers may retire; reviewers may not restore a retired edition.
-  assert.equal(
-    authorizeEditorialTransition({
-      actorId: 'usr-pub',
-      actorRole: 'publisher',
-      currentStatus: 'published',
-      targetStatus: 'retired',
-      reviewers: signed,
-    }).allowed,
-    true
-  );
-  assert.equal(
-    authorizeEditorialTransition({
-      actorId: 'usr-rev',
-      actorRole: 'reviewer',
-      currentStatus: 'retired',
+    });
+    // An empty string is "no signoff", every other unknown value is refused.
+    assert.equal(single.allowed, bad === '', bad);
+    const multi = authorizeEditorialTransition({
+      actorId: 'usr-a',
+      actorRole: 'admin',
+      currentStatus: 'draft',
       targetStatus: 'approved',
-      reviewers: signed,
-    }).allowed,
-    false
-  );
+      signoffTypes: ['subject', bad as never],
+    });
+    assert.equal(multi.allowed, false, `multi ${bad}`);
+  }
 });
 
-test('an admin is explicitly authorized to run the whole workflow alone', () => {
+test('an admin may record several sign-offs at once (deduplicated)', () => {
+  const v = authorizeEditorialTransition({
+    actorId: 'usr-admin',
+    actorRole: 'admin',
+    currentStatus: 'draft',
+    targetStatus: 'approved',
+    signoffType: 'subject',
+    signoffTypes: ['subject', 'language', 'rights'],
+  });
+  assert.equal(v.allowed, true);
+  assert.deepEqual(v.allowed ? v.signoffs : [], ['subject', 'language', 'rights']);
+});
+
+test('an admin runs the full lifecycle alone: draft → review → approve → publish → retire → restore', () => {
   const steps: Array<{ from: EditorialStatus; to: EditorialStatus; signoff: EditorialSignoffType | null }> = [
     { from: 'draft', to: 'subject_review', signoff: null },
     { from: 'subject_review', to: 'language_review', signoff: 'subject' },
     { from: 'language_review', to: 'rights_accessibility_review', signoff: 'language' },
     { from: 'rights_accessibility_review', to: 'approved', signoff: 'rights' },
     { from: 'approved', to: 'published', signoff: null },
+    { from: 'published', to: 'retired', signoff: null },
+    { from: 'retired', to: 'approved', signoff: null },
+    { from: 'approved', to: 'draft', signoff: null },
   ];
-  const reviewers: Record<EditorialSignoffType, string | null> = {
-    subject: null,
-    language: null,
-    rights: null,
-  };
+  const reviewers: Record<EditorialSignoffType, string | null> = { subject: null, language: null, rights: null };
   for (const step of steps) {
     const v = authorizeEditorialTransition({
       actorId: 'usr-admin',
@@ -426,10 +360,59 @@ test('an admin is explicitly authorized to run the whole workflow alone', () => 
   }
 });
 
-test('role display labels map internal roles without changing them', () => {
-  assert.equal(getRoleDisplayLabel('learner', 'en'), 'Student');
-  assert.equal(getRoleDisplayLabel('reviewer', 'en'), 'Moderator');
-  assert.equal(getRoleDisplayLabel('learner', 'uz'), 'Talaba');
-  assert.equal(getRoleDisplayLabel('admin', 'uz'), 'Administrator');
-  assert.deepEqual([...STAFF_ROLES], ['editor', 'reviewer', 'publisher', 'admin']);
+test('one-click approve from draft passes the gate only once all three sign-offs are recorded', () => {
+  const all = { hasProvenance: true, hasSubjectReview: true, hasLanguageReview: true, hasRightsAccessibilityReview: true };
+  assert.equal(canTransitionEditorialState('draft', 'approved', all).allowed, true);
+  assert.equal(canTransitionEditorialState('language_review', 'approved', all).allowed, true);
+  assert.equal(
+    canTransitionEditorialState('draft', 'approved', { ...all, hasLanguageReview: false }).allowed,
+    false
+  );
+  // Publishing still requires Approved first and provenance throughout.
+  assert.equal(canTransitionEditorialState('draft', 'published', all).allowed, false);
+  assert.equal(canTransitionEditorialState('draft', 'approved', { ...all, hasProvenance: false }).allowed, false);
+});
+
+test('authorizeRoleChange: admins toggle learner/admin, never demote themselves', () => {
+  const base = { actorId: 'usr-admin', actorRole: 'admin' as const };
+
+  const promote = authorizeRoleChange({ ...base, targetUserId: 'usr-1', requestedRole: 'admin', currentRole: 'learner' });
+  assert.deepEqual(promote, { allowed: true, nextRole: 'admin', changed: true });
+
+  const demote = authorizeRoleChange({ ...base, targetUserId: 'usr-2', requestedRole: 'learner', currentRole: 'admin' });
+  assert.deepEqual(demote, { allowed: true, nextRole: 'learner', changed: true });
+
+  const noop = authorizeRoleChange({ ...base, targetUserId: 'usr-3', requestedRole: 'learner', currentRole: 'learner' });
+  assert.deepEqual(noop, { allowed: true, nextRole: 'learner', changed: false });
+
+  // A legacy 'editor' row is already effectively a learner.
+  const legacy = authorizeRoleChange({ ...base, targetUserId: 'usr-4', requestedRole: 'learner', currentRole: 'editor' });
+  assert.deepEqual(legacy, { allowed: true, nextRole: 'learner', changed: false });
+
+  const self = authorizeRoleChange({ ...base, targetUserId: 'usr-admin', requestedRole: 'learner', currentRole: 'admin' });
+  assert.equal(self.allowed, false);
+  assert.equal(self.allowed ? 0 : self.status, 403);
+  assert.match(self.allowed ? '' : self.reason, /own administrator role/);
+
+  // Re-affirming your own admin role is harmless.
+  const selfAdmin = authorizeRoleChange({ ...base, targetUserId: 'usr-admin', requestedRole: 'admin', currentRole: 'admin' });
+  assert.deepEqual(selfAdmin, { allowed: true, nextRole: 'admin', changed: false });
+
+  for (const bad of ['editor', 'reviewer', 'publisher', 'ADMIN', '', null, undefined, 1]) {
+    const v = authorizeRoleChange({ ...base, targetUserId: 'usr-5', requestedRole: bad, currentRole: 'learner' });
+    assert.equal(v.allowed, false, String(bad));
+    assert.equal(v.allowed ? 0 : v.status, 400, String(bad));
+  }
+
+  for (const actorRole of ['learner', 'editor', null] as const) {
+    const v = authorizeRoleChange({
+      actorId: 'usr-x',
+      actorRole: actorRole as never,
+      targetUserId: 'usr-1',
+      requestedRole: 'admin',
+      currentRole: 'learner',
+    });
+    assert.equal(v.allowed, false, String(actorRole));
+    assert.equal(v.allowed ? 0 : v.status, 403);
+  }
 });

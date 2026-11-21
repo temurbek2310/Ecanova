@@ -2,7 +2,12 @@ export type Subject = 'Economics' | 'Mathematics' | 'Business';
 export type CourseLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 export type LocaleCode = 'en' | 'uz';
 export type JourneyStatus = 'not_started' | 'progressing' | 'completed' | 'paused';
-export type UserRole = 'learner' | 'editor' | 'reviewer' | 'publisher' | 'admin';
+/**
+ * Active platform roles. The database CHECK constraint still accepts the legacy
+ * values 'editor' | 'reviewer' | 'publisher'; such rows are read through
+ * `normalizeUserRole` (econova-rules.ts) and treated as non-admin learners.
+ */
+export type UserRole = 'learner' | 'admin';
 export type AgeBand = 'school' | 'university' | 'independent';
 
 export type EditorialStatus =

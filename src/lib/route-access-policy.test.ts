@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ACCESS_NOTICE_PARAM,
+  ADMIN_SECTION_PATHS,
   ROUTE_ACCESS_POLICIES,
+  buildAdminSectionPath,
+  formatDestinationLabel,
+  parseAdminSection,
   buildLoginRedirect,
   evaluateMiddlewareRouteGuard,
   getRouteAccessMode,
@@ -23,16 +27,21 @@ import {
   type MiddlewareGuardInput,
   type RouteAccessMode,
 } from './auth-routing.ts';
-import { STAFF_ROLES } from '../shared/econova-rules.ts';
+import { ADMIN_ROLES } from '../shared/econova-rules.ts';
 import { middleware } from '../middleware.ts';
 import type { UserRole } from '../shared/types.ts';
 
-const ALL_ROLES: readonly UserRole[] = ['learner', 'editor', 'reviewer', 'publisher', 'admin'];
+const ALL_ROLES: readonly UserRole[] = ['learner', 'admin'];
+/** Values the database may still hold; they must never unlock admin routes. */
+const LEGACY_ROLES = ['editor', 'reviewer', 'publisher'] as unknown as UserRole[];
 
 const PUBLIC_PATHS = ['/', '/overview', '/catalog', '/courses', '/course/econ-101', '/course/econ-101/lesson/3', '/community'];
 const GUEST_ONLY_PATHS = ['/login', '/signin', '/register', '/signup'];
 const AUTHENTICATED_PATHS = ['/achievements', '/xp', '/dashboard', '/profile', '/settings', '/certificates'];
-const ROLE_PROTECTED_PATHS = ['/admin', '/studio', '/admin/queue', '/studio/editions/42'];
+const ADMIN_PATHS = ['/admin', '/admin/curriculum', '/admin/moderation', '/admin/users', '/admin/audit'];
+const STUDIO_PATHS = ['/studio', '/studio/editions/42'];
+// `/admin/queue` is unknown: still admin-only, rendered as the admin overview.
+const ROLE_PROTECTED_PATHS = [...ADMIN_PATHS, '/admin/queue', ...STUDIO_PATHS];
 
 function guard(input: Partial<MiddlewareGuardInput> & { pathname: string }) {
   return evaluateMiddlewareRouteGuard({ isAuthenticated: false, ...input });
@@ -54,11 +63,49 @@ test('registry: every path resolves to the expected access mode', () => {
   }
 });
 
-test('registry: role-protected staff routes use STAFF_ROLES from econova-rules', () => {
-  const staff = ROUTE_ACCESS_POLICIES.find((p) => p.id === 'staff_studio');
-  assert.ok(staff && staff.mode === 'role_protected');
-  assert.equal(staff.allowedRoles, STAFF_ROLES);
-  assert.deepEqual([...staff.allowedRoles].sort(), ['admin', 'editor', 'publisher', 'reviewer']);
+test('registry: every admin route is role_protected with ADMIN_ROLES (admin only)', () => {
+  const expected: Record<string, string> = {
+    '/admin': 'admin_overview',
+    '/admin/curriculum': 'admin_curriculum',
+    '/admin/moderation': 'admin_moderation',
+    '/admin/users': 'admin_users',
+    '/admin/audit': 'admin_audit',
+    '/studio': 'studio_alias',
+  };
+  for (const [path, id] of Object.entries(expected)) {
+    const policy = getRouteAccessPolicy(path);
+    assert.equal(policy.id, id, path);
+    assert.ok(policy.mode === 'role_protected', path);
+    assert.equal(policy.allowedRoles, ADMIN_ROLES, path);
+    assert.deepEqual([...policy.allowedRoles], ['admin'], path);
+  }
+  // Sub-paths resolve to the most specific admin policy.
+  assert.equal(getRouteAccessPolicy('/admin/users/usr-1').id, 'admin_users');
+  assert.equal(getRouteAccessPolicy('/uz/admin/audit').id, 'admin_audit');
+  assert.equal(getRouteAccessPolicy('/admin/unknown').id, 'admin_overview');
+  const studio = getRouteAccessPolicy('/studio');
+  assert.equal(studio.mode === 'role_protected' ? studio.canonicalPath : null, '/admin/curriculum');
+});
+
+test('admin sections: path <-> section mapping, /studio alias, labels', () => {
+  assert.deepEqual(ADMIN_SECTION_PATHS, {
+    overview: '/admin',
+    curriculum: '/admin/curriculum',
+    moderation: '/admin/moderation',
+    users: '/admin/users',
+    audit: '/admin/audit',
+  });
+  for (const [section, path] of Object.entries(ADMIN_SECTION_PATHS)) {
+    assert.equal(parseAdminSection(path), section, path);
+    assert.equal(buildAdminSectionPath(section as keyof typeof ADMIN_SECTION_PATHS), path);
+    assert.equal(parseRouteFromLocation(path).tab, 'admin', path);
+  }
+  assert.equal(parseAdminSection('/uz/admin/users/'), 'users');
+  assert.equal(parseAdminSection('/studio'), 'curriculum');
+  assert.equal(parseAdminSection('/admin/whatever'), 'overview');
+  assert.equal(formatDestinationLabel('/admin/users', 'en'), 'Users & Certificates');
+  assert.equal(formatDestinationLabel('/admin/audit', 'uz'), 'Audit jurnali');
+  assert.equal(formatDestinationLabel('/admin', 'en'), 'Admin Overview');
 });
 
 test('registry: no prefix is declared by two policies', () => {
@@ -113,7 +160,8 @@ test('roleSatisfiesPolicy never accepts a missing role for role-protected polici
   assert.equal(roleSatisfiesPolicy(staff, undefined), false);
   assert.equal(roleSatisfiesPolicy(staff, '' as UserRole), false);
   assert.equal(roleSatisfiesPolicy(staff, 'learner'), false);
-  assert.equal(roleSatisfiesPolicy(staff, 'editor'), true);
+  for (const legacy of LEGACY_ROLES) assert.equal(roleSatisfiesPolicy(staff, legacy), false, legacy);
+  assert.equal(roleSatisfiesPolicy(staff, 'admin'), true);
   assert.equal(roleSatisfiesPolicy(getRouteAccessPolicy('/profile'), null), true);
 });
 
@@ -246,20 +294,41 @@ test('role_protected routes redirect guests to login with redirectTo', () => {
   }
 });
 
-test('role_protected routes: staff roles allowed, learner denied', () => {
-  for (const pathname of ROLE_PROTECTED_PATHS) {
-    for (const role of ALL_ROLES) {
+test('admin routes: admin allowed; learner and legacy staff roles denied with insufficient_role', () => {
+  for (const pathname of [...ADMIN_PATHS, '/admin/queue']) {
+    const admin = guard({ pathname, isAuthenticated: true, userRole: 'admin' });
+    assert.equal(admin.action, 'allow', `${pathname} as admin`);
+    assert.equal(admin.reason, 'authenticated');
+    for (const role of ['learner' as UserRole, ...LEGACY_ROLES]) {
       const decision = guard({ pathname, isAuthenticated: true, userRole: role });
-      if (STAFF_ROLES.includes(role)) {
-        assert.equal(decision.action, 'allow', `${pathname} as ${role}`);
-        assert.equal(decision.reason, 'authenticated');
-      } else {
-        assert.equal(decision.action, 'redirect', `${pathname} as ${role}`);
-        assert.equal(decision.reason, 'insufficient_role');
-        assert.equal(decision.destination, '/overview');
-      }
+      assert.equal(decision.action, 'redirect', `${pathname} as ${role}`);
+      assert.equal(decision.reason, 'insufficient_role');
+      assert.equal(decision.destination, '/overview');
     }
   }
+});
+
+test('/studio is a protected alias: admins go to /admin/curriculum, learners are blocked', () => {
+  for (const pathname of STUDIO_PATHS) {
+    const admin = guard({ pathname, isAuthenticated: true, userRole: 'admin' });
+    assert.equal(admin.action, 'redirect', pathname);
+    assert.equal(admin.reason, 'route_alias');
+    assert.equal(admin.destination, '/admin/curriculum');
+
+    const learner = guard({ pathname, isAuthenticated: true, userRole: 'learner' });
+    assert.equal(learner.reason, 'insufficient_role');
+    assert.equal(learner.destination, '/overview');
+
+    const anon = guard({ pathname });
+    assert.equal(anon.reason, 'unauthenticated_protected');
+    assert.equal(anon.destination, `/login?redirectTo=${encodeURIComponent(pathname)}`);
+  }
+  // Locale prefix and query survive the alias redirect.
+  const uz = guard({ pathname: '/uz/studio', search: '?edition=ed-1', isAuthenticated: true, userRole: 'admin' });
+  assert.equal(uz.destination, '/uz/admin/curriculum?edition=ed-1');
+  // After sign-in, a /login?redirectTo=/studio bounce ends on the alias, which the SPA follows.
+  const afterLogin = guard({ pathname: '/login', search: '?redirectTo=%2Fstudio', isAuthenticated: true, userRole: 'admin' });
+  assert.equal(afterLogin.destination, '/studio');
 });
 
 test('role_protected routes deny signed-in users with a null, missing or unknown role', () => {
@@ -461,8 +530,16 @@ test('edge middleware mirrors the guard: locale login redirect, role notice, no-
   const roleless = runMiddleware('http://localhost:3000/admin', null);
   assert.equal(roleless.decision.reason, 'insufficient_role');
 
-  const editor = runMiddleware('http://localhost:3000/studio', 'editor');
-  assert.equal(editor.status, 200);
+  const admin = runMiddleware('http://localhost:3000/admin/users', 'admin');
+  assert.equal(admin.status, 200);
+
+  const studio = runMiddleware('http://localhost:3000/studio', 'admin');
+  assert.equal(studio.status, 307);
+  assert.equal(studio.redirectUrl, 'http://localhost:3000/admin/curriculum');
+
+  // A token minted before the role model changed (legacy 'editor') is refused.
+  const legacy = runMiddleware('http://localhost:3000/admin', 'editor' as UserRole);
+  assert.equal(legacy.decision.reason, 'insufficient_role');
 
   const verify = runMiddleware('http://localhost:3000/certificates?verify=abc', 'anon');
   assert.equal(verify.status, 200);

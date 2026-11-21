@@ -4,7 +4,7 @@ import { normalizeBookmarkedCourseIds } from '../src/lib/course-bookmarks.ts';
 import { sanitizeRedirectTo } from '../src/lib/auth-routing.ts';
 import { db, isDatabaseConfigured, runInTransaction } from './db.ts';
 import type { LocaleCode, UserRole, UserSummary } from '../src/shared/types.ts';
-import { STAFF_ROLES } from '../src/shared/econova-rules.ts';
+import { normalizeUserRole } from '../src/shared/econova-rules.ts';
 
 let cachedFallbackSecret: string | null = null;
 let warnedMissingSecret = false;
@@ -179,7 +179,8 @@ export async function loadUserSummaryById(userId: string): Promise<UserSummary |
   const row = await db.queryOne<{
     id: string;
     email: string;
-    role: UserRole;
+    /** Raw stored value; may be a legacy staff role. */
+    role: string;
     display_name: string;
     preferred_locale: 'en' | 'uz';
     timezone: string;
@@ -239,7 +240,8 @@ export async function loadUserSummaryById(userId: string): Promise<UserSummary |
   return {
     id: row.id,
     email: row.email,
-    role: row.role,
+    // Only an exact 'admin' is privileged; legacy editor/reviewer/publisher rows read as learner.
+    role: normalizeUserRole(row.role),
     displayName: row.display_name,
     preferredLocale: row.preferred_locale,
     timezone: row.timezone,
@@ -400,24 +402,10 @@ export function requireRole(...allowedRoles: UserRole[]) {
   };
 }
 
-/** General staff guard: editor, reviewer, publisher or admin. */
-export function requireStaffRole(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-): void {
-  if (!req.authUser) {
-    res.status(401).json({ error: 'Authentication required.' });
-    return;
-  }
-  if (!STAFF_ROLES.includes(req.authUser.role)) {
-    res.status(403).json({ error: 'Staff editorial permission required.' });
-    return;
-  }
-  next();
-}
-
-/** Admin-only guard for system actions (role management, imports, etc.). */
+/**
+ * Admin-only guard for every `/api/admin/*` endpoint and other privileged
+ * actions: 401 without a verified session, 403 unless the role is exactly 'admin'.
+ */
 export const requireAdmin = requireRole('admin');
 
 // --- Google OAuth 2.0 Utilities ---

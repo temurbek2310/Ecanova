@@ -25,8 +25,7 @@ import {
   parseCookies,
   recordAuthFailure,
   requireAuth,
-  requireRole,
-  requireStaffRole,
+  requireAdmin,
   setOAuthNonceCookie,
   setSessionCookie,
   upsertGoogleOAuthUser,
@@ -67,12 +66,13 @@ import {
   calculateAssessmentScore,
   calculateEligibleXp,
   authorizeEditorialTransition,
+  authorizeRoleChange,
   canTransitionEditorialState,
-  DESTRUCTIVE_ACTION_ROLES,
   evaluateCertificateVerification,
   evaluateCourseCompletion,
   evaluateStreakUpdate,
   formatLocalDateKey,
+  normalizeUserRole,
   XP_RULE_VERSION,
 } from './src/shared/econova-rules.ts';
 import { parseDailyGoalMinutes } from './src/lib/study-goal.ts';
@@ -2544,7 +2544,7 @@ function buildApp(): express.Express {
     })
   );
 
-  // Asynchronous Student Lesson Segment Review Request -> Human Reviewers in AdminStudioView
+  // Asynchronous Student Lesson Segment Review Request -> Admin Console moderation queue
   app.post(
     '/api/reviews/request',
     requireDatabase,
@@ -2617,124 +2617,216 @@ function buildApp(): express.Express {
     })
   );
 
+  // --- ADMIN CONSOLE ROUTES (/api/admin/*) ---
+  // Every admin endpoint sits behind this gate (401 without a session, 403 for
+  // non-admins) in addition to the per-route `requireAdmin`, so a route added
+  // below without a guard still cannot be reached by a learner.
+  app.use('/api/admin', requireAdmin);
+
+  const MODERATION_STATUSES = ['open', 'investigating', 'resolved'] as const;
+  type ModerationStatus = (typeof MODERATION_STATUSES)[number];
+  const isModerationStatus = (value: unknown): value is ModerationStatus =>
+    typeof value === 'string' && (MODERATION_STATUSES as readonly string[]).includes(value);
+  const readQueryString = (value: unknown, max = 120): string =>
+    typeof value === 'string' ? value.trim().slice(0, max) : '';
+  const readLimit = (value: unknown, fallback: number, max: number): number => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), max) : fallback;
+  };
+  const likePattern = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+
+  const mapReportRow = (r: Record<string, unknown>) => ({
+    id: String(r.id),
+    courseId: r.course_id ? String(r.course_id) : null,
+    lessonId: r.lesson_id ? String(r.lesson_id) : null,
+    segmentHeading: r.segment_heading ? String(r.segment_heading) : null,
+    category: String(r.category),
+    description: String(r.description),
+    status: String(r.status) as ModerationStatus,
+    resolutionNote: r.resolution_note ? String(r.resolution_note) : null,
+    createdAt: toIso(r.created_at) || '',
+  });
+
+  const mapReviewRequestRow = (rv: Record<string, unknown>) => ({
+    id: String(rv.id),
+    userId: rv.user_id ? String(rv.user_id) : null,
+    studentDisplayName: String(rv.student_display_name || 'Learner'),
+    courseId: String(rv.course_id),
+    lessonId: String(rv.lesson_id),
+    lessonTitle: String(rv.lesson_title || ''),
+    segmentHeading: String(rv.segment_heading || 'General Lesson Segment'),
+    comment: String(rv.comment),
+    status: String(rv.status) as ModerationStatus,
+    reviewerNote: rv.reviewer_note ? String(rv.reviewer_note) : null,
+    createdAt: toIso(rv.created_at) || '',
+  });
+
+  const mapCertificateRow = (c: Record<string, unknown>) => ({
+    id: String(c.id),
+    userId: c.user_id ? String(c.user_id) : null,
+    recipientDisplayName: String(c.recipient_display_name),
+    courseTitle: String(c.course_title),
+    locale: String(c.locale),
+    publicToken: String(c.public_token),
+    status: String(c.status) as 'valid' | 'revoked',
+    issuedAt: toIso(c.issued_at) || '',
+    revokedAt: toIso(c.revoked_at),
+    revokeReason: c.revoke_reason ? String(c.revoke_reason) : null,
+  });
+
+  const mapAuditRow = (a: Record<string, unknown>) => ({
+    id: String(a.id),
+    actorUserId: a.actor_user_id ? String(a.actor_user_id) : null,
+    actorDisplayName: a.actor_display_name ? String(a.actor_display_name) : null,
+    action: String(a.action),
+    targetType: String(a.target_type),
+    targetId: String(a.target_id),
+    reason: String(a.reason),
+    createdAt: toIso(a.created_at) || '',
+  });
+
+  const AUDIT_SELECT = `SELECT a.*, p.display_name AS actor_display_name
+     FROM audit_events a
+     LEFT JOIN learner_profiles p ON p.user_id = a.actor_user_id`;
+
+  // Moderation: a review request's status/note is updated and audit-logged.
   app.patch(
     '/api/admin/reviews/:reviewId',
     requireDatabase,
-    requireStaffRole,
-    asyncHandler(async (req, res) => {
+    requireAdmin,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
       const reviewId = String(req.params.reviewId);
-      const { status, reviewerNote } = req.body as {
-        status?: 'open' | 'investigating' | 'resolved';
-        reviewerNote?: string;
-      };
-      await db.execute(
-        'UPDATE lesson_review_requests SET status = $1, reviewer_note = $2 WHERE id = $3',
-        [
-          status || 'resolved',
-          reviewerNote?.trim() || 'Reviewed and answered by human subject reviewer.',
-          reviewId,
-        ]
+      const { status, reviewerNote } = req.body as { status?: unknown; reviewerNote?: unknown };
+      const nextStatus: ModerationStatus = status === undefined ? 'resolved' : (status as ModerationStatus);
+      if (!isModerationStatus(nextStatus)) {
+        res.status(400).json({ error: 'Status must be open, investigating or resolved.' });
+        return;
+      }
+      const note =
+        (typeof reviewerNote === 'string' ? reviewerNote.trim().slice(0, 2000) : '') ||
+        'Reviewed and answered by an ECONOVA administrator.';
+      const existing = await db.queryOne<{ id: string }>(
+        'SELECT id FROM lesson_review_requests WHERE id = $1',
+        [reviewId]
       );
-      res.json({ ok: true });
+      if (!existing) {
+        res.status(404).json({ error: 'Review request not found.' });
+        return;
+      }
+      const now = new Date().toISOString();
+      await runInTransaction(async (tx) => {
+        await tx.execute(
+          'UPDATE lesson_review_requests SET status = $1, reviewer_note = $2 WHERE id = $3',
+          [nextStatus, note, reviewId]
+        );
+        await tx.execute(
+          `INSERT INTO audit_events (id, actor_user_id, action, target_type, target_id, reason, created_at)
+           VALUES ($1, $2, $3, 'lesson_review_request', $4, $5, $6)`,
+          [uid('aud'), req.authUser!.id, `moderation_review_${nextStatus}`, reviewId, note, now]
+        );
+      });
+      res.json({ ok: true, status: nextStatus });
     })
   );
 
-  // --- ADMIN / CONTENT GOVERNANCE ROUTES ---
   app.get(
     '/api/admin/overview',
     requireDatabase,
-    requireStaffRole,
+    requireAdmin,
     asyncHandler(async (_req, res) => {
-      const [editions, reports, reviewRequests, certificates, auditEvents, xpTotalRow] = await Promise.all([
-        db.query<Record<string, unknown>>(
-          `SELECT ce.*, c.subject, c.level
-           FROM course_editions ce
-           JOIN courses c ON c.id = ce.course_id
-           ORDER BY ce.updated_at DESC`
-        ),
-        db.query<Record<string, unknown>>(
-          'SELECT * FROM issue_reports ORDER BY created_at DESC LIMIT 50'
-        ),
-        db.query<Record<string, unknown>>(
-          'SELECT * FROM lesson_review_requests ORDER BY created_at DESC LIMIT 50'
-        ),
-        db.query<Record<string, unknown>>(
-          'SELECT * FROM certificates ORDER BY issued_at DESC LIMIT 50'
-        ),
-        db.query<Record<string, unknown>>(
-          'SELECT * FROM audit_events ORDER BY created_at DESC LIMIT 40'
-        ),
-        db.queryOne<{ total: number; count: number }>(
-          "SELECT COALESCE(SUM(amount), 0)::int as total, COUNT(*)::int as count FROM xp_ledger WHERE status = 'valid'"
-        ),
-      ]);
+      const [editionCounts, reportRow, reviewRow, userRow, certRow, xpTotalRow, recentAudit] =
+        await Promise.all([
+          db.query<{ status: string; count: number }>(
+            'SELECT status, COUNT(*)::int AS count FROM course_editions GROUP BY status'
+          ),
+          db.queryOne<{ open: number; investigating: number }>(
+            `SELECT COUNT(*) FILTER (WHERE status = 'open')::int AS open,
+                    COUNT(*) FILTER (WHERE status = 'investigating')::int AS investigating
+             FROM issue_reports`
+          ),
+          db.queryOne<{ open: number; investigating: number }>(
+            `SELECT COUNT(*) FILTER (WHERE status = 'open')::int AS open,
+                    COUNT(*) FILTER (WHERE status = 'investigating')::int AS investigating
+             FROM lesson_review_requests`
+          ),
+          db.queryOne<{ total: number; admins: number }>(
+            "SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE role = 'admin')::int AS admins FROM users"
+          ),
+          db.queryOne<{ valid: number; revoked: number }>(
+            `SELECT COUNT(*) FILTER (WHERE status = 'valid')::int AS valid,
+                    COUNT(*) FILTER (WHERE status = 'revoked')::int AS revoked
+             FROM certificates`
+          ),
+          db.queryOne<{ total: number; count: number }>(
+            "SELECT COALESCE(SUM(amount), 0)::int as total, COUNT(*)::int as count FROM xp_ledger WHERE status = 'valid'"
+          ),
+          db.query<Record<string, unknown>>(`${AUDIT_SELECT} ORDER BY a.created_at DESC LIMIT 6`),
+        ]);
 
-      const mappedEditions = await Promise.all(
+      const byStatus = (status: string) =>
+        Number(editionCounts.find((row) => row.status === status)?.count ?? 0);
+      const totalUsers = Number(userRow?.total ?? 0);
+      const admins = Number(userRow?.admins ?? 0);
+
+      res.json({
+        kpis: {
+          editions: {
+            draft: byStatus('draft'),
+            inReview:
+              byStatus('subject_review') + byStatus('language_review') + byStatus('rights_accessibility_review'),
+            approved: byStatus('approved'),
+            published: byStatus('published'),
+            retired: byStatus('retired'),
+            total: editionCounts.reduce((sum, row) => sum + Number(row.count), 0),
+          },
+          moderation: {
+            openReports: Number(reportRow?.open ?? 0),
+            investigatingReports: Number(reportRow?.investigating ?? 0),
+            openReviewRequests: Number(reviewRow?.open ?? 0),
+            investigatingReviewRequests: Number(reviewRow?.investigating ?? 0),
+          },
+          users: { total: totalUsers, admins, learners: Math.max(totalUsers - admins, 0) },
+          certificates: {
+            valid: Number(certRow?.valid ?? 0),
+            revoked: Number(certRow?.revoked ?? 0),
+          },
+          xp: {
+            totalNonCashXpIssued: Number(xpTotalRow?.total ?? 0),
+            validEntriesCount: Number(xpTotalRow?.count ?? 0),
+          },
+        },
+        recentAuditEvents: recentAudit.map(mapAuditRow),
+      });
+    })
+  );
+
+  app.get(
+    '/api/admin/editions',
+    requireDatabase,
+    requireAdmin,
+    asyncHandler(async (_req, res) => {
+      const editions = await db.query<Record<string, unknown>>(
+        `SELECT ce.*, c.subject, c.level
+         FROM course_editions ce
+         JOIN courses c ON c.id = ce.course_id
+         ORDER BY ce.updated_at DESC`
+      );
+      const mapped = await Promise.all(
         editions.map(async (e) => ({
           ...(await mapEditionSummary(e)),
           subject: String(e.subject),
           level: String(e.level),
         }))
       );
-
-      res.json({
-        editions: mappedEditions,
-        reports: reports.map((r) => ({
-          id: String(r.id),
-          courseId: r.course_id ? String(r.course_id) : null,
-          lessonId: r.lesson_id ? String(r.lesson_id) : null,
-          segmentHeading: r.segment_heading ? String(r.segment_heading) : null,
-          category: String(r.category),
-          description: String(r.description),
-          status: String(r.status),
-          resolutionNote: r.resolution_note ? String(r.resolution_note) : null,
-          createdAt: toIso(r.created_at) || '',
-        })),
-        reviewRequests: reviewRequests.map((rv) => ({
-          id: String(rv.id),
-          userId: rv.user_id ? String(rv.user_id) : null,
-          studentDisplayName: String(rv.student_display_name || 'Learner'),
-          courseId: String(rv.course_id),
-          lessonId: String(rv.lesson_id),
-          lessonTitle: String(rv.lesson_title || ''),
-          segmentHeading: String(rv.segment_heading || 'General Lesson Segment'),
-          comment: String(rv.comment),
-          status: String(rv.status) as 'open' | 'investigating' | 'resolved',
-          reviewerNote: rv.reviewer_note ? String(rv.reviewer_note) : null,
-          createdAt: toIso(rv.created_at) || '',
-        })),
-        certificates: certificates.map((c) => ({
-          id: String(c.id),
-          recipientDisplayName: String(c.recipient_display_name),
-          courseTitle: String(c.course_title),
-          locale: String(c.locale),
-          publicToken: String(c.public_token),
-          status: String(c.status),
-          issuedAt: toIso(c.issued_at) || '',
-          revokeReason: c.revoke_reason ? String(c.revoke_reason) : null,
-        })),
-        auditEvents: auditEvents.map((a) => ({
-          id: String(a.id),
-          actorUserId: a.actor_user_id ? String(a.actor_user_id) : null,
-          action: String(a.action),
-          targetType: String(a.target_type),
-          targetId: String(a.target_id),
-          reason: String(a.reason),
-          createdAt: toIso(a.created_at) || '',
-        })),
-        ledgerSummary: {
-          totalNonCashXpIssued: Number(xpTotalRow?.total ?? 0),
-          validEntriesCount: Number(xpTotalRow?.count ?? 0),
-        },
-      });
+      res.json({ editions: mapped });
     })
   );
 
   app.post(
     '/api/admin/editions/draft',
     requireDatabase,
-    requireStaffRole,
-    asyncHandler(async (req, res) => {
+    requireAdmin,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
       const {
         courseId,
         locale,
@@ -2801,13 +2893,13 @@ function buildApp(): express.Express {
             sourceTitle?.trim() || 'ECONOVA Editorial Draft Source',
             authorCreator?.trim() || req.authUser!.displayName,
             originalUrl?.trim() || 'https://econova.edu/editorial',
-            'ECONOVA Editorial Studio',
+            'ECONOVA Admin Console',
             licenseBasis?.trim() || 'Original Draft — Pending Rights Sign-off',
             'Draft awaiting rights and subject review.',
             Boolean(aiAssisted),
             aiAssisted ? aiModel || 'gemini-4-hydrogen' : null,
             aiAssisted ? 'editorial-draft-v1' : null,
-            'Created via Staff Editorial Studio; cannot publish without human review gates.',
+            'Created via the Admin Console; cannot publish without recorded review sign-offs.',
           ]
         );
 
@@ -2824,7 +2916,7 @@ function buildApp(): express.Express {
             nextVersion,
             title.trim(),
             subtitle?.trim() || 'Draft edition awaiting editorial review.',
-            description?.trim() || 'Draft curriculum module created in Editorial Studio.',
+            description?.trim() || 'Draft curriculum module created in the Admin Console.',
             JSON.stringify(['Demonstrate core understanding after completing lessons and assessment.']),
             JSON.stringify(['None required for draft review.']),
             'Complete all required lessons and score 70% or higher on the course assessment.',
@@ -2871,15 +2963,92 @@ function buildApp(): express.Express {
     })
   );
 
+  // Draft editing: title / subtitle / description of an edition still in Draft.
+  // Editions in review or later must be sent back to Draft first, so reviewed
+  // text can never change silently.
+  app.patch(
+    '/api/admin/editions/:editionId/draft',
+    requireDatabase,
+    requireAdmin,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      const editionId = String(req.params.editionId);
+      const body = req.body as { title?: unknown; subtitle?: unknown; description?: unknown };
+      const updates: Record<'title' | 'subtitle' | 'description', string | undefined> = {
+        title: undefined,
+        subtitle: undefined,
+        description: undefined,
+      };
+      const limits = { title: 200, subtitle: 300, description: 4000 } as const;
+      for (const field of ['title', 'subtitle', 'description'] as const) {
+        const value = body[field];
+        if (value === undefined) continue;
+        if (typeof value !== 'string') {
+          res.status(400).json({ error: `${field} must be text.` });
+          return;
+        }
+        const trimmed = value.trim();
+        if (trimmed.length > limits[field]) {
+          res.status(400).json({ error: `${field} must be at most ${limits[field]} characters.` });
+          return;
+        }
+        updates[field] = trimmed;
+      }
+      if (updates.title !== undefined && updates.title.length < 3) {
+        res.status(400).json({ error: 'Title must be at least 3 characters.' });
+        return;
+      }
+      const changedFields = (Object.keys(updates) as Array<keyof typeof updates>).filter(
+        (field) => updates[field] !== undefined
+      );
+      if (changedFields.length === 0) {
+        res.status(400).json({ error: 'Provide a title, subtitle or description to update.' });
+        return;
+      }
+
+      const row = await db.queryOne<{ id: string; status: string }>(
+        'SELECT id, status FROM course_editions WHERE id = $1',
+        [editionId]
+      );
+      if (!row) {
+        res.status(404).json({ error: 'Edition not found.' });
+        return;
+      }
+      if (row.status !== 'draft') {
+        res.status(409).json({ error: 'Only Draft editions can be edited. Send the edition back to Draft first.' });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      await runInTransaction(async (tx) => {
+        await tx.execute(
+          `UPDATE course_editions
+           SET title = COALESCE($1, title),
+               subtitle = COALESCE($2, subtitle),
+               description = COALESCE($3, description),
+               updated_at = $4
+           WHERE id = $5 AND status = 'draft'`,
+          [updates.title ?? null, updates.subtitle ?? null, updates.description ?? null, now, editionId]
+        );
+        await tx.execute(
+          `INSERT INTO audit_events (id, actor_user_id, action, target_type, target_id, reason, created_at)
+           VALUES ($1, $2, 'edit_draft_edition', 'course_edition', $3, $4, $5)`,
+          [uid('aud'), req.authUser!.id, editionId, `Edited draft fields: ${changedFields.join(', ')}`, now]
+        );
+      });
+      res.json({ ok: true, editionId, updatedFields: changedFields });
+    })
+  );
+
   app.post(
     '/api/admin/editions/:editionId/transition',
     requireDatabase,
-    requireStaffRole,
-    asyncHandler(async (req, res) => {
+    requireAdmin,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
       const editionId = String(req.params.editionId);
-      const { nextStatus, signoffType, reason } = req.body as {
+      const { nextStatus, signoffType, signoffs, reason } = req.body as {
         nextStatus?: EditorialStatus;
         signoffType?: EditorialSignoffType | null;
+        signoffs?: unknown;
         reason?: string;
       };
 
@@ -2891,22 +3060,10 @@ function buildApp(): express.Express {
         res.status(404).json({ error: 'Edition not found.' });
         return;
       }
-
-      if (
-        signoffType !== undefined &&
-        signoffType !== null &&
-        signoffType !== 'subject' &&
-        signoffType !== 'language' &&
-        signoffType !== 'rights'
-      ) {
-        res.status(400).json({ error: 'Unknown signoff type. Expected subject, language or rights.' });
+      if (signoffs !== undefined && signoffs !== null && !Array.isArray(signoffs)) {
+        res.status(400).json({ error: 'signoffs must be a list of subject, language or rights.' });
         return;
       }
-
-      const now = new Date().toISOString();
-      let subjectRev = row.subject_reviewer_id ? String(row.subject_reviewer_id) : null;
-      let langRev = row.language_reviewer_id ? String(row.language_reviewer_id) : null;
-      let rightsRev = row.rights_reviewer_id ? String(row.rights_reviewer_id) : null;
 
       const targetStatus = (nextStatus ?? row.status) as EditorialStatus;
       const roleCheck = authorizeEditorialTransition({
@@ -2915,16 +3072,21 @@ function buildApp(): express.Express {
         currentStatus: row.status as EditorialStatus,
         targetStatus,
         signoffType: signoffType ?? null,
-        reviewers: { subject: subjectRev, language: langRev, rights: rightsRev },
+        signoffTypes: Array.isArray(signoffs) ? (signoffs as EditorialSignoffType[]) : null,
       });
       if (!roleCheck.allowed) {
-        res.status(403).json({ error: roleCheck.reason });
+        res.status(roleCheck.reason.startsWith('Unknown') ? 400 : 403).json({ error: roleCheck.reason });
         return;
       }
 
-      if (signoffType === 'subject') subjectRev = req.authUser!.id;
-      if (signoffType === 'language') langRev = req.authUser!.id;
-      if (signoffType === 'rights') rightsRev = req.authUser!.id;
+      // Sign-offs keep provenance: each slot records the acting admin's ID.
+      const now = new Date().toISOString();
+      let subjectRev = row.subject_reviewer_id ? String(row.subject_reviewer_id) : null;
+      let langRev = row.language_reviewer_id ? String(row.language_reviewer_id) : null;
+      let rightsRev = row.rights_reviewer_id ? String(row.rights_reviewer_id) : null;
+      if (roleCheck.signoffs.includes('subject')) subjectRev = req.authUser!.id;
+      if (roleCheck.signoffs.includes('language')) langRev = req.authUser!.id;
+      if (roleCheck.signoffs.includes('rights')) rightsRev = req.authUser!.id;
 
       const check = canTransitionEditorialState(row.status as EditorialStatus, targetStatus, {
         hasProvenance: Boolean(row.provenance_id),
@@ -2938,6 +3100,7 @@ function buildApp(): express.Express {
         return;
       }
 
+      const signoffLabel = roleCheck.signoffs.length > 0 ? roleCheck.signoffs.join('+') : 'none';
       await runInTransaction(async (tx) => {
         await tx.execute(
           `UPDATE course_editions
@@ -2956,33 +3119,132 @@ function buildApp(): express.Express {
             req.authUser!.id,
             `editorial_${targetStatus}`,
             editionId,
-            reason?.trim() || `Signoff (${signoffType || 'publisher'}) -> ${targetStatus}`,
+            reason?.trim() || `${String(row.status)} -> ${targetStatus} (sign-offs: ${signoffLabel})`,
             now,
           ]
         );
       });
 
-      res.json({ ok: true, status: targetStatus });
+      res.json({ ok: true, status: targetStatus, signoffs: roleCheck.signoffs });
+    })
+  );
+
+  app.get(
+    '/api/admin/moderation',
+    requireDatabase,
+    requireAdmin,
+    asyncHandler(async (req, res) => {
+      const status = readQueryString(req.query.status, 20);
+      const filter = isModerationStatus(status) ? status : null;
+      const where = filter ? 'WHERE status = $1' : '';
+      const params = filter ? [filter] : [];
+      const [reports, reviewRequests] = await Promise.all([
+        db.query<Record<string, unknown>>(
+          `SELECT * FROM issue_reports ${where} ORDER BY created_at DESC LIMIT 200`,
+          params
+        ),
+        db.query<Record<string, unknown>>(
+          `SELECT * FROM lesson_review_requests ${where} ORDER BY created_at DESC LIMIT 200`,
+          params
+        ),
+      ]);
+      res.json({
+        status: filter ?? 'all',
+        reports: reports.map(mapReportRow),
+        reviewRequests: reviewRequests.map(mapReviewRequestRow),
+      });
+    })
+  );
+
+  app.patch(
+    '/api/admin/reports/:reportId',
+    requireDatabase,
+    requireAdmin,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      const reportId = String(req.params.reportId);
+      const { status, resolutionNote } = req.body as { status?: unknown; resolutionNote?: unknown };
+      const nextStatus: ModerationStatus = status === undefined ? 'resolved' : (status as ModerationStatus);
+      if (!isModerationStatus(nextStatus)) {
+        res.status(400).json({ error: 'Status must be open, investigating or resolved.' });
+        return;
+      }
+      const note =
+        (typeof resolutionNote === 'string' ? resolutionNote.trim().slice(0, 2000) : '') ||
+        'Reviewed by an ECONOVA administrator.';
+      const existing = await db.queryOne<{ id: string }>('SELECT id FROM issue_reports WHERE id = $1', [
+        reportId,
+      ]);
+      if (!existing) {
+        res.status(404).json({ error: 'Issue report not found.' });
+        return;
+      }
+      const now = new Date().toISOString();
+      await runInTransaction(async (tx) => {
+        await tx.execute('UPDATE issue_reports SET status = $1, resolution_note = $2 WHERE id = $3', [
+          nextStatus,
+          note,
+          reportId,
+        ]);
+        await tx.execute(
+          `INSERT INTO audit_events (id, actor_user_id, action, target_type, target_id, reason, created_at)
+           VALUES ($1, $2, $3, 'issue_report', $4, $5, $6)`,
+          [uid('aud'), req.authUser!.id, `moderation_report_${nextStatus}`, reportId, note, now]
+        );
+      });
+      res.json({ ok: true, status: nextStatus });
+    })
+  );
+
+  app.get(
+    '/api/admin/certificates',
+    requireDatabase,
+    requireAdmin,
+    asyncHandler(async (req, res) => {
+      const q = readQueryString(req.query.q);
+      const status = readQueryString(req.query.status, 20);
+      const clauses: string[] = [];
+      const params: unknown[] = [];
+      if (status === 'valid' || status === 'revoked') {
+        params.push(status);
+        clauses.push(`status = $${params.length}`);
+      }
+      if (q) {
+        params.push(likePattern(q));
+        const i = params.length;
+        clauses.push(
+          `(recipient_display_name ILIKE $${i} OR course_title ILIKE $${i} OR public_token ILIKE $${i})`
+        );
+      }
+      const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+      const rows = await db.query<Record<string, unknown>>(
+        `SELECT * FROM certificates ${where} ORDER BY issued_at DESC LIMIT 200`,
+        params
+      );
+      res.json({ certificates: rows.map(mapCertificateRow) });
     })
   );
 
   app.post(
     '/api/admin/certificates/:certificateId/revoke',
     requireDatabase,
-    requireRole(...DESTRUCTIVE_ACTION_ROLES),
-    asyncHandler(async (req, res) => {
+    requireAdmin,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
       const certificateId = String(req.params.certificateId);
       const { reason } = req.body as { reason?: string };
-      if (!reason || reason.trim().length < 5) {
+      if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
         res.status(400).json({ error: 'A clear audit reason is required to revoke a certificate.' });
         return;
       }
-      const cert = await db.queryOne<{ id: string }>(
-        'SELECT id FROM certificates WHERE id = $1',
+      const cert = await db.queryOne<{ id: string; status: string }>(
+        'SELECT id, status FROM certificates WHERE id = $1',
         [certificateId]
       );
       if (!cert) {
         res.status(404).json({ error: 'Certificate not found.' });
+        return;
+      }
+      if (cert.status === 'revoked') {
+        res.status(409).json({ error: 'This certificate is already revoked.' });
         return;
       }
       const now = new Date().toISOString();
@@ -3001,22 +3263,141 @@ function buildApp(): express.Express {
     })
   );
 
-  app.patch(
-    '/api/admin/reports/:reportId',
+  // User management: list accounts. Legacy staff roles read as 'learner'.
+  app.get(
+    '/api/admin/users',
     requireDatabase,
-    requireStaffRole,
+    requireAdmin,
     asyncHandler(async (req, res) => {
-      const reportId = String(req.params.reportId);
-      const { status, resolutionNote } = req.body as {
-        status?: 'open' | 'investigating' | 'resolved';
-        resolutionNote?: string;
-      };
-      await db.execute('UPDATE issue_reports SET status = $1, resolution_note = $2 WHERE id = $3', [
-        status || 'resolved',
-        resolutionNote?.trim() || 'Reviewed by editorial operations.',
-        reportId,
+      const q = readQueryString(req.query.q);
+      const params: unknown[] = [];
+      let where = '';
+      if (q) {
+        params.push(likePattern(q));
+        where = 'WHERE u.email ILIKE $1 OR p.display_name ILIKE $1';
+      }
+      const rows = await db.query<{
+        id: string;
+        email: string;
+        role: string;
+        display_name: string | null;
+        created_at: unknown;
+      }>(
+        `SELECT u.id, u.email, u.role, p.display_name, u.created_at
+         FROM users u
+         LEFT JOIN learner_profiles p ON p.user_id = u.id
+         ${where}
+         ORDER BY u.created_at DESC
+         LIMIT 200`,
+        params
+      );
+      res.json({
+        users: rows.map((u) => ({
+          id: String(u.id),
+          email: String(u.email),
+          displayName: u.display_name ? String(u.display_name) : String(u.email).split('@')[0],
+          role: normalizeUserRole(u.role),
+          createdAt: toIso(u.created_at) || '',
+        })),
+      });
+    })
+  );
+
+  // User management: set a user's role to 'learner' or 'admin'. An admin can
+  // never demote themselves; every change is audit-logged.
+  app.patch(
+    '/api/admin/users/:userId/role',
+    requireDatabase,
+    requireAdmin,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      const userId = String(req.params.userId);
+      const { role } = req.body as { role?: unknown };
+      const target = await db.queryOne<{ id: string; role: string }>(
+        'SELECT id, role FROM users WHERE id = $1',
+        [userId]
+      );
+      if (!target) {
+        res.status(404).json({ error: 'User not found.' });
+        return;
+      }
+      const decision = authorizeRoleChange({
+        actorId: req.authUser!.id,
+        actorRole: req.authUser!.role,
+        targetUserId: userId,
+        requestedRole: role,
+        currentRole: target.role,
+      });
+      if (!decision.allowed) {
+        res.status(decision.status).json({ error: decision.reason });
+        return;
+      }
+      // Rewrite legacy values (e.g. 'editor') even when the effective role is unchanged.
+      if (!decision.changed && target.role === decision.nextRole) {
+        res.json({ ok: true, userId, role: decision.nextRole, changed: false });
+        return;
+      }
+      const now = new Date().toISOString();
+      await runInTransaction(async (tx) => {
+        await tx.execute('UPDATE users SET role = $1 WHERE id = $2', [decision.nextRole, userId]);
+        await tx.execute(
+          `INSERT INTO audit_events (id, actor_user_id, action, target_type, target_id, reason, created_at)
+           VALUES ($1, $2, 'change_user_role', 'user', $3, $4, $5)`,
+          [
+            uid('aud'),
+            req.authUser!.id,
+            userId,
+            `Role changed from ${target.role} to ${decision.nextRole}`,
+            now,
+          ]
+        );
+      });
+      res.json({ ok: true, userId, role: decision.nextRole, changed: true });
+    })
+  );
+
+  app.get(
+    '/api/admin/audit',
+    requireDatabase,
+    requireAdmin,
+    asyncHandler(async (req, res) => {
+      const action = readQueryString(req.query.action, 80);
+      const targetType = readQueryString(req.query.targetType, 80);
+      const q = readQueryString(req.query.q);
+      const limit = readLimit(req.query.limit, 100, 500);
+      const clauses: string[] = [];
+      const params: unknown[] = [];
+      if (action) {
+        params.push(action);
+        clauses.push(`a.action = $${params.length}`);
+      }
+      if (targetType) {
+        params.push(targetType);
+        clauses.push(`a.target_type = $${params.length}`);
+      }
+      if (q) {
+        params.push(likePattern(q));
+        const i = params.length;
+        clauses.push(
+          `(a.reason ILIKE $${i} OR a.target_id ILIKE $${i} OR a.actor_user_id ILIKE $${i} OR p.display_name ILIKE $${i})`
+        );
+      }
+      const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+      params.push(limit);
+      const [events, actions, targetTypes] = await Promise.all([
+        db.query<Record<string, unknown>>(
+          `${AUDIT_SELECT} ${where} ORDER BY a.created_at DESC LIMIT $${params.length}`,
+          params
+        ),
+        db.query<{ action: string }>('SELECT DISTINCT action FROM audit_events ORDER BY action LIMIT 200'),
+        db.query<{ target_type: string }>(
+          'SELECT DISTINCT target_type FROM audit_events ORDER BY target_type LIMIT 100'
+        ),
       ]);
-      res.json({ ok: true });
+      res.json({
+        events: events.map(mapAuditRow),
+        actions: actions.map((row) => String(row.action)),
+        targetTypes: targetTypes.map((row) => String(row.target_type)),
+      });
     })
   );
 
@@ -3068,7 +3449,7 @@ function buildApp(): express.Express {
     }
   });
 
-  app.post('/api/ai/generate-image', requireStaffRole, async (req, res) => {
+  app.post('/api/ai/generate-image', requireAdmin, async (req, res) => {
     if (!isAiConfigured()) {
       res.status(503).json({
         error:
