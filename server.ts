@@ -34,7 +34,12 @@ import {
   verifyPassword,
   type AuthenticatedRequest,
 } from './server/auth.ts';
-import { evaluateMiddlewareRouteGuard, sanitizeRedirectTo } from './src/lib/auth-routing.ts';
+import {
+  evaluateMiddlewareRouteGuard,
+  resolveGuardRedirectTarget,
+  sanitizeRedirectTo,
+  withAccessNotice,
+} from './src/lib/auth-routing.ts';
 import {
   isAiConfigured,
   runAiChat,
@@ -3125,12 +3130,18 @@ function buildApp(): express.Express {
       userRole: req.authUser?.role ?? null,
     });
     res.setHeader('x-econova-auth-status', req.authUser ? 'authenticated' : 'anonymous');
-    if (decision.action === 'redirect' && decision.destination) {
-      const target = decision.destination.startsWith('/login')
-        ? decision.destination
-        : sanitizeRedirectTo(decision.destination, '/overview');
+    res.setHeader('x-econova-route-policy', decision.policyId);
+    if (decision.mode !== 'public') {
+      // Session-dependent pages must never be served from a shared cache.
       res.setHeader('Cache-Control', 'no-store');
-      res.redirect(302, target);
+      res.vary('Cookie');
+    }
+    if (decision.action === 'redirect' && decision.destination) {
+      res.setHeader('Cache-Control', 'no-store');
+      res.redirect(
+        302,
+        withAccessNotice(resolveGuardRedirectTarget(decision.destination), decision.reason)
+      );
       return;
     }
     next();

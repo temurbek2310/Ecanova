@@ -269,6 +269,8 @@
     "policyEditorialBody": "English and Uzbek editions are authored and reviewed separately. AI tools may assist drafting, but every published lesson and assessment requires human subject, language, and rights approval."
   },
   "auth": {
+    "checkingSession": "Checking your session…",
+    "checkingSessionHint": "Confirming you can open this page.",
     "signInTitle": "Sign In to ECONOVA",
     "registerTitle": "Create Learner Account",
     "subtitle": "Save progress across devices, earn course-specific certificates, and manage privacy settings.",

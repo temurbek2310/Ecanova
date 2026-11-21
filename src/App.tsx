@@ -95,12 +95,17 @@ import { scrollGlobalToTop } from './lib/scroll-sync';
 import {
   buildPathForTab,
   evaluateMiddlewareRouteGuard,
-  isProtectedTab,
+  formatDestinationLabel,
+  isSessionDependentRoute,
   parseRouteFromLocation,
+  readAccessNotice,
   resolveDestinationFromPath,
+  sanitizeRedirectTo,
+  stripAccessNotice,
   type AppNavTab,
   type IntendedDestination,
 } from './lib/auth-routing';
+import { RouteAccessPending } from './components/RouteAccessPending';
 import {
   formatTemplate,
   persistLocalePreference,
@@ -180,6 +185,10 @@ import type {
 
 type NavTab = AppNavTab;
 
+/** Longest wait for /api/auth/me before session-dependent routes stop waiting. */
+const AUTH_HYDRATION_TIMEOUT_MS = 8000;
+const ROUTE_ACCESS_NOTICE_ID = 'route-access-denied';
+
 export default function App() {
   const [locale, setLocale] = useState<LocaleCode>(() => resolveInitialLocale());
   const localeRef = useRef(locale);
@@ -239,6 +248,10 @@ export default function App() {
   // User & protected state (hydrated synchronously from cached session to eliminate sign-in flicker)
   const [user, setUser] = useState<UserSummary | null>(() => getCachedUserSummary());
   const [sessionLoaded, setSessionLoaded] = useState(false);
+  // True once /api/auth/me has answered (or failed / timed out). Until then,
+  // session-dependent routes render a neutral loading state instead of either
+  // their protected content or a premature redirect.
+  const [authHydrated, setAuthHydrated] = useState(false);
 
   // Selected course detail workspace
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(() => {
@@ -260,23 +273,10 @@ export default function App() {
     return peekIntendedDestination();
   });
 
+  // The first tab always mirrors the URL. Access is decided once the session is
+  // verified (see the hydration guard effect), never from the cached profile.
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
     if (typeof window === 'undefined') return 'overview';
-    const cached = getCachedUserSummary();
-    const guard = evaluateMiddlewareRouteGuard({
-      pathname: window.location.pathname,
-      search: window.location.search,
-      isAuthenticated: Boolean(cached),
-      userRole: cached?.role ?? null,
-    });
-    if (guard.action === 'redirect' && guard.destination) {
-      if (guard.reason === 'unauthenticated_protected') {
-        const dest = resolveDestinationFromPath(window.location.pathname);
-        saveIntendedDestination(dest);
-        return 'login';
-      }
-      return parseRouteFromLocation(guard.destination).tab;
-    }
     return parseRouteFromLocation(window.location.pathname, window.location.search).tab;
   });
 
@@ -356,7 +356,10 @@ export default function App() {
   });
 
   // Deep link verification token (?verify=...)
-  const [verifyTokenFromUrl, setVerifyTokenFromUrl] = useState<string | null>(null);
+  const [verifyTokenFromUrl, setVerifyTokenFromUrl] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('verify')?.trim() || null;
+  });
   const [sharingProgress, setSharingProgress] = useState(false);
   const [celebrationEvent, setCelebrationEvent] = useState<MilestoneCelebrationEvent | null>(null);
   const prevMilestoneSnapshotRef = useRef<MilestoneSnapshot | null>(null);
@@ -570,26 +573,139 @@ export default function App() {
     [activeTab, selectedCourseId, activeLessonIndex, syncBrowserPath]
   );
 
+  const showInsufficientRoleNotice = useCallback(
+    (requestedPath: string | null) => {
+      const copy = notificationCopy(locale);
+      notify.warning(
+        copy.access.insufficientRole,
+        copy.access.insufficientRoleMessage(
+          requestedPath ? formatDestinationLabel(requestedPath, locale) : null
+        ),
+        { id: ROUTE_ACCESS_NOTICE_ID }
+      );
+    },
+    [locale]
+  );
+
+  /** Shows the screen for an already-allowed location (tab, course, verify token). */
+  const activateLocation = useCallback(
+    (pathname: string, search: string) => {
+      const parsed = parseRouteFromLocation(pathname, search);
+      if (parsed.tab === 'certificates') {
+        setVerifyTokenFromUrl(new URLSearchParams(search).get('verify')?.trim() || null);
+      }
+      if (parsed.tab === 'course' && parsed.courseId) {
+        void openCourseRef.current(parsed.courseId, locale);
+        return;
+      }
+      setActiveTab(parsed.tab);
+    },
+    [locale]
+  );
+
+  /**
+   * Applies the shared route policy (src/lib/auth-routing.ts) to a location.
+   * Returns true when the location may be shown as-is; otherwise performs the
+   * redirect the policy asks for (login with redirectTo, overview with a
+   * no-access toast, or the post-login destination) and returns false.
+   */
+  const enforceRouteAccess = useCallback(
+    (
+      location: { pathname: string; search: string },
+      authUser: UserSummary | null,
+      historyMode: 'push' | 'replace'
+    ): boolean => {
+      if (typeof window === 'undefined') return true;
+      const writeHistory = (path: string, mode: 'push' | 'replace') => {
+        if (`${window.location.pathname}${window.location.search}` === path) return;
+        if (mode === 'replace') window.history.replaceState({}, '', path);
+        else window.history.pushState({}, '', path);
+      };
+
+      const run = (
+        pathname: string,
+        search: string,
+        mode: 'push' | 'replace',
+        depth: number
+      ): boolean => {
+        const decision = evaluateMiddlewareRouteGuard({
+          pathname,
+          search,
+          isAuthenticated: Boolean(authUser),
+          userRole: authUser?.role ?? null,
+        });
+        if (decision.action === 'allow' || !decision.destination) return true;
+        const requestedPath = `${pathname}${search}`;
+
+        if (decision.reason === 'unauthenticated_protected') {
+          const dest = resolveDestinationFromPath(requestedPath);
+          saveIntendedDestination(dest);
+          setIntendedDestination(dest);
+          setAuthOpen(false);
+          setActiveTab('login');
+          writeHistory(decision.destination, mode);
+          return false;
+        }
+
+        if (decision.reason === 'insufficient_role') {
+          setActiveTab('overview');
+          writeHistory(decision.destination, mode);
+          showInsufficientRoleNotice(requestedPath);
+          return false;
+        }
+
+        // already_authenticated: continue to the sanitized redirectTo, which
+        // must itself pass the policy (e.g. a learner sent on to /admin). The
+        // destination is never guest-only, so this stops after one level.
+        const target = decision.destination;
+        const queryIndex = target.indexOf('?');
+        const targetPath = queryIndex >= 0 ? target.slice(0, queryIndex) : target;
+        const targetSearch = queryIndex >= 0 ? target.slice(queryIndex) : '';
+        if (depth > 0 || run(targetPath, targetSearch, 'replace', depth + 1)) {
+          writeHistory(target, 'replace');
+          activateLocation(targetPath, targetSearch);
+        }
+        return false;
+      };
+
+      return run(location.pathname, location.search, historyMode, 0);
+    },
+    [activateLocation, showInsufficientRoleNotice]
+  );
+
   const navigateToTab = useCallback(
     (nextTab: NavTab) => {
       if (nextTab === 'login' || nextTab === 'register') {
         navigateToLogin(undefined, nextTab);
         return;
       }
-      if (isProtectedTab(nextTab) && !user) {
-        const dest: IntendedDestination = {
-          tab: nextTab,
-          path: buildPathForTab(nextTab),
-        };
-        navigateToLogin(dest, 'login');
-        return;
+      // Before the session is verified, the tab shows its loading state and the
+      // hydration guard decides on whatever URL is current at that point.
+      if (authHydrated) {
+        const path = buildPathForTab(nextTab, { courseId: selectedCourseId });
+        const queryIndex = path.indexOf('?');
+        const allowed = enforceRouteAccess(
+          {
+            pathname: queryIndex >= 0 ? path.slice(0, queryIndex) : path,
+            search: queryIndex >= 0 ? path.slice(queryIndex) : '',
+          },
+          user,
+          'push'
+        );
+        if (!allowed) {
+          scrollGlobalToTop(true);
+          return;
+        }
       }
       setActiveTab(nextTab);
       syncBrowserPath(nextTab);
       scrollGlobalToTop(true);
     },
-    [user, navigateToLogin, syncBrowserPath]
+    [authHydrated, user, selectedCourseId, enforceRouteAccess, navigateToLogin, syncBrowserPath]
   );
+
+  const navigateToTabRef = useRef(navigateToTab);
+  navigateToTabRef.current = navigateToTab;
 
   const loadSession = useCallback(async () => {
     try {
@@ -599,22 +715,11 @@ export default function App() {
         const verifiedUser = data.user ?? null;
         setUser(verifiedUser);
         persistCachedUserSummary(verifiedUser);
+        // Route access is decided from this verified user by the hydration
+        // guard effect; protected data keeps loading in the background.
+        setAuthHydrated(true);
 
         if (verifiedUser) {
-          // The first screen may have been chosen from the cached profile; re-check
-          // it against the verified role (e.g. a stale or edited cached "admin").
-          if (typeof window !== 'undefined') {
-            const roleGuard = evaluateMiddlewareRouteGuard({
-              pathname: window.location.pathname,
-              search: window.location.search,
-              isAuthenticated: true,
-              userRole: verifiedUser.role,
-            });
-            if (roleGuard.action === 'redirect' && roleGuard.reason === 'insufficient_role') {
-              setActiveTab('overview');
-              window.history.replaceState({}, '', '/overview');
-            }
-          }
           setDailyStudyGoalMinutes(verifiedUser.dailyStudyGoalMinutes);
           setGoalNotificationsEnabled(Boolean(verifiedUser.studyGoalNotificationsEnabled));
           await loadProtectedData();
@@ -628,28 +733,44 @@ export default function App() {
           setDailyStudyGoalMinutes(loadSavedDailyGoalMinutes());
           setGoalNotificationsEnabled(loadSavedGoalNotificationsEnabled());
           setBadges([]);
-          if (typeof window !== 'undefined') {
-            const guard = evaluateMiddlewareRouteGuard({
-              pathname: window.location.pathname,
-              search: window.location.search,
-              isAuthenticated: false,
-            });
-            if (guard.action === 'redirect' && guard.destination) {
-              const dest = resolveDestinationFromPath(window.location.pathname);
-              saveIntendedDestination(dest);
-              setIntendedDestination(dest);
-              setActiveTab('login');
-              window.history.replaceState({}, '', guard.destination);
-            }
-          }
         }
       }
     } catch {
-      // Ignore offline auth probe error
+      // Ignore offline auth probe error (the cached profile stays in charge offline)
     } finally {
+      setAuthHydrated(true);
       setSessionLoaded(true);
     }
   }, [loadProtectedData]);
+
+  // Never leave a session-dependent route spinning if /api/auth/me hangs.
+  useEffect(() => {
+    if (authHydrated) return;
+    const timer = window.setTimeout(() => setAuthHydrated(true), AUTH_HYDRATION_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [authHydrated]);
+
+  // One-shot guard for the URL the app booted on (deep link, refresh, OAuth
+  // full-page return), run as soon as the session is known.
+  const hydrationGuardRanRef = useRef(false);
+  useEffect(() => {
+    if (!authHydrated || hydrationGuardRanRef.current || typeof window === 'undefined') return;
+    hydrationGuardRanRef.current = true;
+    const { pathname, search, hash } = window.location;
+    const cleanSearch = stripAccessNotice(search);
+    if (readAccessNotice(search)) {
+      // The server already redirected this user here for lacking a role.
+      window.history.replaceState(window.history.state, '', `${pathname}${cleanSearch}${hash}`);
+      showInsufficientRoleNotice(null);
+    }
+    const allowed = enforceRouteAccess({ pathname, search: cleanSearch }, user, 'replace');
+    if (allowed && user) {
+      // Signed in and on an allowed page (e.g. back from a full-page Google
+      // sign-in): a leftover intended destination would only misroute a later login.
+      consumeIntendedDestination();
+      setIntendedDestination(null);
+    }
+  }, [authHydrated, user, enforceRouteAccess, showInsufficientRoleNotice]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -735,20 +856,17 @@ export default function App() {
   // Listen to browser Back/Forward navigation
   useEffect(() => {
     const handlePopState = () => {
-      const parsed = parseRouteFromLocation(window.location.pathname, window.location.search);
-      if (isProtectedTab(parsed.tab) && !user) {
-        const dest = resolveDestinationFromPath(window.location.pathname, parsed.courseId);
-        navigateToLogin(dest, 'login');
+      const { pathname, search } = window.location;
+      // Same policy as the server and tab clicks. Before hydration the loading
+      // state covers session-dependent routes and the hydration guard decides.
+      if (authHydrated && !enforceRouteAccess({ pathname, search }, user, 'replace')) {
         return;
       }
-      setActiveTab(parsed.tab);
-      if (parsed.courseId) {
-        void openCourse(parsed.courseId, locale);
-      }
+      activateLocation(pathname, search);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [user, locale, navigateToLogin, openCourse]);
+  }, [authHydrated, user, enforceRouteAccess, activateLocation]);
 
   useEffect(() => {
     if (activeTab === 'catalog' || activeTab === 'profile') {
@@ -1237,16 +1355,49 @@ export default function App() {
         await applyBookmarkChange(pendingCourseId, true).catch(() => {});
       }
 
+      // Land on the exact intended route (path, query and locale prefix kept)
+      // after the same policy check every other navigation goes through.
+      const targetPath = sanitizeRedirectTo(targetDest.path, '/overview');
+      const targetQueryIndex = targetPath.indexOf('?');
+      const targetPathname =
+        targetQueryIndex >= 0 ? targetPath.slice(0, targetQueryIndex) : targetPath;
+      const targetSearch = targetQueryIndex >= 0 ? targetPath.slice(targetQueryIndex) : '';
+      const targetMatchesTab =
+        parseRouteFromLocation(targetPathname, targetSearch).tab === targetDest.tab;
+      const accessDecision = evaluateMiddlewareRouteGuard({
+        pathname: targetPathname,
+        search: targetSearch,
+        isAuthenticated: true,
+        userRole: authedUser.role,
+      });
+      if (accessDecision.action === 'redirect' && accessDecision.reason === 'insufficient_role') {
+        setActiveTab('overview');
+        window.history.replaceState({}, '', accessDecision.destination ?? '/overview');
+        showInsufficientRoleNotice(targetPath);
+        return;
+      }
+
       if (targetDest.tab === 'course' && (targetDest.courseId || selectedCourseId)) {
         const cid = targetDest.courseId || selectedCourseId!;
         await openCourse(cid, authedUser.preferredLocale, {
           lessonIndex: targetDest.lessonIndex ?? activeLessonIndex,
           authenticatedUser: authedUser,
         });
-        syncBrowserPath('course', { courseId: cid, replace: true });
+        if (targetMatchesTab && targetDest.courseId) {
+          window.history.replaceState({}, '', targetPath);
+        } else {
+          syncBrowserPath('course', { courseId: cid, replace: true });
+        }
       } else {
         setActiveTab(targetDest.tab);
-        syncBrowserPath(targetDest.tab, { replace: true });
+        if (targetDest.tab === 'certificates') {
+          setVerifyTokenFromUrl(new URLSearchParams(targetSearch).get('verify')?.trim() || null);
+        }
+        if (targetMatchesTab) {
+          window.history.replaceState({}, '', targetPath);
+        } else {
+          syncBrowserPath(targetDest.tab, { replace: true });
+        }
       }
     },
     [
@@ -1258,6 +1409,7 @@ export default function App() {
       applyBookmarkChange,
       openCourse,
       syncBrowserPath,
+      showInsufficientRoleNotice,
     ]
   );
 
@@ -1283,7 +1435,12 @@ export default function App() {
     setCelebrationEvent(null);
     notify.info(toastCopy.profile.signedOut);
     prevMilestoneSnapshotRef.current = null;
-    if (isProtectedTab(activeTab)) {
+    const signedOutDecision = evaluateMiddlewareRouteGuard({
+      pathname: window.location.pathname,
+      search: window.location.search,
+      isAuthenticated: false,
+    });
+    if (signedOutDecision.reason === 'unauthenticated_protected') {
       setActiveTab('overview');
       syncBrowserPath('overview', { replace: true });
     }
@@ -1352,7 +1509,7 @@ export default function App() {
 
       if (nextTab) {
         event.preventDefault();
-        setActiveTab(nextTab);
+        navigateToTabRef.current(nextTab);
         setMobileMenuOpen(false);
       }
     };
@@ -1448,6 +1605,14 @@ export default function App() {
     });
     return () => window.cancelAnimationFrame(id);
   }, [activeTab, locale, courses.length]);
+
+  // Session-dependent routes (guest-only, authenticated, role-protected) wait
+  // for the verified session so nothing protected flashes and nobody is
+  // redirected on the strength of a stale cached profile.
+  const routeGatePending =
+    !authHydrated &&
+    typeof window !== 'undefined' &&
+    isSessionDependentRoute(window.location.pathname, window.location.search);
 
   // Public marketing landing at `/`: pure #000000 void + ConstellationCanvas only —
   // no Sidebar, app Header, EconomicsLiquidBackground or dashboard overlays.
@@ -1757,6 +1922,13 @@ export default function App() {
 
         {/* Main Viewport */}
         <main className="relative z-10 mx-auto w-full max-w-6xl flex-1 overflow-x-clip p-4 sm:p-6 lg:p-8">
+          {routeGatePending ? (
+            <RouteAccessPending
+              title={strings.auth.checkingSession}
+              hint={strings.auth.checkingSessionHint}
+            />
+          ) : (
+          <>
           {/* NEOBRUTALIST /login AND /register ROUTES */}
           {(activeTab === 'login' || activeTab === 'register') && (
             <AuthPageView
@@ -3080,6 +3252,8 @@ export default function App() {
               onCatalogRefresh={loadCatalog}
               currentUser={{ id: user.id, role: user.role }}
             />
+          )}
+          </>
           )}
         </main>
       </div>

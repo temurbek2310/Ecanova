@@ -1,6 +1,7 @@
 import {
   evaluateMiddlewareRouteGuard,
-  sanitizeRedirectTo,
+  resolveGuardRedirectTarget,
+  withAccessNotice,
   type MiddlewareGuardDecision,
 } from './lib/auth-routing';
 import type { UserRole } from './shared/types';
@@ -104,8 +105,8 @@ export function extractTokenFromMiddlewareRequest(
  * Next.js / Edge-compatible middleware that:
  * 1. Reads the active session cookie or Authorization header.
  * 2. Actively refreshes sessions approaching expiry on the response headers.
- * 3. Redirects unauthenticated visitors away from protected routes (/profile, /achievements, /admin, /dashboard)
- *    to `/login?redirectTo=<intended_destination>`.
+ * 3. Redirects unauthenticated visitors away from protected routes (see ROUTE_ACCESS_POLICIES
+ *    in src/lib/auth-routing.ts) to `/login?redirectTo=<intended_destination>`.
  * 4. Redirects authenticated users away from `/login` and `/register` back to their intended destination.
  */
 export function middleware(request: MinimalMiddlewareRequest): MiddlewareResult {
@@ -134,15 +135,17 @@ export function middleware(request: MinimalMiddlewareRequest): MiddlewareResult 
   }
 
   if (decision.action === 'redirect' && decision.destination) {
-    const safeTarget = decision.destination.startsWith('/login')
-      ? decision.destination
-      : sanitizeRedirectTo(decision.destination, '/overview');
+    const safeTarget = withAccessNotice(
+      resolveGuardRedirectTarget(decision.destination),
+      decision.reason
+    );
     const redirectUrl = new URL(safeTarget, parsedUrl.origin).toString();
     return {
       status: 307,
       redirectUrl,
       headers: {
         ...headers,
+        'Cache-Control': 'no-store',
         Location: redirectUrl,
       },
       decision,

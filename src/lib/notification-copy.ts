@@ -149,6 +149,11 @@ export interface NotificationCopy {
   auth: {
     failed: string;
   };
+  access: {
+    insufficientRole: string;
+    /** `destinationLabel` is null when the page is unknown (e.g. after a server redirect). */
+    insufficientRoleMessage: (destinationLabel: string | null) => string;
+  };
   companion: {
     unavailable: string;
     unavailableMessage: string;
@@ -316,6 +321,13 @@ const EN: NotificationCopy = {
   },
   auth: {
     failed: 'Authentication failed',
+  },
+  access: {
+    insufficientRole: 'Access restricted',
+    insufficientRoleMessage: (destinationLabel) =>
+      destinationLabel
+        ? `Your account role cannot open ${destinationLabel}. You have been returned to the overview.`
+        : 'Your account role cannot open that page. You have been returned to the overview.',
   },
   companion: {
     unavailable: 'AI features are off',
@@ -485,6 +497,13 @@ const UZ: NotificationCopy = {
   },
   auth: {
     failed: 'Kirish amalga oshmadi',
+  },
+  access: {
+    insufficientRole: 'Kirish cheklangan',
+    insufficientRoleMessage: (destinationLabel) =>
+      destinationLabel
+        ? `Hisobingiz roli «${destinationLabel}» bo‘limini ochishga ruxsat bermaydi. Siz bosh sahifaga qaytarildingiz.`
+        : 'Hisobingiz roli bu sahifani ochishga ruxsat bermaydi. Siz bosh sahifaga qaytarildingiz.',
   },
   companion: {
     unavailable: 'Sun’iy intellekt funksiyalari o‘chirilgan',

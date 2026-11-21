@@ -1,4 +1,5 @@
 import type { LocaleCode, UserRole } from '../shared/types';
+import { STAFF_ROLES } from '../shared/econova-rules.ts';
 
 export type AppNavTab =
   | 'landing'
@@ -21,19 +22,84 @@ export interface IntendedDestination {
   label?: string;
 }
 
-export const PROTECTED_TABS: ReadonlyArray<AppNavTab> = [
-  'achievements',
-  'profile',
-  'admin',
+/* ------------------------------------------------------------------------- */
+/* Route access policy registry                                              */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * - `public`: anyone, signed in or not.
+ * - `guest_only`: signed-out visitors only; signed-in users bounce to their
+ *   sanitized `redirectTo` (or `/overview`).
+ * - `authenticated`: any signed-in user; guests go to `/login?redirectTo=…`.
+ * - `role_protected`: signed-in users whose role is in `allowedRoles`; guests
+ *   go to login, signed-in users without a matching role go to `/overview`.
+ */
+export type RouteAccessMode = 'public' | 'guest_only' | 'authenticated' | 'role_protected';
+
+interface RouteAccessPolicyBase {
+  /** Stable identifier, used in guard decisions and logs. */
+  id: string;
+  /**
+   * Locale-stripped, lower-case path prefixes. A prefix matches the exact path
+   * and every sub-path (`/admin` matches `/admin/queue`). `/` only ever matches
+   * the bare root. When several policies match, the longest prefix wins, so a
+   * narrower workspace (e.g. `/studio/review`) can override its parent.
+   */
+  paths: readonly string[];
+}
+
+export type RouteAccessPolicy =
+  | (RouteAccessPolicyBase & { mode: 'public' | 'guest_only' | 'authenticated' })
+  | (RouteAccessPolicyBase & {
+      mode: 'role_protected';
+      /** Roles allowed in. A missing or null role is always denied. */
+      allowedRoles: readonly UserRole[];
+    });
+
+/**
+ * The single source of truth for who may open which page. The Express HTML
+ * guard (server.ts), the edge-style middleware (src/middleware.ts) and the SPA
+ * (App.tsx: first load, tab clicks, back/forward, post-login redirects) all
+ * decide through `evaluateMiddlewareRouteGuard`, which reads only this list.
+ *
+ * Adding a per-role workspace is one entry, for example:
+ *   { id: 'review_desk', mode: 'role_protected', paths: ['/studio/review'],
+ *     allowedRoles: ['reviewer', 'admin'] }
+ */
+export const ROUTE_ACCESS_POLICIES: readonly RouteAccessPolicy[] = [
+  { id: 'landing', mode: 'public', paths: ['/'] },
+  { id: 'overview', mode: 'public', paths: ['/overview'] },
+  { id: 'catalog', mode: 'public', paths: ['/catalog', '/courses'] },
+  // Course pages (lessons and assessments too) stay public: guests study with
+  // local progress, and only saving to the server needs sign-in.
+  { id: 'course', mode: 'public', paths: ['/course'] },
+  { id: 'community', mode: 'public', paths: ['/community', '/leaderboard'] },
+  { id: 'auth', mode: 'guest_only', paths: ['/login', '/signin', '/register', '/signup'] },
+  {
+    id: 'learner_workspace',
+    mode: 'authenticated',
+    paths: ['/achievements', '/xp', '/dashboard', '/profile', '/settings', '/certificates'],
+  },
+  { id: 'staff_studio', mode: 'role_protected', paths: ['/admin', '/studio'], allowedRoles: STAFF_ROLES },
 ];
 
-export const PROTECTED_ROUTE_PREFIXES: ReadonlyArray<string> = [
-  '/achievements',
-  '/profile',
-  '/admin',
-  '/dashboard',
-];
+/** Any URL carrying a certificate verification token renders the public verifier. */
+export const PUBLIC_CERTIFICATE_VERIFICATION_POLICY: RouteAccessPolicy = {
+  id: 'certificate_verification',
+  mode: 'public',
+  paths: [],
+};
 
+/** Unknown paths render the public overview, so they are public too. */
+export const FALLBACK_ROUTE_POLICY: RouteAccessPolicy = {
+  id: 'fallback',
+  mode: 'public',
+  paths: [],
+};
+
+const LOCALE_PREFIX_PATTERN = /^\/(en|uz)(?=\/|$)/i;
+
+/** Canonical path for each SPA tab; every tab's access follows from its path. */
 const TAB_TO_PATH: Record<AppNavTab, string> = {
   landing: '/',
   overview: '/overview',
@@ -48,21 +114,8 @@ const TAB_TO_PATH: Record<AppNavTab, string> = {
   register: '/register',
 };
 
-export function isProtectedTab(tab: AppNavTab): tab is 'achievements' | 'profile' | 'admin' {
-  return PROTECTED_TABS.includes(tab);
-}
-
-export function isProtectedPathname(pathname: string): boolean {
-  const clean = stripLocalePrefix(pathname);
-  // Course pages (including lessons and assessments) are intentionally public:
-  // guests study with local progress, and only saving to the server needs sign-in.
-  return PROTECTED_ROUTE_PREFIXES.some(
-    (prefix) => clean === prefix || clean.startsWith(`${prefix}/`)
-  );
-}
-
 export function stripLocalePrefix(pathname: string): string {
-  const normalized = pathname.trim() || '/';
+  const normalized = (pathname || '').trim() || '/';
   const match = normalized.match(/^\/(?:en|uz)(\/.*|$)/i);
   if (match) {
     return match[1] || '/';
@@ -70,6 +123,130 @@ export function stripLocalePrefix(pathname: string): string {
   return normalized;
 }
 
+/** Returns `/en` or `/uz` (lower-case) when the path starts with a locale segment. */
+export function getLocalePrefix(pathname: string): '' | '/en' | '/uz' {
+  const match = (pathname || '').trim().match(LOCALE_PREFIX_PATTERN);
+  if (!match) return '';
+  return match[1].toLowerCase() === 'uz' ? '/uz' : '/en';
+}
+
+/**
+ * Locale-stripped, lower-cased path with trailing slashes removed. Used for
+ * policy matching and tab parsing so `/UZ/Profile/` and `/profile` agree.
+ */
+export function normalizeRoutePath(pathname: string): string {
+  const withoutQuery = (pathname || '').split(/[?#]/)[0] ?? '';
+  const stripped = stripLocalePrefix(withoutQuery).toLowerCase();
+  const trimmed = stripped.replace(/\/+$/, '');
+  return trimmed === '' ? '/' : trimmed;
+}
+
+function toSearchParams(search: string | null | undefined): URLSearchParams {
+  const raw = search ?? '';
+  return new URLSearchParams(raw.startsWith('?') ? raw.slice(1) : raw);
+}
+
+/** True when the query carries a non-empty `verify` certificate token. */
+export function hasPublicVerifyToken(search: string | null | undefined): boolean {
+  return Boolean(toSearchParams(search).get('verify')?.trim());
+}
+
+function pathMatchesPrefix(cleanPath: string, prefix: string): boolean {
+  if (prefix === '/') return cleanPath === '/';
+  return cleanPath === prefix || cleanPath.startsWith(`${prefix}/`);
+}
+
+/** Resolves the policy for a pathname (+ optional query) by longest prefix. */
+export function getRouteAccessPolicy(pathname: string, search = ''): RouteAccessPolicy {
+  if (hasPublicVerifyToken(search)) {
+    return PUBLIC_CERTIFICATE_VERIFICATION_POLICY;
+  }
+  const cleanPath = normalizeRoutePath(pathname);
+  let best: RouteAccessPolicy | null = null;
+  let bestLength = -1;
+  for (const policy of ROUTE_ACCESS_POLICIES) {
+    for (const prefix of policy.paths) {
+      if (prefix.length > bestLength && pathMatchesPrefix(cleanPath, prefix)) {
+        best = policy;
+        bestLength = prefix.length;
+      }
+    }
+  }
+  return best ?? FALLBACK_ROUTE_POLICY;
+}
+
+export function getRouteAccessMode(pathname: string, search = ''): RouteAccessMode {
+  return getRouteAccessPolicy(pathname, search).mode;
+}
+
+/** Policy for an SPA tab (via its canonical path; no verify token). */
+export function getTabAccessPolicy(tab: AppNavTab): RouteAccessPolicy {
+  return getRouteAccessPolicy(TAB_TO_PATH[tab] ?? '/overview');
+}
+
+/** True when a route needs a signed-in user (authenticated or role_protected). */
+export function requiresAuthentication(pathname: string, search = ''): boolean {
+  const mode = getRouteAccessMode(pathname, search);
+  return mode === 'authenticated' || mode === 'role_protected';
+}
+
+/** True when the route's outcome depends on the session (anything but public). */
+export function isSessionDependentRoute(pathname: string, search = ''): boolean {
+  return getRouteAccessMode(pathname, search) !== 'public';
+}
+
+export function isProtectedTab(tab: AppNavTab): boolean {
+  const mode = getTabAccessPolicy(tab).mode;
+  return mode === 'authenticated' || mode === 'role_protected';
+}
+
+export function isProtectedPathname(pathname: string): boolean {
+  return requiresAuthentication(pathname);
+}
+
+/** Whether `role` satisfies a policy. Missing roles never satisfy a role-protected policy. */
+export function roleSatisfiesPolicy(
+  policy: RouteAccessPolicy,
+  role: UserRole | null | undefined
+): boolean {
+  if (policy.mode !== 'role_protected') return true;
+  return Boolean(role) && policy.allowedRoles.includes(role as UserRole);
+}
+
+/* ------------------------------------------------------------------------- */
+/* Redirect sanitizing                                                       */
+/* ------------------------------------------------------------------------- */
+
+const MAX_REDIRECT_LENGTH = 2048;
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F-\u009F]/;
+const SANITIZE_BASE_ORIGIN = 'http://econova.invalid';
+
+/** Paths that are never page destinations (API and OAuth endpoints). */
+function isNonPageEndpoint(cleanPath: string): boolean {
+  return (
+    cleanPath === '/api' ||
+    cleanPath.startsWith('/api/') ||
+    cleanPath === '/auth' ||
+    cleanPath.startsWith('/auth/')
+  );
+}
+
+function isUnsafeRedirectShape(value: string): boolean {
+  return (
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.includes('\\') ||
+    CONTROL_CHAR_PATTERN.test(value)
+  );
+}
+
+/**
+ * Returns a same-origin, in-app path or `fallback`. Rejects absolute and
+ * protocol-relative URLs (`https://…`, `//…`, `/\…`), backslashes, control
+ * characters (raw or percent-encoded), API/OAuth endpoints and guest-only
+ * pages such as `/login` (which would loop). Locale prefixes are kept.
+ */
 export function sanitizeRedirectTo(
   rawRedirectTo: string | null | undefined,
   fallback = '/overview'
@@ -77,16 +254,50 @@ export function sanitizeRedirectTo(
   if (!rawRedirectTo || typeof rawRedirectTo !== 'string') {
     return fallback;
   }
-  const trimmed = rawRedirectTo.trim();
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
+  if (CONTROL_CHAR_PATTERN.test(rawRedirectTo)) {
     return fallback;
   }
-  const cleanPath = stripLocalePrefix(trimmed.split('?')[0] || '/');
-  if (cleanPath === '/login' || cleanPath === '/register') {
+  const trimmed = rawRedirectTo.trim();
+  if (!trimmed || trimmed.length > MAX_REDIRECT_LENGTH || isUnsafeRedirectShape(trimmed)) {
+    return fallback;
+  }
+
+  // Re-check after one round of percent-decoding: `/%2F/evil`, `/%5Cevil`
+  // and `/%0A/evil` are refused even though browsers treat them as paths.
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(trimmed);
+  } catch {
+    return fallback;
+  }
+  if (isUnsafeRedirectShape(decoded)) {
+    return fallback;
+  }
+
+  // Belt and braces: the browser's own URL parser must keep it same-origin.
+  try {
+    const resolved = new URL(trimmed, SANITIZE_BASE_ORIGIN);
+    if (resolved.origin !== SANITIZE_BASE_ORIGIN) {
+      return fallback;
+    }
+  } catch {
+    return fallback;
+  }
+
+  const cleanPath = normalizeRoutePath(decoded);
+  if (isNonPageEndpoint(cleanPath)) {
+    return fallback;
+  }
+  // `/login?redirectTo=/login…` style loops: never send anyone back to a guest-only page.
+  if (getRouteAccessMode(cleanPath) === 'guest_only') {
     return fallback;
   }
   return trimmed;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Tab / path helpers                                                        */
+/* ------------------------------------------------------------------------- */
 
 export function buildPathForTab(
   tab: AppNavTab,
@@ -106,6 +317,12 @@ export function buildPathForTab(
   return basePath;
 }
 
+/** Reads `redirectTo` (or the legacy `callbackUrl` / `next`) from a query string. */
+export function readRedirectParam(search: string | null | undefined): string | null {
+  const params = toSearchParams(search);
+  return params.get('redirectTo') || params.get('callbackUrl') || params.get('next');
+}
+
 export function parseRouteFromLocation(
   pathname: string,
   search = ''
@@ -114,12 +331,11 @@ export function parseRouteFromLocation(
   courseId: string | null;
   redirectTo: string | null;
 } {
-  const clean = stripLocalePrefix(pathname);
-  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
-  const redirectToParam = params.get('redirectTo') || params.get('callbackUrl') || params.get('next');
+  const clean = normalizeRoutePath(pathname);
+  const redirectToParam = readRedirectParam(search);
   const redirectTo = redirectToParam ? sanitizeRedirectTo(redirectToParam, '/overview') : null;
 
-  if (params.get('verify')) {
+  if (hasPublicVerifyToken(search)) {
     return { tab: 'certificates', courseId: null, redirectTo };
   }
 
@@ -148,17 +364,21 @@ export function parseRouteFromLocation(
   if (clean === '/profile' || clean === '/settings') {
     return { tab: 'profile', courseId: null, redirectTo };
   }
-  if (clean === '/admin' || clean === '/studio') {
+  if (clean === '/admin' || clean === '/studio' || clean.startsWith('/admin/') || clean.startsWith('/studio/')) {
     return { tab: 'admin', courseId: null, redirectTo };
   }
 
-  const courseMatch = clean.match(/^\/course\/([^/]+)/);
+  // Course ids keep their original case, so match against the un-lowered path.
+  const originalClean = stripLocalePrefix((pathname || '').split(/[?#]/)[0] ?? '');
+  const courseMatch = originalClean.match(/^\/course\/([^/]+)/i);
   if (courseMatch && courseMatch[1]) {
-    return {
-      tab: 'course',
-      courseId: decodeURIComponent(courseMatch[1]),
-      redirectTo,
-    };
+    let courseId: string;
+    try {
+      courseId = decodeURIComponent(courseMatch[1]);
+    } catch {
+      courseId = courseMatch[1];
+    }
+    return { tab: 'course', courseId, redirectTo };
   }
 
   return { tab: 'overview', courseId: null, redirectTo };
@@ -169,7 +389,9 @@ export function resolveDestinationFromPath(
   fallbackCourseId?: string | null
 ): IntendedDestination {
   const safePath = sanitizeRedirectTo(rawPath, '/overview');
-  const [pathnamePart, searchPart = ''] = safePath.split('?');
+  const queryIndex = safePath.indexOf('?');
+  const pathnamePart = queryIndex >= 0 ? safePath.slice(0, queryIndex) : safePath;
+  const searchPart = queryIndex >= 0 ? safePath.slice(queryIndex) : '';
   const parsed = parseRouteFromLocation(pathnamePart, searchPart);
   const targetTab =
     parsed.tab === 'login' || parsed.tab === 'register' || parsed.tab === 'landing'
@@ -217,6 +439,10 @@ export function formatDestinationLabel(
   return locale === 'uz' ? labelsUz[resolved.tab] : labelsEn[resolved.tab];
 }
 
+/* ------------------------------------------------------------------------- */
+/* Guard                                                                     */
+/* ------------------------------------------------------------------------- */
+
 export interface MiddlewareGuardInput {
   pathname: string;
   search?: string;
@@ -224,72 +450,127 @@ export interface MiddlewareGuardInput {
   userRole?: UserRole | null;
 }
 
+export type MiddlewareGuardReason =
+  | 'public_route'
+  | 'authenticated'
+  | 'unauthenticated_protected'
+  | 'already_authenticated'
+  | 'insufficient_role';
+
 export interface MiddlewareGuardDecision {
   action: 'allow' | 'redirect';
+  /** Same-origin, sanitized path to send the user to when `action` is `redirect`. */
   destination: string | null;
-  reason: 'public_route' | 'authenticated' | 'unauthenticated_protected' | 'already_authenticated' | 'insufficient_role';
+  reason: MiddlewareGuardReason;
+  /** Access mode of the requested route. */
+  mode: RouteAccessMode;
+  /** `id` of the policy that decided. */
+  policyId: string;
 }
 
+/** `/login?redirectTo=<encoded full path>`, keeping a `/en` or `/uz` prefix. */
+export function buildLoginRedirect(pathname: string, search = ''): string {
+  const rawPath = ((pathname || '/').split(/[?#]/)[0] || '/').trim() || '/';
+  const query = search ? (search.startsWith('?') ? search : `?${search}`) : '';
+  const requested = sanitizeRedirectTo(`${rawPath}${query}`, '/overview');
+  return `${getLocalePrefix(rawPath)}/login?redirectTo=${encodeURIComponent(requested)}`;
+}
+
+/**
+ * The one access decision used by the server HTML guard, the edge middleware
+ * and the SPA. Pure and synchronous: same input, same answer everywhere.
+ */
 export function evaluateMiddlewareRouteGuard(
   input: MiddlewareGuardInput
 ): MiddlewareGuardDecision {
-  const cleanPath = stripLocalePrefix(input.pathname || '/');
-  const searchStr = input.search
+  const pathname = input.pathname || '/';
+  const search = input.search
     ? input.search.startsWith('?')
       ? input.search
       : `?${input.search}`
     : '';
-  const fullRequestedPath = `${cleanPath}${searchStr}`;
+  const policy = getRouteAccessPolicy(pathname, search);
+  const localePrefix = getLocalePrefix(pathname);
+  const homePath = `${localePrefix}/overview`;
+  const base = { mode: policy.mode, policyId: policy.id };
 
-  if (cleanPath === '/login' || cleanPath === '/register') {
-    if (input.isAuthenticated) {
-      const params = new URLSearchParams(searchStr.startsWith('?') ? searchStr.slice(1) : searchStr);
-      const target = sanitizeRedirectTo(
-        params.get('redirectTo') || params.get('callbackUrl') || '/overview',
-        '/overview'
-      );
+  switch (policy.mode) {
+    case 'public':
+      return { ...base, action: 'allow', destination: null, reason: 'public_route' };
+
+    case 'guest_only': {
+      if (!input.isAuthenticated) {
+        return { ...base, action: 'allow', destination: null, reason: 'public_route' };
+      }
       return {
+        ...base,
         action: 'redirect',
-        destination: target,
+        destination: sanitizeRedirectTo(readRedirectParam(search), homePath),
         reason: 'already_authenticated',
       };
     }
-    return {
-      action: 'allow',
-      destination: null,
-      reason: 'public_route',
-    };
-  }
 
-  if (isProtectedPathname(cleanPath)) {
-    if (!input.isAuthenticated) {
-      return {
-        action: 'redirect',
-        destination: `/login?redirectTo=${encodeURIComponent(fullRequestedPath)}`,
-        reason: 'unauthenticated_protected',
-      };
+    case 'authenticated':
+    case 'role_protected': {
+      if (!input.isAuthenticated) {
+        return {
+          ...base,
+          action: 'redirect',
+          destination: buildLoginRedirect(pathname, search),
+          reason: 'unauthenticated_protected',
+        };
+      }
+      if (policy.mode === 'role_protected' && !roleSatisfiesPolicy(policy, input.userRole)) {
+        return { ...base, action: 'redirect', destination: homePath, reason: 'insufficient_role' };
+      }
+      return { ...base, action: 'allow', destination: null, reason: 'authenticated' };
     }
-    if (
-      (cleanPath === '/admin' || cleanPath.startsWith('/admin/')) &&
-      input.userRole &&
-      !['editor', 'reviewer', 'publisher', 'admin'].includes(input.userRole)
-    ) {
-      return {
-        action: 'redirect',
-        destination: '/overview',
-        reason: 'insufficient_role',
-      };
-    }
-    return {
-      action: 'allow',
-      destination: null,
-      reason: 'authenticated',
-    };
   }
+}
 
-  return {
-    action: 'allow',
-    destination: null,
-    reason: input.isAuthenticated ? 'authenticated' : 'public_route',
-  };
+/**
+ * Final check before a guard decision becomes a `Location` header. Guard
+ * destinations are built from sanitized parts, so this only refuses anything
+ * that is not a same-origin absolute path (never expected in practice).
+ */
+export function resolveGuardRedirectTarget(destination: string | null | undefined): string {
+  if (
+    !destination ||
+    !destination.startsWith('/') ||
+    destination.startsWith('//') ||
+    destination.includes('\\') ||
+    CONTROL_CHAR_PATTERN.test(destination)
+  ) {
+    return '/overview';
+  }
+  return destination;
+}
+
+/** Query flag a server-side redirect uses to tell the SPA why it landed somewhere. */
+export const ACCESS_NOTICE_PARAM = 'accessNotice';
+export type AccessNotice = Extract<MiddlewareGuardReason, 'insufficient_role'>;
+
+/**
+ * Adds `?accessNotice=insufficient_role` to a server redirect so the SPA can
+ * show the bilingual "no access" toast after a full page load.
+ */
+export function withAccessNotice(destination: string, reason: MiddlewareGuardReason): string {
+  if (reason !== 'insufficient_role') return destination;
+  const separator = destination.includes('?') ? '&' : '?';
+  return `${destination}${separator}${ACCESS_NOTICE_PARAM}=${reason}`;
+}
+
+/** Reads the access notice flag from a query string, if present and known. */
+export function readAccessNotice(search: string | null | undefined): AccessNotice | null {
+  return toSearchParams(search).get(ACCESS_NOTICE_PARAM) === 'insufficient_role'
+    ? 'insufficient_role'
+    : null;
+}
+
+/** Removes the access notice flag from a query string (returns '' or '?…'). */
+export function stripAccessNotice(search: string | null | undefined): string {
+  const params = toSearchParams(search);
+  params.delete(ACCESS_NOTICE_PARAM);
+  const next = params.toString();
+  return next ? `?${next}` : '';
 }

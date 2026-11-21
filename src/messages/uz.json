@@ -269,6 +269,8 @@
     "policyEditorialBody": "Ingliz va o‘zbek nashrlari alohida yoziladi va tekshiriladi. AI vositalari qoralama tayyorlashda yordam berishi mumkin, biroq har bir chop etilgan dars va test inson — fan, til va huquq muharrirlari tasdig‘idan o‘tadi."
   },
   "auth": {
+    "checkingSession": "Sessiya tekshirilmoqda…",
+    "checkingSessionHint": "Ushbu sahifani ochish huquqingiz tasdiqlanmoqda.",
     "signInTitle": "ECONOVA tizimiga kirish",
     "registerTitle": "O‘quvchi hisobini yaratish",
     "subtitle": "O‘quv natijalarini qurilmalararo saqlang, kurs sertifikatlarini oling va maxfiylik sozlamalarini boshqaring.",
