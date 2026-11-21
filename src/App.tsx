@@ -47,6 +47,7 @@ import { CommandBar } from './components/CommandBar';
 import { CommunityView } from './components/CommunityView';
 import { CourseMap } from './components/CourseMap';
 import { CourseShowcase } from './components/CourseShowcase';
+import { BrutalCardSkeleton, BrutalCourseDetailSkeleton, ContentReveal } from './components/ui/BrutalSkeleton';
 import { DailyStudyGoalCard } from './components/DailyStudyGoalCard';
 import { EconomicsLiquidBackground } from './components/EconomicsLiquidBackground';
 import { EconomicsSection } from './components/EconomicsSection';
@@ -346,6 +347,7 @@ export default function App() {
   // Community & referrals
   const [cohortName, setCohortName] = useState('Active Weekly Study Cohort');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   const [quizLeaderboard, setQuizLeaderboard] = useState<QuizLeaderboardEntry[]>([]);
   const [weekWindow, setWeekWindow] = useState<{
     weekStartIso: string;
@@ -429,6 +431,7 @@ export default function App() {
 
   const loadLeaderboard = useCallback(async () => {
     try {
+      setLeaderboardLoading(true);
       const res = await apiFetch('/api/leaderboards');
       if (res.ok) {
         const data = (await res.json()) as {
@@ -448,6 +451,8 @@ export default function App() {
       }
     } catch {
       // Non-blocking
+    } finally {
+      setLeaderboardLoading(false);
     }
   }, []);
 
@@ -486,9 +491,9 @@ export default function App() {
           if (typeof ov.dailyStudyGoalMinutes === 'number') {
             setDailyStudyGoalMinutes(ov.dailyStudyGoalMinutes);
           }
-          setXpLedger(ov.xpLedger);
-          setStreak(ov.streak);
-          setBadges(ov.badges);
+          if (Array.isArray(ov.xpLedger)) setXpLedger(ov.xpLedger);
+          if (ov.streak) setStreak(ov.streak);
+          if (Array.isArray(ov.badges)) setBadges(ov.badges);
 
           const nextSnapshot: MilestoneSnapshot = {
             completedCourseIds: ov.enrollments
@@ -2087,6 +2092,7 @@ export default function App() {
               <CourseShowcase
                 locale={locale}
                 courses={courses}
+                loading={catalogLoading}
                 enrollments={enrollments}
                 bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
                 bookmarkBusyId={bookmarkBusyId}
@@ -2165,15 +2171,21 @@ export default function App() {
                 </div>
 
                 {catalogLoading ? (
-                  <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
-                    {strings.overview.loadingCourses}
+                  <div
+                    aria-busy="true"
+                    aria-label={locale === 'uz' ? 'Kurslar yuklanmoqda...' : 'Loading courses...'}
+                    className="grid gap-4 md:grid-cols-3"
+                  >
+                    <BrutalCardSkeleton locale={locale} />
+                    <BrutalCardSkeleton locale={locale} />
+                    <BrutalCardSkeleton locale={locale} />
                   </div>
                 ) : courses.length === 0 ? (
                   <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                     {locale === 'uz' ? 'Hozircha ko‘rsatiladigan kurslar yo‘q.' : 'No courses to show yet.'}
                   </div>
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <ContentReveal className="grid gap-4 md:grid-cols-3">
                     {courses.map((course, idx) => {
                       const ed = course.editions[locale];
                       const enr = enrollments.find((e) => e.courseId === course.id);
@@ -2239,7 +2251,7 @@ export default function App() {
                         </MagneticCourseCard>
                       );
                     })}
-                  </div>
+                  </ContentReveal>
                 )}
               </section>
             </div>
@@ -2427,7 +2439,20 @@ export default function App() {
                 </div>
               </header>
 
-              {(subjectFilter === 'ALL' || subjectFilter === 'Economics') && (
+              {catalogLoading ? (
+                <div
+                  aria-busy="true"
+                  aria-label={locale === 'uz' ? 'Kurslar yuklanmoqda...' : 'Loading courses...'}
+                  className="relative z-10 isolate mt-8 grid gap-4 md:grid-cols-2"
+                >
+                  <BrutalCardSkeleton locale={locale} />
+                  <BrutalCardSkeleton locale={locale} />
+                  <BrutalCardSkeleton locale={locale} />
+                  <BrutalCardSkeleton locale={locale} />
+                </div>
+              ) : (
+                <ContentReveal>
+                  {(subjectFilter === 'ALL' || subjectFilter === 'Economics') && (
                 <>
                   <NeobrutalistSectionDivider subject="Economics" locale={locale} indexLabel="01" />
                   <EconomicsSection
@@ -2675,6 +2700,8 @@ export default function App() {
                   })}
                 </div>
               )}
+                </ContentReveal>
+              )}
             </div>
           )}
 
@@ -2715,16 +2742,14 @@ export default function App() {
                 )}
               </div>
 
-              {courseLoading ? (
-                <div className="relative z-10 rounded-xl border-2 border-slate-500 bg-white/25 p-8 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
-                  {strings.courseDetail.loadingEdition}
-                </div>
+              {courseLoading && !courseDetail ? (
+                <BrutalCourseDetailSkeleton locale={locale} />
               ) : !courseDetail ? (
                 <div className="relative z-10 rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                   {strings.editionMissingNote}
                 </div>
               ) : (
-                <div className="relative z-10 space-y-6">
+                <ContentReveal className="relative z-10 space-y-6">
                   {/* Course Metadata & Completion Criteria */}
                   <section className="rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                     {(() => {
@@ -3068,79 +3093,83 @@ export default function App() {
 
                     <div data-print-content="course-main" className="min-w-0 lg:col-span-8">
                       {typeof activeLessonIndex === 'number' && courseDetail.lessons[activeLessonIndex] && (
-                        <LessonPlayer
-                          courseId={courseDetail.course.id}
-                          courseTitle={courseDetail.edition.title}
-                          lesson={courseDetail.lessons[activeLessonIndex]}
-                          locale={courseDetail.edition.locale}
-                          focusTimer={focusTimer}
-                          ambientAudio={ambientAudio}
-                          isCompleted={
-                            activeEnrollment?.completedLessonIds.includes(
-                              courseDetail.lessons[activeLessonIndex].id
-                            ) ?? false
-                          }
-                          isAuthenticated={Boolean(user)}
-                          profileNotes={user?.lessonNotes}
-                          onSyncNotesToProfile={async (nextNotes) => {
-                            if (!user) return;
-                            const res = await apiFetch('/api/me/profile', {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ lessonNotes: nextNotes }),
-                            });
-                            if (res.ok) {
-                              const data = (await res.json()) as { user?: UserSummary };
-                              if (data.user) setUser(data.user);
+                        <ContentReveal key={courseDetail.lessons[activeLessonIndex].id}>
+                          <LessonPlayer
+                            courseId={courseDetail.course.id}
+                            courseTitle={courseDetail.edition.title}
+                            lesson={courseDetail.lessons[activeLessonIndex]}
+                            locale={courseDetail.edition.locale}
+                            focusTimer={focusTimer}
+                            ambientAudio={ambientAudio}
+                            isCompleted={
+                              activeEnrollment?.completedLessonIds.includes(
+                                courseDetail.lessons[activeLessonIndex].id
+                              ) ?? false
                             }
-                          }}
-                          onCompleteLesson={handleCompleteLesson}
-                          onRequireAuth={() =>
-                            navigateToLogin({
-                              tab: 'course',
-                              path: buildPathForTab('course', { courseId: courseDetail.course.id }),
-                              courseId: courseDetail.course.id,
-                              lessonIndex: activeLessonIndex,
-                            })
-                          }
-                          onNextLesson={
-                            activeLessonIndex + 1 < courseDetail.lessons.length
-                              ? () => setActiveLessonIndex(activeLessonIndex + 1)
-                              : undefined
-                          }
-                          onOpenAssessment={
-                            courseDetail.assessment ? () => setActiveLessonIndex('assessment') : undefined
-                          }
-                        />
+                            isAuthenticated={Boolean(user)}
+                            profileNotes={user?.lessonNotes}
+                            onSyncNotesToProfile={async (nextNotes) => {
+                              if (!user) return;
+                              const res = await apiFetch('/api/me/profile', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ lessonNotes: nextNotes }),
+                              });
+                              if (res.ok) {
+                                const data = (await res.json()) as { user?: UserSummary };
+                                if (data.user) setUser(data.user);
+                              }
+                            }}
+                            onCompleteLesson={handleCompleteLesson}
+                            onRequireAuth={() =>
+                              navigateToLogin({
+                                tab: 'course',
+                                path: buildPathForTab('course', { courseId: courseDetail.course.id }),
+                                courseId: courseDetail.course.id,
+                                lessonIndex: activeLessonIndex,
+                              })
+                            }
+                            onNextLesson={
+                              activeLessonIndex + 1 < courseDetail.lessons.length
+                                ? () => setActiveLessonIndex(activeLessonIndex + 1)
+                                : undefined
+                            }
+                            onOpenAssessment={
+                              courseDetail.assessment ? () => setActiveLessonIndex('assessment') : undefined
+                            }
+                          />
+                        </ContentReveal>
                       )}
 
                       {activeLessonIndex === 'assessment' && courseDetail.assessment && (
-                        <AssessmentView
-                          courseId={courseDetail.course.id}
-                          assessment={courseDetail.assessment}
-                          locale={courseDetail.edition.locale}
-                          isAuthenticated={Boolean(user)}
-                          onRequireAuth={() =>
-                            navigateToLogin({
-                              tab: 'course',
-                              path: buildPathForTab('course', { courseId: courseDetail.course.id }),
-                              courseId: courseDetail.course.id,
-                              lessonIndex: 'assessment',
-                            })
-                          }
-                          onAttemptCompleted={async () => {
-                            setWeaknessRefreshTick((t) => t + 1);
-                            await Promise.all([
-                              loadProtectedData({ allowCelebrate: true }),
-                              loadLeaderboard(),
-                            ]);
-                          }}
-                          onViewCertificates={() => navigateToTab('certificates')}
-                        />
+                        <ContentReveal key="assessment">
+                          <AssessmentView
+                            courseId={courseDetail.course.id}
+                            assessment={courseDetail.assessment}
+                            locale={courseDetail.edition.locale}
+                            isAuthenticated={Boolean(user)}
+                            onRequireAuth={() =>
+                              navigateToLogin({
+                                tab: 'course',
+                                path: buildPathForTab('course', { courseId: courseDetail.course.id }),
+                                courseId: courseDetail.course.id,
+                                lessonIndex: 'assessment',
+                              })
+                            }
+                            onAttemptCompleted={async () => {
+                              setWeaknessRefreshTick((t) => t + 1);
+                              await Promise.all([
+                                loadProtectedData({ allowCelebrate: true }),
+                                loadLeaderboard(),
+                              ]);
+                            }}
+                            onViewCertificates={() => navigateToTab('certificates')}
+                          />
+                        </ContentReveal>
                       )}
                     </div>
                   </div>
-                </div>
+                </ContentReveal>
               )}
             </div>
           )}
@@ -3169,6 +3198,7 @@ export default function App() {
           {activeTab === 'community' && (
             <CommunityView
               locale={locale}
+              loading={leaderboardLoading}
               user={user}
               cohortName={cohortName}
               entries={leaderboard}

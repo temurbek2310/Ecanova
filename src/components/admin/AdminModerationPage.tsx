@@ -18,6 +18,7 @@ import {
   adminInputClass,
   adminPrimaryButtonClass,
 } from './AdminLayout';
+import { AdminCardSkeleton, ContentReveal } from '../ui/BrutalSkeleton';
 
 export interface AdminModerationPageProps {
   locale: LocaleCode;
@@ -184,30 +185,39 @@ export const AdminModerationPage: React.FC<AdminModerationPageProps> = ({ locale
             </h3>
             <div className="mt-4 space-y-3">
               {!data || data.reviewRequests.length === 0 ? (
-                <AdminEmpty>{loading ? copy.loading : copy.moderation.noReviewRequests}</AdminEmpty>
+                loading ? (
+                  <div aria-busy="true" aria-label={copy.loading} className="space-y-3">
+                    <AdminCardSkeleton locale={locale} lines={2} />
+                    <AdminCardSkeleton locale={locale} lines={2} />
+                  </div>
+                ) : (
+                  <AdminEmpty>{copy.moderation.noReviewRequests}</AdminEmpty>
+                )
               ) : (
-                data.reviewRequests.map((rv) => (
-                  <article key={rv.id} className="admin-card p-4 text-[13px]">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium text-ink">
-                        {rv.lessonTitle} · <span className="text-teal">{rv.segmentHeading}</span>
-                      </span>
-                      <span className={`admin-badge ${statusTone[rv.status]}`}>
-                        {copy.moderation.statuses[rv.status]}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-muted">
-                      <span className="font-medium text-ink">{rv.studentDisplayName}:</span> {rv.comment}
-                    </p>
-                    <p className="mt-1 text-[11px] text-muted">{formatAdminDate(rv.createdAt, locale)}</p>
-                    {rv.reviewerNote ? (
-                      <p className="mt-1.5 text-[12px] text-muted">
-                        {copy.moderation.existingNote} {rv.reviewerNote}
+                <ContentReveal className="space-y-3">
+                  {data.reviewRequests.map((rv) => (
+                    <article key={rv.id} className="admin-card p-4 text-[13px]">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-ink">
+                          {rv.lessonTitle} · <span className="text-teal">{rv.segmentHeading}</span>
+                        </span>
+                        <span className={`admin-badge ${statusTone[rv.status]}`}>
+                          {copy.moderation.statuses[rv.status]}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-muted">
+                        <span className="font-medium text-ink">{rv.studentDisplayName}:</span> {rv.comment}
                       </p>
-                    ) : null}
-                    {renderControls('review', rv.id, rv.status)}
-                  </article>
-                ))
+                      <p className="mt-1 text-[11px] text-muted">{formatAdminDate(rv.createdAt, locale)}</p>
+                      {rv.reviewerNote ? (
+                        <p className="mt-1.5 text-[12px] text-muted">
+                          {copy.moderation.existingNote} {rv.reviewerNote}
+                        </p>
+                      ) : null}
+                      {renderControls('review', rv.id, rv.status)}
+                    </article>
+                  ))}
+                </ContentReveal>
               )}
             </div>
           </div>
@@ -218,29 +228,38 @@ export const AdminModerationPage: React.FC<AdminModerationPageProps> = ({ locale
             </h3>
             <div className="mt-4 space-y-3">
               {!data || data.reports.length === 0 ? (
-                <AdminEmpty>{loading ? copy.loading : copy.moderation.noReports}</AdminEmpty>
+                loading ? (
+                  <div aria-busy="true" aria-label={copy.loading} className="space-y-3">
+                    <AdminCardSkeleton locale={locale} lines={2} />
+                    <AdminCardSkeleton locale={locale} lines={2} />
+                  </div>
+                ) : (
+                  <AdminEmpty>{copy.moderation.noReports}</AdminEmpty>
+                )
               ) : (
-                data.reports.map((r) => (
-                  <article key={r.id} className="admin-card p-4 text-[13px]">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium text-ink">
-                        {r.category}
-                        {r.segmentHeading ? ` · ${r.segmentHeading}` : ''}
-                      </span>
-                      <span className={`admin-badge ${statusTone[r.status]}`}>
-                        {copy.moderation.statuses[r.status]}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-muted">{r.description}</p>
-                    <p className="mt-1 text-[11px] text-muted">{formatAdminDate(r.createdAt, locale)}</p>
-                    {r.resolutionNote ? (
-                      <p className="mt-1.5 text-[12px] text-muted">
-                        {copy.moderation.existingNote} {r.resolutionNote}
-                      </p>
-                    ) : null}
-                    {renderControls('report', r.id, r.status)}
-                  </article>
-                ))
+                <ContentReveal className="space-y-3">
+                  {data.reports.map((r) => (
+                    <article key={r.id} className="admin-card p-4 text-[13px]">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-ink">
+                          {r.category}
+                          {r.segmentHeading ? ` · ${r.segmentHeading}` : ''}
+                        </span>
+                        <span className={`admin-badge ${statusTone[r.status]}`}>
+                          {copy.moderation.statuses[r.status]}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-muted">{r.description}</p>
+                      <p className="mt-1 text-[11px] text-muted">{formatAdminDate(r.createdAt, locale)}</p>
+                      {r.resolutionNote ? (
+                        <p className="mt-1.5 text-[12px] text-muted">
+                          {copy.moderation.existingNote} {r.resolutionNote}
+                        </p>
+                      ) : null}
+                      {renderControls('report', r.id, r.status)}
+                    </article>
+                  ))}
+                </ContentReveal>
               )}
             </div>
           </div>

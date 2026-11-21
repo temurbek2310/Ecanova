@@ -20,6 +20,7 @@ import {
   adminInputClass,
   adminPrimaryButtonClass,
 } from './AdminLayout';
+import { AdminCardSkeleton, AdminTableSkeleton, ContentReveal } from '../ui/BrutalSkeleton';
 
 export interface AdminUsersCertificatesPageProps {
   locale: LocaleCode;
@@ -182,68 +183,87 @@ export const AdminUsersCertificatesPage: React.FC<AdminUsersCertificatesPageProp
           {copy.users.usersHeading} ({users.length})
         </h3>
         {users.length === 0 ? (
-          <div className="mt-4">
-            <AdminEmpty>{usersLoading ? copy.loading : copy.users.noUsers}</AdminEmpty>
-          </div>
+          usersLoading ? (
+            <div className="mt-4 overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6">
+              <table className="admin-table" style={{ minWidth: '640px' }}>
+                <thead>
+                  <tr>
+                    <th scope="col">{copy.users.columns.name}</th>
+                    <th scope="col">{copy.users.columns.email}</th>
+                    <th scope="col">{copy.users.columns.role}</th>
+                    <th scope="col">{copy.users.columns.joined}</th>
+                    <th scope="col">{copy.users.columns.actions}</th>
+                  </tr>
+                </thead>
+                <AdminTableSkeleton rows={4} cols={5} locale={locale} />
+              </table>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <AdminEmpty>{copy.users.noUsers}</AdminEmpty>
+            </div>
+          )
         ) : (
-          <div className="mt-4 overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6">
-            <table className="admin-table" style={{ minWidth: '640px' }}>
-              <thead>
-                <tr>
-                  <th scope="col">{copy.users.columns.name}</th>
-                  <th scope="col">{copy.users.columns.email}</th>
-                  <th scope="col">{copy.users.columns.role}</th>
-                  <th scope="col">{copy.users.columns.joined}</th>
-                  <th scope="col">{copy.users.columns.actions}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => {
-                  const isSelf = u.id === currentUserId;
-                  const isAdmin = u.role === 'admin';
-                  const selfDemotion = isSelf && isAdmin;
-                  return (
-                    <tr key={u.id} data-user-role={u.role}>
-                      <td className="font-medium text-ink">
-                        {u.displayName}
-                        {isSelf ? <span className="ml-1 text-[11px] font-normal text-muted">({copy.users.you})</span> : null}
-                      </td>
-                      <td className="text-muted">{u.email}</td>
-                      <td className={`font-semibold ${isAdmin ? 'text-teal' : 'text-ink'}`}>
-                        {getRoleDisplayLabel(u.role, locale)}
-                      </td>
-                      <td className="text-muted whitespace-nowrap">{formatAdminDate(u.createdAt, locale)}</td>
-                      <td>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={roleBusyId === u.id || selfDemotion}
-                            title={selfDemotion ? copy.users.selfDemotionHint : undefined}
-                            aria-describedby={selfDemotion ? `self-demotion-${u.id}` : undefined}
-                            onClick={() => void changeRole(u, isAdmin ? 'learner' : 'admin')}
-                            className={adminButtonClass}
-                            data-testid={`role-toggle-${u.id}`}
-                          >
-                            {isAdmin ? (
-                              <ShieldOff className="h-3.5 w-3.5" aria-hidden="true" />
-                            ) : (
-                              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                            )}
-                            {isAdmin ? copy.users.makeLearner : copy.users.makeAdmin}
-                          </button>
-                          {selfDemotion ? (
-                            <span id={`self-demotion-${u.id}`} className="sr-only">
-                              {copy.users.selfDemotionHint}
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ContentReveal>
+            <div className="mt-4 overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6">
+              <table className="admin-table" style={{ minWidth: '640px' }}>
+                <thead>
+                  <tr>
+                    <th scope="col">{copy.users.columns.name}</th>
+                    <th scope="col">{copy.users.columns.email}</th>
+                    <th scope="col">{copy.users.columns.role}</th>
+                    <th scope="col">{copy.users.columns.joined}</th>
+                    <th scope="col">{copy.users.columns.actions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => {
+                    const isSelf = u.id === currentUserId;
+                    const isAdmin = u.role === 'admin';
+                    const selfDemotion = isSelf && isAdmin;
+                    return (
+                      <tr key={u.id} data-user-role={u.role}>
+                        <td className="font-medium text-ink">
+                          {u.displayName}
+                          {isSelf ? <span className="ml-1 text-[11px] font-normal text-muted">({copy.users.you})</span> : null}
+                        </td>
+                        <td className="text-muted">{u.email}</td>
+                        <td className={`font-semibold ${isAdmin ? 'text-teal' : 'text-ink'}`}>
+                          {getRoleDisplayLabel(u.role, locale)}
+                        </td>
+                        <td className="text-muted whitespace-nowrap">{formatAdminDate(u.createdAt, locale)}</td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={roleBusyId === u.id || selfDemotion}
+                              title={selfDemotion ? copy.users.selfDemotionHint : undefined}
+                              aria-describedby={selfDemotion ? `self-demotion-${u.id}` : undefined}
+                              onClick={() => void changeRole(u, isAdmin ? 'learner' : 'admin')}
+                              className={adminButtonClass}
+                              data-testid={`role-toggle-${u.id}`}
+                            >
+                              {isAdmin ? (
+                                <ShieldOff className="h-3.5 w-3.5" aria-hidden="true" />
+                              ) : (
+                                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                              )}
+                              {isAdmin ? copy.users.makeLearner : copy.users.makeAdmin}
+                            </button>
+                            {selfDemotion ? (
+                              <span id={`self-demotion-${u.id}`} className="sr-only">
+                                {copy.users.selfDemotionHint}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </ContentReveal>
         )}
       </AdminPanel>
 
@@ -275,45 +295,55 @@ export const AdminUsersCertificatesPage: React.FC<AdminUsersCertificatesPageProp
 
         <div className="mt-5 space-y-3">
           {certificates.length === 0 ? (
-            <AdminEmpty>{certsLoading ? copy.loading : copy.users.noCertificates}</AdminEmpty>
+            certsLoading ? (
+              <div aria-busy="true" aria-label={copy.loading} className="space-y-3">
+                <AdminCardSkeleton locale={locale} lines={2} />
+                <AdminCardSkeleton locale={locale} lines={2} />
+                <AdminCardSkeleton locale={locale} lines={2} />
+              </div>
+            ) : (
+              <AdminEmpty>{copy.users.noCertificates}</AdminEmpty>
+            )
           ) : (
-            certificates.map((c) => (
-              <article key={c.id} className="admin-card p-4 text-[13px]">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-medium text-ink">
-                      {c.recipientDisplayName} · {c.courseTitle}
-                    </div>
-                    <div className="mt-1.5 font-mono text-[11px] text-muted">
-                      {c.publicToken} · {c.locale.toUpperCase()} · {formatAdminDate(c.issuedAt, locale)}
-                    </div>
-                    {c.status === 'revoked' && c.revokeReason ? (
-                      <div className="mt-1.5 text-[12px] text-danger-text">
-                        {copy.users.revokedOn} {c.revokedAt ? formatAdminDate(c.revokedAt, locale) : ''}: {c.revokeReason}
+            <ContentReveal className="space-y-3">
+              {certificates.map((c) => (
+                <article key={c.id} className="admin-card p-4 text-[13px]">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-ink">
+                        {c.recipientDisplayName} · {c.courseTitle}
                       </div>
-                    ) : null}
+                      <div className="mt-1.5 font-mono text-[11px] text-muted">
+                        {c.publicToken} · {c.locale.toUpperCase()} · {formatAdminDate(c.issuedAt, locale)}
+                      </div>
+                      {c.status === 'revoked' && c.revokeReason ? (
+                        <div className="mt-1.5 text-[12px] text-danger-text">
+                          {copy.users.revokedOn} {c.revokedAt ? formatAdminDate(c.revokedAt, locale) : ''}: {c.revokeReason}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`admin-badge ${c.status === 'valid' ? '!text-success' : '!text-danger-text'}`}>
+                        {copy.users.certificateStatus[c.status]}
+                      </span>
+                      {c.status === 'valid' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRevokeTarget(c);
+                            setRevokeReason('');
+                          }}
+                          className={adminDangerButtonClass}
+                          data-testid={`revoke-open-${c.id}`}
+                        >
+                          {copy.users.revoke}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`admin-badge ${c.status === 'valid' ? '!text-success' : '!text-danger-text'}`}>
-                      {copy.users.certificateStatus[c.status]}
-                    </span>
-                    {c.status === 'valid' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRevokeTarget(c);
-                          setRevokeReason('');
-                        }}
-                        className={adminDangerButtonClass}
-                        data-testid={`revoke-open-${c.id}`}
-                      >
-                        {copy.users.revoke}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </article>
-            ))
+                </article>
+              ))}
+            </ContentReveal>
           )}
         </div>
       </AdminPanel>

@@ -20,9 +20,11 @@ import { describeError, notify } from '../lib/notifications';
 import type { WeekWindow } from '../lib/quiz-leaderboard';
 import { FloatingWatermark } from './FloatingWatermark';
 import { RankingMatrix } from './RankingMatrix';
+import { BrutalLeaderboardSkeleton, ContentReveal, SkeletonLine } from './ui/BrutalSkeleton';
 
 interface CommunityViewProps {
   locale: LocaleCode;
+  loading?: boolean;
   user: UserSummary | null;
   cohortName: string;
   entries: LeaderboardEntry[];
@@ -39,6 +41,7 @@ interface CommunityViewProps {
 
 export const CommunityView: React.FC<CommunityViewProps> = ({
   locale,
+  loading = false,
   user,
   cohortName,
   entries,
@@ -95,7 +98,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <ContentReveal className="space-y-6">
       <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
         <FloatingWatermark
           theme="gamification"
@@ -245,25 +248,29 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line/60">
-                {entries.map((row) => (
-                  <tr key={row.rank} className={row.isCurrentUser ? 'bg-accent/10' : ''}>
-                    <td className="py-2.5 pr-4 font-mono tabular-nums text-muted">
-                      #{row.rank}
-                    </td>
-                    <td className="py-2.5 pr-4 font-medium text-ink">
-                      {row.pseudonym}{' '}
-                      {row.isCurrentUser ? (locale === 'uz' ? '(Siz)' : '(You)') : ''}
-                    </td>
-                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums text-muted">
-                      {row.lessonsCompleted}
-                    </td>
-                    <td className="py-2.5 text-right font-mono font-semibold tabular-nums text-warning">
-                      {row.cohortXp} XP
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              {loading && entries.length === 0 ? (
+                <BrutalLeaderboardSkeleton rows={5} locale={locale} />
+              ) : (
+                <tbody className="divide-y divide-line/60">
+                  {entries.map((row) => (
+                    <tr key={row.rank} className={row.isCurrentUser ? 'bg-accent/10' : ''}>
+                      <td className="py-2.5 pr-4 font-mono tabular-nums text-muted">
+                        #{row.rank}
+                      </td>
+                      <td className="py-2.5 pr-4 font-medium text-ink">
+                        {row.pseudonym}{' '}
+                        {row.isCurrentUser ? (locale === 'uz' ? '(Siz)' : '(You)') : ''}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right font-mono tabular-nums text-muted">
+                        {row.lessonsCompleted}
+                      </td>
+                      <td className="py-2.5 text-right font-mono font-semibold tabular-nums text-warning">
+                        {row.cohortXp} XP
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              )}
             </table>
           </div>
         )}
@@ -320,7 +327,11 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className="font-mono text-lg font-bold tracking-wider text-teal">
-                  {referralCode || (locale === 'uz' ? 'Yuklanmoqda...' : 'Loading...')}
+                  {referralCode ? (
+                    referralCode
+                  ) : (
+                    <SkeletonLine width="130px" height="22px" className="inline-block" />
+                  )}
                 </span>
                 {referralCode && (
                   <button
@@ -390,6 +401,6 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
         )}
         </div>
       </section>
-    </div>
+    </ContentReveal>
   );
 };

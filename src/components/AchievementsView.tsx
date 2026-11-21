@@ -12,6 +12,7 @@ import {
 } from '../lib/badge-entrance';
 import { t } from '../lib/i18n';
 import { FloatingWatermark } from './FloatingWatermark';
+import { ContentReveal, SkeletonBlock, SkeletonLine } from './ui/BrutalSkeleton';
 
 interface AchievementsViewProps {
   locale: LocaleCode;
@@ -196,8 +197,56 @@ export const AchievementsView: React.FC<AchievementsViewProps> = ({
     );
   }
 
+  if (!overviewLoaded) {
+    return (
+      <div
+        aria-busy="true"
+        aria-label={locale === 'uz' ? 'Yutuqlar yuklanmoqda...' : 'Loading achievements...'}
+        className="space-y-6"
+      >
+        <section className="rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+          <SkeletonLine width="260px" height="24px" />
+          <SkeletonLine width="180px" height="12px" className="mt-2" />
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/55 dark:bg-[#080B14]/55 p-4 backdrop-blur-md space-y-2"
+              >
+                <SkeletonLine width="60%" height="12px" />
+                <SkeletonLine width="45%" height="28px" />
+                <SkeletonLine width="75%" height="11px" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+          <SkeletonLine width="200px" height="20px" />
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
+                className="rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/55 dark:bg-[#080B14]/55 p-4 backdrop-blur-md space-y-2"
+              >
+                <div className="flex items-center gap-3">
+                  <SkeletonBlock width="40px" height="40px" className="rounded-full shrink-0" />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <SkeletonLine width="70%" height="14px" />
+                    <SkeletonLine width="40%" height="10px" />
+                  </div>
+                </div>
+                <SkeletonLine width="90%" height="11px" className="mt-2" />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <ContentReveal className="space-y-6">
       <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
         <FloatingWatermark
           theme="gamification"
@@ -391,6 +440,6 @@ export const AchievementsView: React.FC<AchievementsViewProps> = ({
           )}
         </div>
       </section>
-    </div>
+    </ContentReveal>
   );
 };

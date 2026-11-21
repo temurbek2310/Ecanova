@@ -7,6 +7,7 @@ import { describeError, notify } from '../../lib/notifications';
 import { adminRequest, formatAdminDate, type AdminOverviewResponse } from './admin-api';
 import { adminCopy } from './admin-copy';
 import { ADMIN_SECTION_ICONS, AdminEmpty, AdminPanel, adminButtonClass } from './AdminLayout';
+import { AdminCardSkeleton, AdminMetricSkeleton, ContentReveal } from '../ui/BrutalSkeleton';
 
 export interface AdminOverviewPageProps {
   locale: LocaleCode;
@@ -69,9 +70,23 @@ export const AdminOverviewPage: React.FC<AdminOverviewPageProps> = ({ locale, on
         }
       >
         {!k ? (
-          <AdminEmpty>{loading ? copy.loading : copy.empty}</AdminEmpty>
+          loading ? (
+            <div
+              aria-busy="true"
+              aria-label={copy.loading}
+              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              <AdminMetricSkeleton locale={locale} />
+              <AdminMetricSkeleton locale={locale} />
+              <AdminMetricSkeleton locale={locale} />
+              <AdminMetricSkeleton locale={locale} />
+              <AdminMetricSkeleton locale={locale} />
+            </div>
+          ) : (
+            <AdminEmpty>{copy.empty}</AdminEmpty>
+          )
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ContentReveal className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard
               testId="admin-kpi-editions"
               label={copy.overview.editions}
@@ -106,7 +121,7 @@ export const AdminOverviewPage: React.FC<AdminOverviewPageProps> = ({ locale, on
               tone="text-success"
               detail={copy.overview.xpEntries(k.xp.validEntriesCount)}
             />
-          </div>
+          </ContentReveal>
         )}
       </AdminPanel>
 
@@ -139,22 +154,32 @@ export const AdminOverviewPage: React.FC<AdminOverviewPageProps> = ({ locale, on
             </button>
           }
         >
-          {!data || data.recentAuditEvents.length === 0 ? (
-            <AdminEmpty>{loading ? copy.loading : copy.empty}</AdminEmpty>
+          {!data || !data.recentAuditEvents || data.recentAuditEvents.length === 0 ? (
+            loading ? (
+              <div aria-busy="true" aria-label={copy.loading} className="space-y-3">
+                <AdminCardSkeleton locale={locale} lines={1} />
+                <AdminCardSkeleton locale={locale} lines={1} />
+                <AdminCardSkeleton locale={locale} lines={1} />
+              </div>
+            ) : (
+              <AdminEmpty>{copy.empty}</AdminEmpty>
+            )
           ) : (
-            <ul className="space-y-3">
-              {data.recentAuditEvents.map((event) => (
-                <li key={event.id} className="admin-card p-4 text-[13px]">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-mono font-semibold text-ink">{event.action}</span>
-                    <span className="text-[11px] text-muted">{formatAdminDate(event.createdAt, locale)}</span>
-                  </div>
-                  <p className="mt-1.5 text-muted">
-                    {event.actorDisplayName ?? event.actorUserId ?? copy.audit.system} · {event.reason}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <ContentReveal>
+              <ul className="space-y-3">
+                {data.recentAuditEvents.map((event) => (
+                  <li key={event.id} className="admin-card p-4 text-[13px]">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-mono font-semibold text-ink">{event.action}</span>
+                      <span className="text-[11px] text-muted">{formatAdminDate(event.createdAt, locale)}</span>
+                    </div>
+                    <p className="mt-1.5 text-muted">
+                      {event.actorDisplayName ?? event.actorUserId ?? copy.audit.system} · {event.reason}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </ContentReveal>
           )}
         </AdminPanel>
       </div>

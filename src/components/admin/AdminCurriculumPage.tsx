@@ -21,6 +21,7 @@ import {
   adminPrimaryButtonClass,
 } from './AdminLayout';
 import { OverflowMenu, type OverflowMenuItem } from './OverflowMenu';
+import { AdminCardSkeleton, ContentReveal } from '../ui/BrutalSkeleton';
 
 export interface AdminCurriculumPageProps {
   locale: LocaleCode;
@@ -275,9 +276,18 @@ export const AdminCurriculumPage: React.FC<AdminCurriculumPageProps> = ({
         }
       >
         {visible.length === 0 ? (
-          <AdminEmpty>{loading ? copy.loading : copy.curriculum.noEditions}</AdminEmpty>
+          loading ? (
+            <div aria-busy="true" aria-label={copy.loading} className="space-y-3">
+              <AdminCardSkeleton locale={locale} lines={3} />
+              <AdminCardSkeleton locale={locale} lines={3} />
+              <AdminCardSkeleton locale={locale} lines={3} />
+            </div>
+          ) : (
+            <AdminEmpty>{copy.curriculum.noEditions}</AdminEmpty>
+          )
         ) : (
-          <ul className="space-y-3">
+          <ContentReveal>
+            <ul className="space-y-3">
             {visible.map((ed) => {
               const { primary, overflow } = actionsFor(ed);
               return (
@@ -376,7 +386,8 @@ export const AdminCurriculumPage: React.FC<AdminCurriculumPageProps> = ({
               );
             })}
           </ul>
-        )}
+        </ContentReveal>
+      )}
       </AdminPanel>
 
       <div className="grid gap-6 lg:grid-cols-2">

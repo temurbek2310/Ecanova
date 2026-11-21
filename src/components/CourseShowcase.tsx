@@ -23,6 +23,7 @@ import type {
   LocaleCode,
 } from '../shared/types';
 import { ArtifactConstellation } from './ArtifactConstellation';
+import { BrutalCardSkeleton, ContentReveal, SkeletonLine } from './ui/BrutalSkeleton';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -32,6 +33,7 @@ interface CourseShowcaseProps {
   enrollments: EnrollmentRecord[];
   bookmarkedCourseIds: string[];
   bookmarkBusyId: string | null;
+  loading?: boolean;
   onOpenCourse: (courseId: string, locale: LocaleCode, lessonIndex?: number) => void;
   onToggleBookmark: (courseId: string) => void;
 }
@@ -232,6 +234,7 @@ export const CourseShowcase: React.FC<CourseShowcaseProps> = ({
   enrollments,
   bookmarkedCourseIds,
   bookmarkBusyId,
+  loading = false,
   onOpenCourse,
   onToggleBookmark,
 }) => {
@@ -353,6 +356,53 @@ export const CourseShowcase: React.FC<CourseShowcaseProps> = ({
   );
 
   if (showcaseCards.length === 0) {
+    if (loading) {
+      return (
+        <section
+          ref={sectionRef}
+          data-testid="course-showcase-section"
+          aria-busy="true"
+          aria-label={isUz ? 'Gorizontal kurs vitrinasi yuklanmoqda...' : 'Loading horizontal course showcase...'}
+          className="relative z-10"
+        >
+          <div
+            className="overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+          >
+            <div className="flex flex-col gap-3 border-b-2 border-slate-500 dark:border-[#222B3D] pb-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="inline-flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-wider text-theme-cyan">
+                  <Layers className="h-3.5 w-3.5 text-theme-accent shrink-0" aria-hidden="true" />
+                  <span>
+                    {isUz
+                      ? 'GORIZONTAL KURS VITRINASI · PINNED TRACK'
+                      : 'HORIZONTAL COURSE SHOWCASE'}
+                  </span>
+                </div>
+                <h2
+                  className="mt-1.5 font-display text-xl font-extrabold tracking-tight text-ink sm:text-2xl [text-wrap:balance]"
+                >
+                  {isUz
+                    ? 'O‘quv yo‘nalishlari bo‘ylab interaktiv sayohat'
+                    : 'Scroll-Driven Curriculum Deck'}
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <SkeletonLine width="64px" height="14px" />
+              </div>
+            </div>
+
+            <div className="mt-5 overflow-hidden px-1.5 pt-3 pb-5">
+              <div className="flex w-max items-stretch gap-5 pr-6">
+                <BrutalCardSkeleton locale={locale} showcaseVariant />
+                <BrutalCardSkeleton locale={locale} showcaseVariant />
+                <BrutalCardSkeleton locale={locale} showcaseVariant />
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
     return <section ref={sectionRef} aria-hidden="true" className="hidden" />;
   }
 

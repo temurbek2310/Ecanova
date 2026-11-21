@@ -6,6 +6,7 @@ import { describeError, notify } from '../../lib/notifications';
 import { adminRequest, buildQuery, formatAdminDate, type AdminAuditResponse } from './admin-api';
 import { adminCopy } from './admin-copy';
 import { AdminEmpty, AdminPanel, adminButtonClass, adminInputClass } from './AdminLayout';
+import { AdminTableSkeleton, ContentReveal } from '../ui/BrutalSkeleton';
 
 export interface AdminAuditPageProps {
   locale: LocaleCode;
@@ -106,36 +107,55 @@ export const AdminAuditPage: React.FC<AdminAuditPageProps> = ({ locale }) => {
 
       <div className="mt-5">
         {!data || data.events.length === 0 ? (
-          <AdminEmpty>{loading ? copy.loading : copy.audit.noEvents}</AdminEmpty>
-        ) : (
-          <div className="overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6">
-            <table className="admin-table" style={{ minWidth: '720px' }}>
-              <thead>
-                <tr>
-                  <th scope="col">{copy.audit.columns.when}</th>
-                  <th scope="col">{copy.audit.columns.actor}</th>
-                  <th scope="col">{copy.audit.columns.action}</th>
-                  <th scope="col">{copy.audit.columns.target}</th>
-                  <th scope="col">{copy.audit.columns.reason}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.events.map((event) => (
-                  <tr key={event.id}>
-                    <td className="whitespace-nowrap text-muted">{formatAdminDate(event.createdAt, locale)}</td>
-                    <td className="text-ink">{event.actorDisplayName ?? event.actorUserId ?? copy.audit.system}</td>
-                    <td className="font-mono text-ink">{event.action}</td>
-                    <td className="font-mono text-[11px] text-muted">
-                      {event.targetType}
-                      <br />
-                      {event.targetId}
-                    </td>
-                    <td className="text-muted">{event.reason}</td>
+          loading ? (
+            <div className="overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6">
+              <table className="admin-table" style={{ minWidth: '720px' }}>
+                <thead>
+                  <tr>
+                    <th scope="col">{copy.audit.columns.when}</th>
+                    <th scope="col">{copy.audit.columns.actor}</th>
+                    <th scope="col">{copy.audit.columns.action}</th>
+                    <th scope="col">{copy.audit.columns.target}</th>
+                    <th scope="col">{copy.audit.columns.reason}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <AdminTableSkeleton rows={5} cols={5} locale={locale} />
+              </table>
+            </div>
+          ) : (
+            <AdminEmpty>{copy.audit.noEvents}</AdminEmpty>
+          )
+        ) : (
+          <ContentReveal>
+            <div className="overflow-x-auto -mx-4 px-4 sm:-mx-6 sm:px-6">
+              <table className="admin-table" style={{ minWidth: '720px' }}>
+                <thead>
+                  <tr>
+                    <th scope="col">{copy.audit.columns.when}</th>
+                    <th scope="col">{copy.audit.columns.actor}</th>
+                    <th scope="col">{copy.audit.columns.action}</th>
+                    <th scope="col">{copy.audit.columns.target}</th>
+                    <th scope="col">{copy.audit.columns.reason}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.events.map((event) => (
+                    <tr key={event.id}>
+                      <td className="whitespace-nowrap text-muted">{formatAdminDate(event.createdAt, locale)}</td>
+                      <td className="text-ink">{event.actorDisplayName ?? event.actorUserId ?? copy.audit.system}</td>
+                      <td className="font-mono text-ink">{event.action}</td>
+                      <td className="font-mono text-[11px] text-muted">
+                        {event.targetType}
+                        <br />
+                        {event.targetId}
+                      </td>
+                      <td className="text-muted">{event.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </ContentReveal>
         )}
       </div>
     </AdminPanel>

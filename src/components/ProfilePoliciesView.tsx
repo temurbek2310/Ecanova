@@ -30,6 +30,7 @@ import { buildWeeklyStudyDigest } from '../lib/study-features';
 import type { ThemeMode } from '../lib/theme';
 import type { AmbientFocusAudioController } from '../hooks/useAmbientFocusAudio';
 import { AudioSettingsPanel } from './AudioSettingsPanel';
+import { BrutalBookmarkSkeleton, ContentReveal } from './ui/BrutalSkeleton';
 
 interface ProfilePoliciesViewProps {
   locale: LocaleCode;
@@ -300,9 +301,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           {strings.bookmarks.emptyGuest}
         </div>
       ) : catalogLoading && rawBookmarkCount > 0 && bookmarkedCourses.length === 0 ? (
-        <div className="rounded-lg border border-line bg-chrome p-4 text-xs text-muted">
-          {locale === 'uz' ? 'Saqlangan kurslar yuklanmoqda...' : 'Loading bookmarked courses...'}
-        </div>
+        <BrutalBookmarkSkeleton count={Math.min(rawBookmarkCount, 3)} locale={locale} />
       ) : bookmarkedCourses.length === 0 ? (
         <div
           className="rounded-lg border border-line bg-chrome p-4 text-xs text-muted"
@@ -311,54 +310,56 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           {strings.bookmarks.emptyAuthenticated}
         </div>
       ) : (
-        <ul className="space-y-2.5" aria-label={strings.bookmarks.sectionTitle}>
-          {bookmarkedCourses.map((item) => (
-            <li
-              key={item.courseId}
-              data-testid={`profile-bookmark-item-${item.courseId}`}
-              className="flex flex-col gap-3 rounded-lg border border-line bg-chrome p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
-                  <span>
-                    {strings.subjects[item.subject]} · {strings.levels[item.level]} · {item.estimatedMinutes} min
-                  </span>
-                  {item.enrollment && (
-                    <span className="font-medium text-teal">
-                      · {strings.journey[item.enrollment.journeyStatus]}
+        <ContentReveal>
+          <ul className="space-y-2.5" aria-label={strings.bookmarks.sectionTitle}>
+            {bookmarkedCourses.map((item) => (
+              <li
+                key={item.courseId}
+                data-testid={`profile-bookmark-item-${item.courseId}`}
+                className="flex flex-col gap-3 rounded-lg border border-line bg-chrome p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                    <span>
+                      {strings.subjects[item.subject]} · {strings.levels[item.level]} · {item.estimatedMinutes} min
                     </span>
+                    {item.enrollment && (
+                      <span className="font-medium text-teal">
+                        · {strings.journey[item.enrollment.journeyStatus]}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-1 text-sm font-semibold text-ink">{item.title}</h3>
+                  {item.subtitle && (
+                    <p className="mt-0.5 text-xs text-muted line-clamp-1">{item.subtitle}</p>
                   )}
                 </div>
-                <h3 className="mt-1 text-sm font-semibold text-ink">{item.title}</h3>
-                {item.subtitle && (
-                  <p className="mt-0.5 text-xs text-muted line-clamp-1">{item.subtitle}</p>
-                )}
-              </div>
 
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => onOpenBookmarkedCourse(item.courseId, item.openLocale)}
-                  data-testid={`profile-bookmark-open-${item.courseId}`}
-                  className="min-h-[38px] rounded-lg bg-accent px-3.5 py-1.5 text-xs font-semibold text-accent-ink hover:bg-accent-hover whitespace-nowrap"
-                >
-                  {strings.bookmarks.openCourse}
-                </button>
-                <button
-                  type="button"
-                  disabled={bookmarkBusyId === item.courseId}
-                  onClick={() => void onToggleBookmark(item.courseId)}
-                  aria-label={`${strings.bookmarks.removeLabel}: ${item.title}`}
-                  aria-pressed={true}
-                  data-testid={`profile-bookmark-remove-${item.courseId}`}
-                  className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-accent/60 bg-accent/15 text-accent transition-colors hover:bg-accent/25 disabled:opacity-50"
-                >
-                  <Bookmark className="h-4 w-4 fill-current" aria-hidden="true" />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenBookmarkedCourse(item.courseId, item.openLocale)}
+                    data-testid={`profile-bookmark-open-${item.courseId}`}
+                    className="min-h-[38px] rounded-lg bg-accent px-3.5 py-1.5 text-xs font-semibold text-accent-ink hover:bg-accent-hover whitespace-nowrap"
+                  >
+                    {strings.bookmarks.openCourse}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={bookmarkBusyId === item.courseId}
+                    onClick={() => void onToggleBookmark(item.courseId)}
+                    aria-label={`${strings.bookmarks.removeLabel}: ${item.title}`}
+                    aria-pressed={true}
+                    data-testid={`profile-bookmark-remove-${item.courseId}`}
+                    className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-accent/60 bg-accent/15 text-accent transition-colors hover:bg-accent/25 disabled:opacity-50"
+                  >
+                    <Bookmark className="h-4 w-4 fill-current" aria-hidden="true" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </ContentReveal>
       )}
     </section>
   );

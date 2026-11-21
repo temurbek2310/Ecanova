@@ -24,6 +24,7 @@ import { apiFetch } from '../lib/auth-client';
 import { notificationCopy } from '../lib/notification-copy';
 import { describeError, notify } from '../lib/notifications';
 import { GeometricNova } from './GeometricNova';
+import { BrutalCardSkeleton, ContentReveal, SkeletonBlock, SkeletonLine } from './ui/BrutalSkeleton';
 
 interface CertificatesViewProps {
   locale: LocaleCode;
@@ -706,13 +707,36 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
             </div>
 
             {serverVerifyLoading ? (
-              <div className="py-8 text-center text-xs text-muted">
-                {locale === 'uz'
-                  ? 'Server ma’lumotlar bazasidan tasdiq vaqti tekshirilmoqda...'
-                  : 'Verifying certificate record against server database...'}
+              <div
+                aria-busy="true"
+                aria-label={
+                  locale === 'uz'
+                    ? 'Server ma’lumotlar bazasidan tasdiq vaqti tekshirilmoqda...'
+                    : 'Verifying certificate record against server database...'
+                }
+                className="mt-4 space-y-4"
+              >
+                <div className="flex items-center gap-2 rounded-lg border border-line bg-chrome px-3.5 py-3">
+                  <SkeletonBlock width="16px" height="16px" className="rounded-full shrink-0" />
+                  <SkeletonLine width="160px" height="16px" />
+                </div>
+                <div className="space-y-3 rounded-lg border border-line bg-chrome p-3.5">
+                  <div className="flex items-center justify-between">
+                    <SkeletonLine width="100px" height="12px" />
+                    <SkeletonLine width="140px" height="12px" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <SkeletonLine width="90px" height="12px" />
+                    <SkeletonLine width="120px" height="12px" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <SkeletonLine width="80px" height="12px" />
+                    <SkeletonLine width="180px" height="12px" />
+                  </div>
+                </div>
               </div>
             ) : serverVerification ? (
-              <div className="mt-4 space-y-4">
+              <ContentReveal className="mt-4 space-y-4">
                 <div
                   data-testid="cert-popup-status"
                   className={`flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm font-semibold ${
@@ -801,7 +825,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                 <p className="text-[11px] leading-snug text-muted">
                   {serverVerification.nonAccreditationNotice}
                 </p>
-              </div>
+              </ContentReveal>
             ) : null}
 
             <div className="mt-5 flex justify-end gap-2">

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
+import { SkeletonLine } from './ui/BrutalSkeleton';
 
 export interface RouteAccessPendingProps {
   title: string;
@@ -16,14 +17,19 @@ export function RouteAccessPending({ title, hint }: RouteAccessPendingProps) {
     <div
       aria-busy="true"
       data-testid="route-access-pending"
-      className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center"
+      className="flex min-h-[50vh] flex-col items-center justify-center p-4 text-center"
     >
-      <Loader2
-        className="h-7 w-7 animate-spin text-slate-500 dark:text-slate-400"
-        aria-hidden="true"
-      />
-      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</p>
-      {hint ? <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p> : null}
+      <div className="admin-surface flex max-w-sm w-full flex-col items-center justify-center p-6 sm:p-8 space-y-4">
+        <Loader2
+          className="h-6 w-6 animate-spin text-muted"
+          aria-hidden="true"
+        />
+        <div className="space-y-1 w-full">
+          <p className="text-sm font-semibold text-ink">{title}</p>
+          {hint ? <p className="text-xs text-muted">{hint}</p> : null}
+        </div>
+        <SkeletonLine admin width="60%" height="8px" className="rounded-full mt-2" />
+      </div>
     </div>
   );
 }
