@@ -1703,6 +1703,54 @@ export default function App() {
     );
   }
 
+  if (activeTab === 'login' || activeTab === 'register') {
+    return (
+      <SmoothScroll>
+        <div className="relative isolate min-h-screen overflow-x-clip text-ink">
+          {/* Economics WebGL Liquid Background (-z-10, decoupled behind UI shell) */}
+          <EconomicsLiquidBackground
+            active={true}
+            theme={theme}
+          />
+
+          {routeGatePending ? (
+            <main className="relative z-10 mx-auto flex min-h-screen max-w-6xl items-center justify-center p-4">
+              <RouteAccessPending
+                title={strings.auth.checkingSession}
+                hint={strings.auth.checkingSessionHint}
+              />
+            </main>
+          ) : (
+            <AuthPageView
+              mode={activeTab}
+              locale={locale}
+              theme={theme}
+              onToggleTheme={() => handleSelectManualTheme(getNextTheme(theme))}
+              onToggleLocale={handleLocaleSwitch}
+              sandboxEnabled={health.sandboxEnabled}
+              intendedDestination={intendedDestination}
+              onSwitchMode={(nextMode) => {
+                setActiveTab(nextMode);
+                syncBrowserPath(nextMode, { redirectTo: intendedDestination?.path ?? '/overview' });
+              }}
+              onBackToOverview={() => {
+                if (user) {
+                  navigateToTab('overview');
+                } else {
+                  navigateToTab('landing');
+                }
+              }}
+              onBackToLanding={() => navigateToTab('landing')}
+              onAuthenticated={handleUserAuthenticated}
+            />
+          )}
+
+          <NotificationViewport locale={locale} />
+        </div>
+      </SmoothScroll>
+    );
+  }
+
   return (
     <SmoothScroll>
     <div className="relative isolate min-h-screen overflow-x-clip text-ink flex flex-col md:flex-row">
@@ -2023,28 +2071,6 @@ export default function App() {
             />
           ) : (
           <>
-          {/* NEOBRUTALIST /login AND /register ROUTES */}
-          {(activeTab === 'login' || activeTab === 'register') && (
-            <AuthPageView
-              mode={activeTab}
-              locale={locale}
-              sandboxEnabled={health.sandboxEnabled}
-              intendedDestination={intendedDestination}
-              onSwitchMode={(nextMode) => {
-                setActiveTab(nextMode);
-                syncBrowserPath(nextMode, { redirectTo: intendedDestination?.path ?? '/overview' });
-              }}
-              onBackToOverview={() => {
-                if (user) {
-                  navigateToTab('overview');
-                } else {
-                  navigateToTab('landing');
-                }
-              }}
-              onAuthenticated={handleUserAuthenticated}
-            />
-          )}
-
           {/* OVERVIEW & DASHBOARD */}
           {activeTab === 'overview' && (
             <div className="space-y-8">
