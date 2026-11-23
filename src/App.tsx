@@ -3310,6 +3310,10 @@ export default function App() {
             <ProfilePoliciesView
               locale={locale}
               user={user}
+              onPasswordUpdated={(updatedUser) => {
+                setUser(updatedUser);
+                persistCachedUserSummary(updatedUser);
+              }}
               courses={courses}
               catalogLoading={catalogLoading}
               enrollments={enrollments}

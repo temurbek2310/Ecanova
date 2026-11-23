@@ -266,7 +266,29 @@
     "policyNonCashTitle": "Non-Cash XP & No Withdrawals",
     "policyCertificatesTitle": "Course Certificates",
     "policyEditorialTitle": "Editorial & AI Accountability",
-    "policyEditorialBody": "English and Uzbek editions are authored and reviewed separately. AI tools may assist drafting, but every published lesson and assessment requires human subject, language, and rights approval."
+    "policyEditorialBody": "English and Uzbek editions are authored and reviewed separately. AI tools may assist drafting, but every published lesson and assessment requires human subject, language, and rights approval.",
+    "security": {
+      "title": "Account Security",
+      "subtitle": "Manage your password and sign-in credentials",
+      "googleOnlyBadge": "Google Sign-In Only",
+      "passwordSetBadge": "Password Protected",
+      "setPasswordDescription": "Your account is currently linked only to Google Sign-In. Set a password below to sign in with either Google or your email and password.",
+      "changePasswordDescription": "You can sign in using your password or Google. Update your password below.",
+      "currentPasswordLabel": "Current Password",
+      "currentPasswordPlaceholder": "Enter current password",
+      "newPasswordLabel": "New Password",
+      "newPasswordPlaceholder": "At least 8 characters",
+      "confirmPasswordLabel": "Confirm New Password",
+      "confirmPasswordPlaceholder": "Re-enter new password",
+      "setPasswordButton": "Set Password",
+      "changePasswordButton": "Change Password",
+      "updatingPassword": "Updating password...",
+      "passwordSetSuccess": "Password set successfully! You can now sign in with either email+password or Google.",
+      "passwordChangeSuccess": "Password updated successfully!",
+      "passwordsDoNotMatch": "New password and confirmation do not match.",
+      "passwordTooShort": "Password must be at least 8 characters.",
+      "currentPasswordRequired": "Current password is required to change password."
+    }
   },
   "auth": {
     "checkingSession": "Checking your session…",
@@ -303,6 +325,7 @@
     "googleNotConfigured": "Google sign-in is not set up yet. Please use email and password.",
     "googlePopupBlocked": "The Google sign-in window was blocked. Allow pop-ups for this site and try again.",
     "googleFailed": "Google sign-in did not complete. Please try again.",
+    "googleOnlyAccountNotice": "This account uses Google Sign-In. Click 'Continue with Google' to enter, then you can set a password in Profile settings.",
     "backToLanding": "Back to Landing",
     "showPassword": "Show password",
     "hidePassword": "Hide password",

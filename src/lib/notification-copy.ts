@@ -122,6 +122,9 @@ export interface NotificationCopy {
     exportFailed: string;
     deleted: string;
     deleteFailed: string;
+    passwordSet: string;
+    passwordUpdated: string;
+    passwordFailed: string;
     signedIn: (name: string) => string;
     signedOut: string;
   };
@@ -148,6 +151,7 @@ export interface NotificationCopy {
   };
   auth: {
     failed: string;
+    googleOnly: string;
   };
   admin: {
     loadFailed: string;
@@ -307,6 +311,9 @@ const EN: NotificationCopy = {
     exportFailed: 'Could not export your data',
     deleted: 'Account deleted',
     deleteFailed: 'Could not delete account',
+    passwordSet: 'Password set successfully',
+    passwordUpdated: 'Password updated successfully',
+    passwordFailed: 'Could not update password',
     signedIn: (name) => `Signed in as ${name}`,
     signedOut: 'Signed out',
   },
@@ -333,6 +340,7 @@ const EN: NotificationCopy = {
   },
   auth: {
     failed: 'Authentication failed',
+    googleOnly: 'Google Sign-In Required',
   },
   admin: {
     loadFailed: 'Could not load admin data',
@@ -495,6 +503,9 @@ const UZ: NotificationCopy = {
     exportFailed: 'Ma’lumotlaringizni eksport qilib bo‘lmadi',
     deleted: 'Hisob o‘chirildi',
     deleteFailed: 'Hisobni o‘chirib bo‘lmadi',
+    passwordSet: 'Parol muvaffaqiyatli o‘rnatildi',
+    passwordUpdated: 'Parol muvaffaqiyatli yangilandi',
+    passwordFailed: 'Parolni yangilab bo‘lmadi',
     signedIn: (name) => `${name} sifatida kirdingiz`,
     signedOut: 'Tizimdan chiqdingiz',
   },
@@ -521,6 +532,7 @@ const UZ: NotificationCopy = {
   },
   auth: {
     failed: 'Kirish amalga oshmadi',
+    googleOnly: 'Google orqali kirish talab etiladi',
   },
   admin: {
     loadFailed: 'Admin ma’lumotlarini yuklab bo‘lmadi',

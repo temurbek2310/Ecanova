@@ -17,7 +17,7 @@ import type { AgeBand, LocaleCode, UserSummary } from '../shared/types';
 import type { ThemeMode } from '../lib/theme';
 import { t } from '../lib/i18n';
 import { notificationCopy } from '../lib/notification-copy';
-import { useToastSlot } from '../context/NotificationContext';
+import { useNotify, useToastSlot } from '../context/NotificationContext';
 import {
   apiFetch,
   persistCachedUserSummary,
@@ -224,6 +224,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
 }) => {
   const strings = t(locale);
   const authStrings = strings.auth;
+  const notify = useNotify();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -233,6 +234,8 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googlePressed, setGooglePressed] = useState(false);
+  const [googleHighlighted, setGoogleHighlighted] = useState(false);
+  const googleBtnRef = React.useRef<HTMLButtonElement>(null);
   const [pointerOffset, setPointerOffset] = useState({ x: 0, y: 0 });
 
   const setErrorMsg = useToastSlot('auth-page-error', notificationCopy(locale).auth.failed);
@@ -300,8 +303,13 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
   };
 
   const completeSignIn = async (res: Response) => {
-    const data = await readJsonSafely<{ user: UserSummary; error: string }>(res);
+    const data = await readJsonSafely<{ user: UserSummary; error: string; code?: string }>(res);
     if (!res.ok || !data.user) {
+      if (data.code === 'GOOGLE_ONLY_ACCOUNT') {
+        const error = new Error(authStrings.googleOnlyAccountNotice);
+        (error as unknown as { code: string }).code = 'GOOGLE_ONLY_ACCOUNT';
+        throw error;
+      }
       throw new Error(data.error || (res.status >= 500 ? authStrings.networkError : authStrings.authFailed));
     }
     persistCachedUserSummary(data.user);
@@ -336,7 +344,19 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
       });
       await completeSignIn(res);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
+      const code = (err as unknown as { code?: string })?.code;
+      if (code === 'GOOGLE_ONLY_ACCOUNT') {
+        notify.info(
+          notificationCopy(locale).auth.googleOnly,
+          authStrings.googleOnlyAccountNotice,
+          { durationMs: 9000 }
+        );
+        setGoogleHighlighted(true);
+        googleBtnRef.current?.focus();
+        window.setTimeout(() => setGoogleHighlighted(false), 3000);
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
+      }
     } finally {
       setLoading(false);
     }
@@ -580,14 +600,20 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
               {/* Primary Google OAuth Button with Tactile Push-Down */}
               <div className="mt-5">
                 <button
+                  ref={googleBtnRef}
                   type="button"
                   disabled={loading || googleLoading}
-                  onClick={() => void handleGoogleSignIn()}
+                  onClick={() => {
+                    setGoogleHighlighted(false);
+                    void handleGoogleSignIn();
+                  }}
                   data-testid="google-oauth-btn"
-                  className={`flex min-h-[48px] w-full items-center justify-center gap-3 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#080B14]/65 px-4 py-3 text-sm font-extrabold text-ink backdrop-blur-md transition-transform duration-75 select-none active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-60 ${
-                    googlePressed
-                      ? 'translate-x-[2px] translate-y-[2px] shadow-none'
-                      : 'shadow-brutal-sm hover:border-theme-accent'
+                  className={`flex min-h-[48px] w-full items-center justify-center gap-3 rounded-xl border-2 px-4 py-3 text-sm font-extrabold text-ink backdrop-blur-md transition-all duration-150 select-none active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-60 ${
+                    googleHighlighted
+                      ? 'border-theme-accent bg-theme-accent/20 ring-4 ring-theme-accent/50 animate-pulse shadow-brutal-sm'
+                      : googlePressed
+                      ? 'translate-x-[2px] translate-y-[2px] shadow-none border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#080B14]/65'
+                      : 'border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#080B14]/65 shadow-brutal-sm hover:border-theme-accent'
                   }`}
                 >
                   <GoogleLogoSvg className="h-5 w-5 shrink-0" />

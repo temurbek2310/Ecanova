@@ -34,8 +34,14 @@ function resolveDbConnectionString(): string | null {
 	return candidate
 }
 
+let mockSqlExecutor: SqlExecutor | null = null
+
+export function setMockSqlExecutor(mock: SqlExecutor | null): void {
+	mockSqlExecutor = mock
+}
+
 export function isDatabaseConfigured(): boolean {
-	return resolveDbConnectionString() !== null
+	return mockSqlExecutor !== null || resolveDbConnectionString() !== null
 }
 
 export function isSupabaseApiConfigured(): boolean {
@@ -99,6 +105,7 @@ export const db: SqlExecutor = {
 		text: string,
 		params: unknown[] = [],
 	): Promise<T[]> {
+		if (mockSqlExecutor) return mockSqlExecutor.query<T>(text, params)
 		const res = await getPool().query<T>(text, params)
 		return res.rows
 	},
@@ -106,10 +113,12 @@ export const db: SqlExecutor = {
 		text: string,
 		params: unknown[] = [],
 	): Promise<T | null> {
+		if (mockSqlExecutor) return mockSqlExecutor.queryOne<T>(text, params)
 		const res = await getPool().query<T>(text, params)
 		return res.rows[0] ?? null
 	},
 	async execute(text: string, params: unknown[] = []): Promise<number> {
+		if (mockSqlExecutor) return mockSqlExecutor.execute(text, params)
 		const res = await getPool().query(text, params)
 		return res.rowCount ?? 0
 	},
@@ -118,6 +127,9 @@ export const db: SqlExecutor = {
 export async function runInTransaction<T>(
 	fn: (tx: SqlExecutor) => Promise<T>,
 ): Promise<T> {
+	if (mockSqlExecutor) {
+		return fn(mockSqlExecutor)
+	}
 	const client = await getPool().connect()
 	try {
 		await client.query('BEGIN')

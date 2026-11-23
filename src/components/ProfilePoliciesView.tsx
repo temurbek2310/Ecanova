@@ -6,20 +6,26 @@ import {
   CalendarRange,
   CheckCircle2,
   Download,
+  Eye,
+  EyeOff,
   HardDrive,
+  KeyRound,
+  Lock,
   Mail,
   Monitor,
   Moon,
   Shield,
+  ShieldCheck,
   Sun,
   Trash2,
 } from 'lucide-react';
 import type { CourseCatalogItem, EnrollmentRecord, LocaleCode, UserSummary, XpLedgerEntry } from '../shared/types';
 import { t } from '../lib/i18n';
-import { apiFetch } from '../lib/auth-client';
+import { apiFetch, persistCachedUserSummary, readJsonSafely } from '../lib/auth-client';
 import { notificationCopy } from '../lib/notification-copy';
 import { describeError, notify } from '../lib/notifications';
 import { resolveBookmarkedCourses } from '../lib/course-bookmarks';
+import { calculatePasswordStrength } from './AuthPageView';
 import {
   resolveCachedCourseDetails,
   type CachedCourseEntry,
@@ -67,6 +73,7 @@ interface ProfilePoliciesViewProps {
     weeklyDigestEmailEnabled?: boolean;
   }) => Promise<void>;
   onToggleWeeklyDigestEmail?: (enabled: boolean) => Promise<void>;
+  onPasswordUpdated?: (user: UserSummary) => void;
   onAccountDeleted: () => Promise<void>;
   onRequireAuth: () => void;
 }
@@ -95,6 +102,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
   onOpenBookmarkedCourse,
   onUpdateProfile,
   onToggleWeeklyDigestEmail,
+  onPasswordUpdated,
   onAccountDeleted,
   onRequireAuth,
 }) => {
@@ -108,6 +116,17 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
   const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState<boolean>(
     Boolean(user?.weeklyDigestEmailEnabled)
   );
+
+  // Password management states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+
+  const passwordStrength = useMemo(() => calculatePasswordStrength(newPassword), [newPassword]);
   const [digestBusy, setDigestBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [clearingKey, setClearingKey] = useState<string | null>(null);
@@ -608,6 +627,273 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
     </section>
   );
 
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    if (user.hasPassword && !currentPassword) {
+      notify.warning(
+        toastCopy.common.genericError,
+        strings.profile.security.currentPasswordRequired
+      );
+      return;
+    }
+    if (!newPassword || newPassword.length < 8) {
+      notify.warning(
+        toastCopy.common.genericError,
+        strings.profile.security.passwordTooShort
+      );
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      notify.warning(
+        toastCopy.common.genericError,
+        strings.profile.security.passwordsDoNotMatch
+      );
+      return;
+    }
+
+    setPasswordSubmitting(true);
+    try {
+      const res = await apiFetch('/api/auth/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: user.hasPassword ? currentPassword : undefined,
+          newPassword,
+        }),
+      });
+      const data = await readJsonSafely<{ ok: boolean; hasPassword?: boolean; error?: string }>(res);
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || toastCopy.profile.passwordFailed);
+      }
+      const updatedUser: UserSummary = { ...user, hasPassword: true };
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      if (onPasswordUpdated) {
+        onPasswordUpdated(updatedUser);
+      } else {
+        persistCachedUserSummary(updatedUser);
+      }
+      notify.success(
+        user.hasPassword
+          ? toastCopy.profile.passwordUpdated
+          : toastCopy.profile.passwordSet,
+        user.hasPassword
+          ? strings.profile.security.passwordChangeSuccess
+          : strings.profile.security.passwordSetSuccess
+      );
+    } catch (err) {
+      notify.error(
+        toastCopy.profile.passwordFailed,
+        err instanceof Error ? err.message : toastCopy.common.genericError
+      );
+    } finally {
+      setPasswordSubmitting(false);
+    }
+  };
+
+  const accountSecuritySection = user && (
+    <section
+      aria-labelledby="account-security-title"
+      data-testid="account-security-section"
+      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
+        <div>
+          <h2 id="account-security-title" className="flex items-center gap-2 text-base font-semibold text-ink">
+            <ShieldCheck className="h-4 w-4 text-theme-accent" aria-hidden="true" />
+            <span>{strings.profile.security.title}</span>
+          </h2>
+          <p className="mt-1 text-xs text-muted">
+            {strings.profile.security.subtitle}
+          </p>
+        </div>
+        <span
+          data-testid="account-security-badge"
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wider ${
+            user.hasPassword
+              ? 'border-theme-emerald/40 bg-theme-emerald/10 text-theme-emerald'
+              : 'border-theme-cyan/40 bg-theme-cyan/10 text-theme-cyan'
+          }`}
+        >
+          {user.hasPassword ? strings.profile.security.passwordSetBadge : strings.profile.security.googleOnlyBadge}
+        </span>
+      </div>
+
+      <p className="text-xs text-muted leading-relaxed">
+        {user.hasPassword
+          ? strings.profile.security.changePasswordDescription
+          : strings.profile.security.setPasswordDescription}
+      </p>
+
+      <form onSubmit={handlePasswordSubmit} className="space-y-3.5">
+        {user.hasPassword && (
+          <div>
+            <label htmlFor="sec-current-password" className="block text-xs font-bold text-ink">
+              {strings.profile.security.currentPasswordLabel}
+            </label>
+            <div className="relative mt-1.5">
+              <Lock
+                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+                aria-hidden="true"
+              />
+              <input
+                id="sec-current-password"
+                data-testid="current-password-input"
+                type={showCurrentPassword ? 'text' : 'password'}
+                required
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder={strings.profile.security.currentPasswordPlaceholder}
+                className="min-h-[42px] w-full rounded-lg border border-line bg-chrome pl-10 pr-10 text-sm text-ink focus:border-theme-accent focus:outline-none"
+              />
+              <button
+                type="button"
+                data-testid="toggle-current-password"
+                onClick={() => setShowCurrentPassword((v) => !v)}
+                aria-label={showCurrentPassword ? strings.auth.hidePassword : strings.auth.showPassword}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink transition-colors p-1"
+              >
+                {showCurrentPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label htmlFor="sec-new-password" className="block text-xs font-bold text-ink">
+            {strings.profile.security.newPasswordLabel}
+          </label>
+          <div className="relative mt-1.5">
+            <Lock
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+              aria-hidden="true"
+            />
+            <input
+              id="sec-new-password"
+              data-testid="new-password-input"
+              type={showNewPassword ? 'text' : 'password'}
+              required
+              minLength={8}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder={strings.profile.security.newPasswordPlaceholder}
+              className="min-h-[42px] w-full rounded-lg border border-line bg-chrome pl-10 pr-10 text-sm text-ink focus:border-theme-accent focus:outline-none"
+            />
+            <button
+              type="button"
+              data-testid="toggle-new-password"
+              onClick={() => setShowNewPassword((v) => !v)}
+              aria-label={showNewPassword ? strings.auth.hidePassword : strings.auth.showPassword}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink transition-colors p-1"
+            >
+              {showNewPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+            </button>
+          </div>
+
+          {/* 4-Segment Strength Bar */}
+          <div
+            data-testid="profile-password-strength-bar"
+            data-strength={passwordStrength.score}
+            className="mt-2 space-y-1"
+          >
+            <div className="flex items-center justify-between text-[11px] font-mono">
+              <span className="text-muted">{strings.auth.passwordStrengthLabel}</span>
+              <span
+                className={`font-bold ${
+                  newPassword.length === 0
+                    ? 'text-muted'
+                    : passwordStrength.score === 1
+                    ? 'text-red-500'
+                    : passwordStrength.score === 2
+                    ? 'text-amber-500'
+                    : passwordStrength.score === 3
+                    ? 'text-theme-cyan'
+                    : 'text-theme-emerald'
+                }`}
+              >
+                {newPassword.length === 0 ? '—' : strings.auth[passwordStrength.labelKey]}
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {[1, 2, 3, 4].map((seg) => {
+                const isActive = newPassword.length > 0 && passwordStrength.score >= seg;
+                return (
+                  <div
+                    key={seg}
+                    className={`h-1.5 rounded-full transition-colors ${
+                      isActive
+                        ? passwordStrength.score === 1
+                          ? 'bg-red-500'
+                          : passwordStrength.score === 2
+                          ? 'bg-amber-500'
+                          : passwordStrength.score === 3
+                          ? 'bg-theme-cyan'
+                          : 'bg-theme-emerald'
+                        : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="sec-confirm-password" className="block text-xs font-bold text-ink">
+            {strings.profile.security.confirmPasswordLabel}
+          </label>
+          <div className="relative mt-1.5">
+            <Lock
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+              aria-hidden="true"
+            />
+            <input
+              id="sec-confirm-password"
+              data-testid="confirm-password-input"
+              type={showConfirmPassword ? 'text' : 'password'}
+              required
+              minLength={8}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder={strings.profile.security.confirmPasswordPlaceholder}
+              className="min-h-[42px] w-full rounded-lg border border-line bg-chrome pl-10 pr-10 text-sm text-ink focus:border-theme-accent focus:outline-none"
+            />
+            <button
+              type="button"
+              data-testid="toggle-confirm-password"
+              onClick={() => setShowConfirmPassword((v) => !v)}
+              aria-label={showConfirmPassword ? strings.auth.hidePassword : strings.auth.showPassword}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink transition-colors p-1"
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="pt-1">
+          <button
+            type="submit"
+            disabled={passwordSubmitting}
+            data-testid="submit-password-btn"
+            className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg border-2 border-theme-border bg-theme-accent px-5 py-2 text-xs font-extrabold text-theme-accent-ink shadow-brutal-sm hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-50 transition-transform"
+          >
+            <KeyRound className="h-4 w-4" aria-hidden="true" />
+            <span>
+              {passwordSubmitting
+                ? strings.profile.security.updatingPassword
+                : user.hasPassword
+                ? strings.profile.security.changePasswordButton
+                : strings.profile.security.setPasswordButton}
+            </span>
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+
   return (
     <div className="space-y-6">
       {ambientAudio && (
@@ -741,6 +1027,8 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           </button>
         </section>
       )}
+
+      {accountSecuritySection}
 
       {!user && bookmarksSection}
 

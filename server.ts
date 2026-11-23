@@ -580,7 +580,7 @@ const isServerless = Boolean(process.env.VERCEL);
  * synchronous so `app` can be exported at module load for serverless use;
  * listening, static files and the Vite dev middleware live in startLocalServer().
  */
-function buildApp(): express.Express {
+export function buildApp(): express.Express {
   assertSessionSecretForProduction();
   const app = express();
   // One proxy hop (Vercel edge / Cloud Run load balancer) so req.ip, req.secure,
@@ -621,6 +621,7 @@ function buildApp(): express.Express {
         id: req.authUser.id,
         name: req.authUser.displayName,
         role: req.authUser.role,
+        hasPassword: req.authUser.hasPassword ?? false,
         user: req.authUser,
       });
       return;
@@ -671,12 +672,22 @@ function buildApp(): express.Express {
         return;
       }
 
-      const exists = await db.queryOne<{ id: string }>(
-        'SELECT id FROM users WHERE email = $1',
+      const existingUser = await db.queryOne<{ id: string; password_hash: string | null }>(
+        'SELECT id, password_hash FROM users WHERE email = $1',
         [cleanEmail]
       );
-      if (exists) {
-        res.status(409).json({ error: 'An account with this email already exists.' });
+      if (existingUser) {
+        if (!existingUser.password_hash || !existingUser.password_hash.trim()) {
+          res.status(409).json({
+            error: 'This account uses Google Sign-In. Please sign in with Google.',
+            code: 'GOOGLE_ONLY_ACCOUNT',
+          });
+          return;
+        }
+        res.status(409).json({
+          error: 'An account with this email already exists.',
+          code: 'EMAIL_ALREADY_EXISTS',
+        });
         return;
       }
 
@@ -721,11 +732,19 @@ function buildApp(): express.Express {
         sendThrottled(res, loginRetry);
         return;
       }
-      const row = await db.queryOne<{ id: string; password_hash: string }>(
+      const row = await db.queryOne<{ id: string; password_hash: string | null }>(
         'SELECT id, password_hash FROM users WHERE email = $1',
         [cleanEmail]
       );
-      if (!row || !verifyPassword(password, row.password_hash)) {
+      if (row && (!row.password_hash || !row.password_hash.trim())) {
+        recordAuthFailure(req, 'login', cleanEmail);
+        res.status(409).json({
+          error: 'This account uses Google Sign-In. Please sign in with Google.',
+          code: 'GOOGLE_ONLY_ACCOUNT',
+        });
+        return;
+      }
+      if (!row || !row.password_hash || !verifyPassword(password, row.password_hash)) {
         recordAuthFailure(req, 'login', cleanEmail);
         res.status(401).json({ error: 'Invalid email or password.' });
         return;
@@ -734,6 +753,103 @@ function buildApp(): express.Express {
       const user = await loadUserSummaryById(row.id);
       setSessionCookie(res, row.id, req, user?.role);
       res.json({ user });
+    })
+  );
+
+  app.post(
+    '/api/auth/password',
+    requireDatabase,
+    requireAuth,
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      if (!req.authUser) {
+        res.status(401).json({ error: 'Authentication required.' });
+        return;
+      }
+      const origin = req.headers.origin;
+      if (origin) {
+        try {
+          const originHost = new URL(origin).host;
+          const reqHost = req.headers.host;
+          if (reqHost && originHost !== reqHost) {
+            res.status(403).json({ error: 'Cross-origin request forbidden.' });
+            return;
+          }
+        } catch {
+          res.status(403).json({ error: 'Invalid origin header.' });
+          return;
+        }
+      }
+      const throttleRetry = getAuthThrottleRetryAfter(req, 'password', req.authUser.email);
+      if (throttleRetry !== null) {
+        sendThrottled(res, throttleRetry);
+        return;
+      }
+
+      const { currentPassword, newPassword } = req.body as {
+        currentPassword?: string;
+        newPassword?: string;
+      };
+
+      if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+        res.status(400).json({ error: 'Password must be at least 8 characters.' });
+        return;
+      }
+
+      const userRow = await db.queryOne<{ id: string; password_hash: string | null }>(
+        'SELECT id, password_hash FROM users WHERE id = $1',
+        [req.authUser.id]
+      );
+
+      if (!userRow) {
+        res.status(404).json({ error: 'User not found.' });
+        return;
+      }
+
+      const hasExistingPassword = Boolean(
+        userRow.password_hash && userRow.password_hash.trim().length > 0
+      );
+
+      if (hasExistingPassword) {
+        if (!currentPassword || typeof currentPassword !== 'string') {
+          res.status(400).json({ error: 'Current password is required.' });
+          return;
+        }
+        if (!verifyPassword(currentPassword, userRow.password_hash!)) {
+          recordAuthFailure(req, 'password', req.authUser.email);
+          res.status(403).json({ error: 'Current password does not match.' });
+          return;
+        }
+      }
+
+      const newHash = hashPassword(newPassword);
+      await db.execute('UPDATE users SET password_hash = $1 WHERE id = $2', [
+        newHash,
+        req.authUser.id,
+      ]);
+
+      clearAuthFailuresForEmail('password', req.authUser.email);
+
+      try {
+        await db.execute(
+          `INSERT INTO audit_events (id, actor_user_id, action, target_type, target_id, reason, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            uid('aud'),
+            req.authUser.id,
+            hasExistingPassword ? 'auth.password_changed' : 'auth.password_set',
+            'user',
+            req.authUser.id,
+            hasExistingPassword
+              ? 'Password changed by authenticated user'
+              : 'Initial password set from Google-only account',
+            new Date().toISOString(),
+          ]
+        );
+      } catch (auditErr) {
+        console.warn('Failed to record password audit event:', auditErr);
+      }
+
+      res.json({ ok: true, hasPassword: true });
     })
   );
 
@@ -3569,7 +3685,9 @@ async function startLocalServer(): Promise<void> {
   });
 }
 
-if (!isServerless) {
+const isMainModule = typeof process.argv[1] === 'string' && (process.argv[1].endsWith('server.ts') || process.argv[1].endsWith('server.js'));
+
+if (!isServerless && isMainModule && process.env.NODE_ENV !== 'test') {
   startLocalServer().catch((err) => {
     console.error('Failed to start ECONOVA server:', err);
     process.exit(1);

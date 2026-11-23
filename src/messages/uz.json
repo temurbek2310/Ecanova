@@ -266,7 +266,29 @@
     "policyNonCashTitle": "Naqd pulsiz XP va pul yechmaslik",
     "policyCertificatesTitle": "Kurs sertifikatlari",
     "policyEditorialTitle": "Tahririyat va AI javobgarligi",
-    "policyEditorialBody": "Ingliz va o‘zbek nashrlari alohida yoziladi va tekshiriladi. AI vositalari qoralama tayyorlashda yordam berishi mumkin, biroq har bir chop etilgan dars va test inson — fan, til va huquq muharrirlari tasdig‘idan o‘tadi."
+    "policyEditorialBody": "Ingliz va o‘zbek nashrlari alohida yoziladi va tekshiriladi. AI vositalari qoralama tayyorlashda yordam berishi mumkin, biroq har bir chop etilgan dars va test inson — fan, til va huquq muharrirlari tasdig‘idan o‘tadi.",
+    "security": {
+      "title": "Hisob xavfsizligi",
+      "subtitle": "Parol va tizimga kirish maʼlumotlarini boshqarish",
+      "googleOnlyBadge": "Faqat Google orqali kirish",
+      "passwordSetBadge": "Parol bilan himoyalangan",
+      "setPasswordDescription": "Hisobingiz hozirda faqat Google orqali kirishga ulangan. Google yoki elektron pochta va parol orqali kirish imkoniyatiga ega bo‘lish uchun quyida parol o‘rnating.",
+      "changePasswordDescription": "Hisobingizga parol yoki Google orqali kirishingiz mumkin. Parolingizni quyida yangilang.",
+      "currentPasswordLabel": "Amaldagi parol",
+      "currentPasswordPlaceholder": "Amaldagi parolni kiriting",
+      "newPasswordLabel": "Yangi parol",
+      "newPasswordPlaceholder": "Kamida 8 ta belgi",
+      "confirmPasswordLabel": "Yangi parolni tasdiqlang",
+      "confirmPasswordPlaceholder": "Yangi parolni qayta kiriting",
+      "setPasswordButton": "Parol o‘rnatish",
+      "changePasswordButton": "Parolni yangilash",
+      "updatingPassword": "Parol yangilanmoqda...",
+      "passwordSetSuccess": "Parol muvaffaqiyatli o‘rnatildi! Endi email+parol yoki Google orqali kirishingiz mumkin.",
+      "passwordChangeSuccess": "Parol muvaffaqiyatli yangilandi!",
+      "passwordsDoNotMatch": "Yangi parol va tasdiqlovchi parol mos kelmadi.",
+      "passwordTooShort": "Parol kamida 8 ta belgidan iborat bo‘lishi kerak.",
+      "currentPasswordRequired": "Parolni o‘zgartirish uchun amaldagi parol kiritilishi shart."
+    }
   },
   "auth": {
     "checkingSession": "Sessiya tekshirilmoqda…",
@@ -303,6 +325,7 @@
     "googleNotConfigured": "Google orqali kirish hali sozlanmagan. Iltimos, email va parol bilan kiring.",
     "googlePopupBlocked": "Google kirish oynasi bloklandi. Ushbu sayt uchun qalqib chiquvchi oynalarga ruxsat bering va qayta urinib ko'ring.",
     "googleFailed": "Google orqali kirish yakunlanmadi. Iltimos, qayta urinib ko'ring.",
+    "googleOnlyAccountNotice": "Bu hisob Google orqali kirishdan foydalanadi. Kirish uchun 'Google bilan davom etish' tugmasini bosing, so‘ng Profil sozlamalarida parol o‘rnatishingiz mumkin.",
     "backToLanding": "Bosh sahifa",
     "showPassword": "Parolni ko‘rsatish",
     "hidePassword": "Parolni yashirish",

@@ -37,7 +37,10 @@ export interface UserSummary {
   weeklyDigestEmailEnabled?: boolean;
   lessonNotes?: Record<string, string>;
   bookmarkedCourseIds: string[];
+  hasPassword?: boolean;
 }
+
+export type User = UserSummary;
 
 export interface ProvenanceSummary {
   id: string;

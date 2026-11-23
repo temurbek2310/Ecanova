@@ -181,6 +181,7 @@ export async function loadUserSummaryById(userId: string): Promise<UserSummary |
     email: string;
     /** Raw stored value; may be a legacy staff role. */
     role: string;
+    password_hash: string | null;
     display_name: string;
     preferred_locale: 'en' | 'uz';
     timezone: string;
@@ -194,7 +195,7 @@ export async function loadUserSummaryById(userId: string): Promise<UserSummary |
     lesson_notes_json: unknown;
     bookmarked_course_ids: unknown;
   }>(
-    `SELECT u.id, u.email, u.role, p.display_name, p.preferred_locale, p.timezone,
+    `SELECT u.id, u.email, u.role, u.password_hash, p.display_name, p.preferred_locale, p.timezone,
             p.age_band, p.leaderboard_opt_in, p.leaderboard_pseudonym, p.consent_accepted_at,
             p.daily_study_goal_minutes, p.study_goal_notifications_enabled,
             p.weekly_digest_email_enabled, p.lesson_notes_json,
@@ -254,6 +255,7 @@ export async function loadUserSummaryById(userId: string): Promise<UserSummary |
     weeklyDigestEmailEnabled: Boolean(row.weekly_digest_email_enabled),
     lessonNotes,
     bookmarkedCourseIds: normalizeBookmarkedCourseIds(row.bookmarked_course_ids),
+    hasPassword: Boolean(row.password_hash && row.password_hash.trim().length > 0),
   };
 }
 
@@ -571,12 +573,11 @@ export async function upsertGoogleOAuthUser(profile: {
   const userId = `usr-${crypto.randomUUID().slice(0, 12)}`;
   const now = new Date().toISOString();
   const pseudonym = `Scholar-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
-  const randomOAuthPasswordHash = hashPassword(crypto.randomBytes(24).toString('hex'));
 
   await runInTransaction(async (tx) => {
     await tx.execute(
       'INSERT INTO users (id, email, password_hash, role, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (email) DO NOTHING',
-      [userId, cleanEmail, randomOAuthPasswordHash, 'learner', now]
+      [userId, cleanEmail, null, 'learner', now]
     );
     const createdRow = await tx.queryOne<{ id: string }>(
       'SELECT id FROM users WHERE email = $1',
