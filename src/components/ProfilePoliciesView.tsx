@@ -5,6 +5,7 @@ import {
   Bookmark,
   CalendarRange,
   CheckCircle2,
+  Compass,
   Download,
   Eye,
   EyeOff,
@@ -77,6 +78,7 @@ interface ProfilePoliciesViewProps {
   onPasswordUpdated?: (user: UserSummary) => void;
   onAccountDeleted: () => Promise<void>;
   onRequireAuth: () => void;
+  onReplayTour?: () => void;
 }
 
 export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
@@ -106,6 +108,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
   onPasswordUpdated,
   onAccountDeleted,
   onRequireAuth,
+  onReplayTour,
 }) => {
   const strings = t(locale);
   const toastCopy = notificationCopy(locale);
@@ -633,6 +636,30 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           </button>
         </div>
       </div>
+
+      {onReplayTour && (
+        <div className="pt-3 border-t-2 border-theme-border/60 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-bold text-ink">
+              {locale === 'uz' ? 'Mahsulot bo‘ylab ekskursiya' : 'Architectural Product Tour'}
+            </div>
+            <div className="text-[11px] text-muted">
+              {locale === 'uz'
+                ? 'Bosh sahifa, kurslar va o‘quv vositalari bo‘ylab 5 bosqichli ko‘rsatmalarni qayta boshlang.'
+                : 'Relaunch the 5-step guided blueprint walkthrough of the overview dashboard, courses, and study tools.'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onReplayTour}
+            data-testid="profile-replay-tour-btn"
+            className="inline-flex items-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-1.5 text-xs font-bold text-ink shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:border-theme-accent dark:hover:text-ink shrink-0"
+          >
+            <Compass className="h-3.5 w-3.5 text-theme-accent" aria-hidden="true" />
+            <span>{locale === 'uz' ? 'Ekskursiyani qayta ko‘rish' : 'Replay Tour'}</span>
+          </button>
+        </div>
+      )}
       </div>
     </section>
   );

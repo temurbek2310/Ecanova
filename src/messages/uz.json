@@ -521,5 +521,15 @@
     "legendUpcoming": "Keyingi",
     "lessonPrefix": "Dars",
     "selectHint": "Istalgan dars yoki baholash tugunini bosib bevosita o‘ting."
+  },
+  "tour": {
+    "replay": "Mahsulot ekskursiyasini qayta ko‘rish",
+    "badgeTemplate": "KALIBROVKA // {current} / {total}",
+    "targetActive": "NISHO N // FAOL",
+    "skip": "O‘tkazib yuborish",
+    "back": "Orqaga",
+    "next": "Keyingisi",
+    "finish": "O‘qishni boshlash",
+    "trackSelectionPrompt": "O‘quv jarayonini moslashtirish uchun asosiy yo‘nalishingizni tanlang:"
   }
 }

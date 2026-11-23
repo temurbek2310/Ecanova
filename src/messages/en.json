@@ -521,5 +521,15 @@
     "legendUpcoming": "Upcoming",
     "lessonPrefix": "Lesson",
     "selectHint": "Select any lesson or assessment node to jump directly to it."
+  },
+  "tour": {
+    "replay": "Replay Product Tour",
+    "badgeTemplate": "CALIBRATION // {current} OF {total}",
+    "targetActive": "TARGET // ACTIVE",
+    "skip": "Skip Tour",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Start Learning",
+    "trackSelectionPrompt": "Select your primary focus track to personalize your journey:"
   }
 }

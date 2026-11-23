@@ -10,6 +10,7 @@ import {
   readJsonSafely,
   readOAuthPopupMessage,
   startGooglePopupSignIn,
+  subscribeToOAuthEvents,
 } from '../lib/auth-client';
 import { GoogleLogoSvg } from './AuthPageView';
 
@@ -45,9 +46,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const setErrorMsg = useToastSlot('auth-modal-error', notificationCopy(locale).auth.failed);
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const message = readOAuthPopupMessage(event);
-      if (!message) return;
+    const unsubscribe = subscribeToOAuthEvents((message) => {
       setGoogleLoading(false);
       setGooglePressed(false);
       if (message.type === 'error') {
@@ -58,11 +57,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       void onAuthenticated(message.user, {
         redirectTo: message.redirectTo ?? redirectTo,
       }).then(() => onClose());
-    };
+    });
 
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [authStrings.googleFailed, onAuthenticated, onClose, redirectTo]);
+    return unsubscribe;
+  }, [authStrings.googleFailed, onAuthenticated, onClose, redirectTo, setErrorMsg]);
 
   const handleGoogleSignIn = async () => {
     setErrorMsg(null);

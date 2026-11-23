@@ -361,6 +361,58 @@ export function readRedirectParam(search: string | null | undefined): string | n
   return params.get('redirectTo') || params.get('callbackUrl') || params.get('next');
 }
 
+/**
+ * Detects if a location contains OAuth callback artifacts
+ * (e.g. /auth/callback path, ?code=..., ?state=..., #access_token=..., #id_token=..., etc.).
+ */
+export function isOAuthCallbackUrl(
+  pathname = '',
+  search = '',
+  hash = ''
+): boolean {
+  const cleanPath = normalizeRoutePath(pathname);
+  if (cleanPath === '/auth/callback' || cleanPath.startsWith('/auth/callback/')) {
+    return true;
+  }
+  const s = search.startsWith('?') ? search.slice(1) : search;
+  const searchParams = new URLSearchParams(s);
+  if (searchParams.has('code') || searchParams.has('oauthError')) {
+    return true;
+  }
+  const h = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (h) {
+    const hashParams = new URLSearchParams(h);
+    if (hashParams.has('access_token') || hashParams.has('id_token') || hashParams.has('error')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Strips OAuth query artifacts (?code=..., ?state=..., ?oauthError=...) and any hash tokens,
+ * preserving legitimate application parameters such as ?redirectTo=...
+ */
+export function cleanOAuthUrlParams(
+  pathname = '',
+  search = ''
+): string {
+  const cleanPath = normalizeRoutePath(pathname);
+  const targetPath =
+    cleanPath === '/auth/callback' || cleanPath.startsWith('/auth/callback/')
+      ? '/overview'
+      : pathname || '/overview';
+  const s = search.startsWith('?') ? search.slice(1) : search;
+  const params = new URLSearchParams(s);
+  params.delete('code');
+  params.delete('state');
+  params.delete('oauthError');
+  params.delete('error');
+  params.delete('error_description');
+  const remaining = params.toString();
+  return remaining ? `${targetPath}?${remaining}` : targetPath;
+}
+
 export function parseRouteFromLocation(
   pathname: string,
   search = ''

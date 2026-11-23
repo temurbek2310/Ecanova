@@ -24,6 +24,7 @@ import {
   readJsonSafely,
   readOAuthPopupMessage,
   startGooglePopupSignIn,
+  subscribeToOAuthEvents,
 } from '../lib/auth-client';
 import {
   formatDestinationLabel,
@@ -269,11 +270,9 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
     }
   }, [authStrings.googleFailed, setErrorMsg]);
 
-  // Listen for OAuth popup completion postMessage (same origin only)
+  // Listen for OAuth completion across popup postMessage, BroadcastChannel, and storage
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const message = readOAuthPopupMessage(event);
-      if (!message) return;
+    const unsubscribe = subscribeToOAuthEvents((message) => {
       setGoogleLoading(false);
       setGooglePressed(false);
       if (message.type === 'error') {
@@ -284,10 +283,9 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
       void onAuthenticated(message.user, {
         redirectTo: message.redirectTo ?? destinationPath,
       });
-    };
+    });
 
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    return unsubscribe;
   }, [authStrings.googleFailed, destinationPath, onAuthenticated, setErrorMsg]);
 
   const handleGoogleSignIn = async () => {

@@ -243,6 +243,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 type="button"
                 data-sidebar-nav-item="true"
                 data-sidebar-nav-id={item.id}
+                data-tour-id={item.id === 'certificates' ? 'tour-certificates' : item.id === 'catalog' ? 'tour-sidebar-catalog' : undefined}
                 data-active={isActive ? 'true' : 'false'}
                 onClick={() => onNavigateTab(item.id)}
                 aria-keyshortcuts={shortcut ? shortcut.toLowerCase() : undefined}

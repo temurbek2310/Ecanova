@@ -63,6 +63,8 @@ import { NodeUnlockOverlay } from './components/NodeUnlockOverlay';
 import { NotificationViewport } from './components/NotificationViewport';
 import { ProfilePoliciesView } from './components/ProfilePoliciesView';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { ProductTour } from './components/tour/ProductTour';
+import { shouldAutoStartTour, type TourTrack } from './lib/product-tour';
 import { Sidebar } from './components/Sidebar';
 import { SmoothScroll } from './components/SmoothScroll';
 import { LandingPage } from './components/landing/LandingPage';
@@ -88,11 +90,14 @@ import { isCourseBookmarked } from './lib/course-bookmarks';
 import {
   clearClientSessionState,
   apiFetch,
+  cleanOAuthUrlParams,
   consumeIntendedDestination,
   getCachedUserSummary,
+  isOAuthCallbackUrl,
   peekIntendedDestination,
   persistCachedUserSummary,
   saveIntendedDestination,
+  subscribeToOAuthEvents,
 } from './lib/auth-client';
 import { scrollGlobalToTop } from './lib/scroll-sync';
 import {
@@ -101,12 +106,14 @@ import {
   buildPathForTab,
   evaluateMiddlewareRouteGuard,
   getAdminSectionLabel,
+  getRouteAccessMode,
   parseAdminSection,
   type AdminSection,
   formatDestinationLabel,
   isSessionDependentRoute,
   parseRouteFromLocation,
   readAccessNotice,
+  readRedirectParam,
   resolveDestinationFromPath,
   sanitizeRedirectTo,
   stripAccessNotice,
@@ -296,6 +303,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [companionOpen, setCompanionOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
 
   // Catalog & filters
   const [courses, setCourses] = useState<CourseCatalogItem[]>([]);
@@ -775,6 +783,25 @@ export default function App() {
           setDailyStudyGoalMinutes(verifiedUser.dailyStudyGoalMinutes);
           setGoalNotificationsEnabled(Boolean(verifiedUser.studyGoalNotificationsEnabled));
           await loadProtectedDataRef.current();
+
+          // Auto-redirect if sitting on a guest-only or OAuth callback route
+          if (typeof window !== 'undefined') {
+            const { pathname, search, hash } = window.location;
+            const currentMode = getRouteAccessMode(pathname, search);
+            const isCallback = isOAuthCallbackUrl(pathname, search, hash);
+            if (currentMode === 'guest_only' || isCallback) {
+              const storedDest = consumeIntendedDestination();
+              const redirectParam = readRedirectParam(search);
+              const targetPath = storedDest?.path ?? (redirectParam ? sanitizeRedirectTo(redirectParam, '/overview') : '/overview');
+              const targetDest = resolveDestinationFromPath(targetPath, selectedCourseId);
+              setActiveTab(targetDest.tab);
+              if (targetDest.tab === 'admin') {
+                setAdminSection(parseAdminSection(targetPath));
+              }
+              const cleanUrl = cleanOAuthUrlParams(targetPath, '');
+              window.history.replaceState({}, '', cleanUrl);
+            }
+          }
         } else {
           clearClientSessionState();
           setEnrollments([]);
@@ -793,7 +820,7 @@ export default function App() {
       setAuthHydrated(true);
       setSessionLoaded(true);
     }
-  }, []);
+  }, [selectedCourseId]);
 
   // Never leave a session-dependent route spinning if /api/auth/me hangs.
   useEffect(() => {
@@ -806,8 +833,7 @@ export default function App() {
   // full-page return), run as soon as the session is known.
   const hydrationGuardRanRef = useRef(false);
   useEffect(() => {
-    if (!authHydrated || hydrationGuardRanRef.current || typeof window === 'undefined') return;
-    hydrationGuardRanRef.current = true;
+    if (!authHydrated || typeof window === 'undefined') return;
     const { pathname, search, hash } = window.location;
     const cleanSearch = stripAccessNotice(search);
     if (readAccessNotice(search)) {
@@ -815,6 +841,25 @@ export default function App() {
       window.history.replaceState(window.history.state, '', `${pathname}${cleanSearch}${hash}`);
       showInsufficientRoleNotice(null);
     }
+
+    const currentMode = getRouteAccessMode(pathname, cleanSearch);
+    // Any authenticated user sitting on a guest-only route or OAuth callback is automatically redirected
+    if (user && (currentMode === 'guest_only' || isOAuthCallbackUrl(pathname, cleanSearch, hash))) {
+      const stored = consumeIntendedDestination();
+      const redirectParam = readRedirectParam(cleanSearch);
+      const target = stored?.path ?? (redirectParam ? sanitizeRedirectTo(redirectParam, '/overview') : '/overview');
+      const targetDest = resolveDestinationFromPath(target, selectedCourseId);
+      setActiveTab(targetDest.tab);
+      if (targetDest.tab === 'admin') {
+        setAdminSection(parseAdminSection(target));
+      }
+      const cleanUrl = cleanOAuthUrlParams(target, '');
+      window.history.replaceState({}, '', cleanUrl);
+      return;
+    }
+
+    if (hydrationGuardRanRef.current) return;
+    hydrationGuardRanRef.current = true;
     const allowed = enforceRouteAccess({ pathname, search: cleanSearch }, user, 'replace');
     if (allowed && user) {
       // Signed in and on an allowed page (e.g. back from a full-page Google
@@ -822,7 +867,7 @@ export default function App() {
       consumeIntendedDestination();
       setIntendedDestination(null);
     }
-  }, [authHydrated, user, enforceRouteAccess, showInsufficientRoleNotice]);
+  }, [authHydrated, user, enforceRouteAccess, showInsufficientRoleNotice, selectedCourseId]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -830,6 +875,10 @@ export default function App() {
     if (verifyParam) {
       setVerifyTokenFromUrl(verifyParam);
       setActiveTab('certificates');
+    }
+    if (typeof window !== 'undefined' && isOAuthCallbackUrl(window.location.pathname, window.location.search, window.location.hash)) {
+      const cleanPath = cleanOAuthUrlParams(window.location.pathname, window.location.search);
+      window.history.replaceState(window.history.state, '', cleanPath);
     }
     void loadHealth();
     void loadCatalog();
@@ -1402,15 +1451,9 @@ export default function App() {
       const pendingCourseId = pendingBookmarkCourseIdRef.current;
       pendingBookmarkCourseIdRef.current = null;
 
-      await Promise.all([loadProtectedData(), loadLeaderboard()]);
-
-      if (pendingCourseId) {
-        await applyBookmarkChange(pendingCourseId, true).catch(() => {});
-      }
-
-      // Land on the exact intended route (path, query and locale prefix kept)
-      // after the same policy check every other navigation goes through.
-      const targetPath = sanitizeRedirectTo(targetDest.path, '/overview');
+      // Clean OAuth query/hash params from destination path and navigate immediately
+      const rawTargetPath = sanitizeRedirectTo(targetDest.path, '/overview');
+      const targetPath = cleanOAuthUrlParams(rawTargetPath, '');
       const targetQueryIndex = targetPath.indexOf('?');
       const targetPathname =
         targetQueryIndex >= 0 ? targetPath.slice(0, targetQueryIndex) : targetPath;
@@ -1427,12 +1470,9 @@ export default function App() {
         setActiveTab('overview');
         window.history.replaceState({}, '', accessDecision.destination ?? '/overview');
         showInsufficientRoleNotice(targetPath);
-        return;
-      }
-
-      if (targetDest.tab === 'course' && (targetDest.courseId || selectedCourseId)) {
+      } else if (targetDest.tab === 'course' && (targetDest.courseId || selectedCourseId)) {
         const cid = targetDest.courseId || selectedCourseId!;
-        await openCourse(cid, authedUser.preferredLocale, {
+        void openCourse(cid, authedUser.preferredLocale, {
           lessonIndex: targetDest.lessonIndex ?? activeLessonIndex,
           authenticatedUser: authedUser,
         });
@@ -1455,6 +1495,16 @@ export default function App() {
           syncBrowserPath(targetDest.tab, { replace: true });
         }
       }
+
+      // Hydrate learner data concurrently without blocking the route transition
+      try {
+        await Promise.all([loadProtectedData(), loadLeaderboard()]);
+        if (pendingCourseId) {
+          await applyBookmarkChange(pendingCourseId, true).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('Failed to hydrate learner data post-auth:', err);
+      }
     },
     [
       activeTab,
@@ -1468,6 +1518,65 @@ export default function App() {
       showInsufficientRoleNotice,
     ]
   );
+
+  // Unified cross-window and cross-tab OAuth event listener
+  useEffect(() => {
+    const unsubscribe = subscribeToOAuthEvents((message) => {
+      if (message.type === 'success') {
+        void handleUserAuthenticated(message.user, { redirectTo: message.redirectTo });
+      }
+    });
+    return unsubscribe;
+  }, [handleUserAuthenticated]);
+
+  // Re-check session on window focus / visibility change if on an auth page or callback
+  useEffect(() => {
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const { pathname, search, hash } = window.location;
+      const isAuthRoute =
+        activeTab === 'login' ||
+        activeTab === 'register' ||
+        pathname === '/login' ||
+        pathname === '/register' ||
+        isOAuthCallbackUrl(pathname, search, hash);
+      if (isAuthRoute) {
+        void loadSession();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    return () => {
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [activeTab, loadSession]);
+
+  const handleLaunchTour = useCallback(() => {
+    if (activeTab !== 'overview') {
+      navigateToTab('overview');
+    }
+    setTourOpen(true);
+  }, [activeTab, navigateToTab]);
+
+  // Product Tour Auto-Launch: triggers once when landing on /overview
+  useEffect(() => {
+    if (!authHydrated) return;
+    const canLaunch = shouldAutoStartTour({
+      isAuthenticated: Boolean(user),
+      activeTab,
+      userId: user?.id,
+      authModalOpen: authOpen,
+    });
+    if (!canLaunch) return;
+
+    // 450ms settle delay so page elements settle before spotlighting
+    const timer = window.setTimeout(() => {
+      setTourOpen(true);
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [authHydrated, user, activeTab, authOpen]);
 
   const handleLogout = async () => {
     await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
@@ -1673,13 +1782,17 @@ export default function App() {
     return () => window.cancelAnimationFrame(id);
   }, [activeTab, locale, courses.length]);
 
+  const isOAuthCallback =
+    typeof window !== 'undefined' &&
+    isOAuthCallbackUrl(window.location.pathname, window.location.search, window.location.hash);
+
   // Session-dependent routes (guest-only, authenticated, role-protected) wait
   // for the verified session so nothing protected flashes and nobody is
   // redirected on the strength of a stale cached profile.
   const routeGatePending =
-    !authHydrated &&
+    (!authHydrated || isOAuthCallback) &&
     typeof window !== 'undefined' &&
-    isSessionDependentRoute(window.location.pathname, window.location.search);
+    (isSessionDependentRoute(window.location.pathname, window.location.search) || isOAuthCallback);
 
   // Public marketing landing at `/`: pure #000000 void + ConstellationCanvas only —
   // no Sidebar, app Header, EconomicsLiquidBackground or dashboard overlays.
@@ -1845,7 +1958,10 @@ export default function App() {
             />
           </div>
 
-          <div className="justify-self-end flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div
+            data-tour-id="tour-toolkit"
+            className="justify-self-end flex items-center gap-1.5 sm:gap-2 shrink-0"
+          >
             {/* Focus Timer + Ambient Soundscape Hub (Header Popover on sm+; Mobile accesses via Drawer, Lesson Bar & Profile) */}
             <HeaderAudioControl
               locale={locale}
@@ -1853,6 +1969,18 @@ export default function App() {
               timer={focusTimer}
               className="hidden sm:block"
             />
+
+            {/* Product Tour Replay Trigger */}
+            <button
+              type="button"
+              onClick={handleLaunchTour}
+              aria-label={locale === 'uz' ? 'Mahsulot ekskursiyasi' : 'Product Tour'}
+              title={locale === 'uz' ? 'Mahsulot ekskursiyasi' : 'Product Tour'}
+              data-testid="header-tour-trigger-btn"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-muted shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] shrink-0 dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:border-theme-accent dark:hover:text-ink"
+            >
+              <Compass className="h-4 w-4 text-theme-accent shrink-0" aria-hidden="true" />
+            </button>
 
             {/* Theme Mode Toggle (Compact icon on mobile/laptop; label on 2xl+) */}
             <button
@@ -2096,7 +2224,7 @@ export default function App() {
 
               {/* Daily Study Goal Ring & 7-Day XP Progress Chart */}
               <div className="relative z-10 grid gap-6 lg:grid-cols-12">
-                <div className="lg:col-span-5">
+                <div className="lg:col-span-5" data-tour-id="tour-daily-goal">
                   <DailyStudyGoalCard
                     locale={locale}
                     isAuthenticated={Boolean(user)}
@@ -2137,22 +2265,24 @@ export default function App() {
               />
 
               {/* Horizontal Pinned GSAP ScrollTrigger Course Showcase */}
-              <CourseShowcase
-                locale={locale}
-                courses={courses}
-                loading={catalogLoading}
-                enrollments={enrollments}
-                bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
-                bookmarkBusyId={bookmarkBusyId}
-                onOpenCourse={(courseId, openLocale, lessonIndex) =>
-                  void openCourse(
-                    courseId,
-                    openLocale,
-                    typeof lessonIndex === 'number' ? { lessonIndex } : undefined
-                  )
-                }
-                onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
-              />
+              <div data-tour-id="tour-catalog">
+                <CourseShowcase
+                  locale={locale}
+                  courses={courses}
+                  loading={catalogLoading}
+                  enrollments={enrollments}
+                  bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
+                  bookmarkBusyId={bookmarkBusyId}
+                  onOpenCourse={(courseId, openLocale, lessonIndex) =>
+                    void openCourse(
+                      courseId,
+                      openLocale,
+                      typeof lessonIndex === 'number' ? { lessonIndex } : undefined
+                    )
+                  }
+                  onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
+                />
+              </div>
 
               {/* Neobrutalist Dotted Section Divider: Economics */}
               <NeobrutalistSectionDivider subject="Economics" locale={locale} indexLabel="01" />
@@ -3338,6 +3468,7 @@ export default function App() {
               theme={theme}
               themeSyncWithOs={themeSyncWithOs}
               ambientAudio={ambientAudio}
+              onReplayTour={handleLaunchTour}
               onToggleThemeSyncWithOs={handleToggleThemeSyncWithOs}
               onSelectManualTheme={handleSelectManualTheme}
               onToggleGoalNotifications={handleToggleGoalNotifications}
@@ -3598,6 +3729,26 @@ export default function App() {
                     })}
                 </div>
               </div>
+
+              <div className="pt-3 border-t-2 border-theme-border flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Compass className="h-4 w-4 text-theme-accent shrink-0" aria-hidden="true" />
+                  <span className="text-xs font-bold text-ink">
+                    {locale === 'uz' ? 'Mahsulot bo‘ylab ekskursiya' : 'Interactive Product Tour'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCheatSheetOpen(false);
+                    handleLaunchTour();
+                  }}
+                  data-testid="shortcuts-modal-launch-tour-btn"
+                  className="rounded-md border-2 border-theme-border bg-theme-accent px-3 py-1 font-mono text-xs font-bold text-theme-accent-ink shadow-brutal-sm transition-all hover:bg-accent-hover hover:border-slate-900 active:translate-x-[1px] active:translate-y-[1px]"
+                >
+                  {locale === 'uz' ? 'Boshlash' : 'Launch Tour'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3605,6 +3756,44 @@ export default function App() {
     </>
     )}
     </div>
+
+    <ProductTour
+      isOpen={tourOpen}
+      locale={locale}
+      userId={user?.id}
+      onClose={() => setTourOpen(false)}
+      onComplete={(preferredTrack) => {
+        if (preferredTrack) {
+          const sectionMap: Record<TourTrack, string> = {
+            Economics: 'economics',
+            Mathematics: 'mathematics',
+            Business: 'business',
+          };
+          const sectionId = sectionMap[preferredTrack];
+          if (sectionId) {
+            window.setTimeout(() => {
+              const target = document.querySelector(`[data-testid="${sectionId}-section"]`);
+              target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 150);
+          }
+        }
+      }}
+      onNavigateToCatalog={() => navigateToTab('catalog')}
+      onScrollToTrack={(preferredTrack) => {
+        const sectionMap: Record<TourTrack, string> = {
+          Economics: 'economics',
+          Mathematics: 'mathematics',
+          Business: 'business',
+        };
+        const sectionId = sectionMap[preferredTrack];
+        if (sectionId) {
+          window.setTimeout(() => {
+            const target = document.querySelector(`[data-testid="${sectionId}-section"]`);
+            target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 150);
+        }
+      }}
+    />
     </SmoothScroll>
   );
 }

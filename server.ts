@@ -921,12 +921,49 @@ export function buildApp(): express.Express {
         var payload = ${serializedPayload};
         var fallbackHref = ${serializedHref};
         try { window.localStorage.removeItem('econova_session_token'); } catch (e) {}
-        if (window.opener && !window.opener.closed) {
-          window.opener.postMessage(payload, window.location.origin);
-          window.close();
-        } else {
-          window.location.replace(fallbackHref);
+
+        // 1. BroadcastChannel across all same-origin tabs/windows (works even when opener is severed)
+        try {
+          if (typeof window.BroadcastChannel === 'function') {
+            var channel = new BroadcastChannel('econova_oauth');
+            channel.postMessage(payload);
+            channel.close();
+          }
+        } catch (e) {}
+
+        // 2. Storage event fallback for cross-window notification
+        try {
+          window.localStorage.setItem('econova_oauth_result', JSON.stringify({
+            payload: payload,
+            timestamp: Date.now()
+          }));
+        } catch (e) {}
+
+        // 3. postMessage to opener (if accessible)
+        try {
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage(payload, window.location.origin);
+          }
+        } catch (e) {}
+
+        // 4. If opened as a popup window, close cleanly
+        var isPopup = false;
+        try {
+          isPopup = Boolean(window.opener || window.name === 'econova_google_oauth');
+        } catch (e) {}
+
+        if (isPopup) {
+          try {
+            window.close();
+          } catch (e) {}
         }
+
+        // 5. If not in a popup, or if window.close was prevented by the browser, replace location
+        window.setTimeout(function() {
+          if (!window.closed) {
+            window.location.replace(fallbackHref);
+          }
+        }, 120);
       })();
     </script>
   </body>

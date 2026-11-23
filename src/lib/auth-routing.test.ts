@@ -2,14 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildPathForTab,
+  cleanOAuthUrlParams,
   evaluateMiddlewareRouteGuard,
   formatDestinationLabel,
+  isOAuthCallbackUrl,
   isProtectedPathname,
   isProtectedTab,
   parseRouteFromLocation,
   resolveDestinationFromPath,
   sanitizeRedirectTo,
 } from './auth-routing.ts';
+import { parseOAuthPayload } from './auth-client.ts';
 import {
   decodeUnverifiedSessionPayload,
   middleware,
@@ -242,4 +245,70 @@ test('unauthenticated Launch App goes directly to Sign In / Sign Up with zero ov
   assert.equal(directOverviewGuard.destination, '/login?redirectTo=%2Foverview');
   assert.equal(directOverviewGuard.reason, 'unauthenticated_protected');
 });
+
+test('OAuth callback recognition, query/hash cleanup, and post-OAuth redirect resolution', () => {
+  // 1. Detect OAuth callback locations accurately
+  assert.equal(isOAuthCallbackUrl('/auth/callback'), true);
+  assert.equal(isOAuthCallbackUrl('/auth/callback/'), true);
+  assert.equal(isOAuthCallbackUrl('/login', '?code=auth_code_123'), true);
+  assert.equal(isOAuthCallbackUrl('/login', '?oauthError=access_denied'), true);
+  assert.equal(isOAuthCallbackUrl('/overview', '', '#access_token=token_xyz&token_type=bearer'), true);
+  assert.equal(isOAuthCallbackUrl('/overview', '', '#error=access_denied'), true);
+  assert.equal(isOAuthCallbackUrl('/login', '?redirectTo=%2Foverview'), false);
+  assert.equal(isOAuthCallbackUrl('/overview', ''), false);
+  assert.equal(isOAuthCallbackUrl('/catalog', '?subject=economics'), false);
+
+  // 2. Clean OAuth params cleanly while preserving legitimate navigation parameters
+  assert.equal(cleanOAuthUrlParams('/auth/callback', '?code=123&state=xyz'), '/overview');
+  assert.equal(cleanOAuthUrlParams('/login', '?code=123&state=xyz&redirectTo=%2Fprofile'), '/login?redirectTo=%2Fprofile');
+  assert.equal(cleanOAuthUrlParams('/login', '?oauthError=cancelled'), '/login');
+  assert.equal(cleanOAuthUrlParams('/overview', '?tab=stats'), '/overview?tab=stats');
+
+  // 3. Parse OAuth payloads from BroadcastChannel / storage / postMessage
+  const validSuccess = parseOAuthPayload({
+    type: 'OAUTH_AUTH_SUCCESS',
+    user: { id: 'usr-google-1', email: 'scholar@gmail.com', displayName: 'Scholar' },
+    redirectTo: '/profile',
+  });
+  assert.equal(validSuccess?.type, 'success');
+  if (validSuccess?.type === 'success') {
+    assert.equal(validSuccess.user.id, 'usr-google-1');
+    assert.equal(validSuccess.redirectTo, '/profile');
+  }
+
+  const validError = parseOAuthPayload({
+    type: 'OAUTH_AUTH_ERROR',
+    reason: 'access_denied',
+  });
+  assert.equal(validError?.type, 'error');
+  if (validError?.type === 'error') {
+    assert.equal(validError.reason, 'access_denied');
+  }
+
+  assert.equal(parseOAuthPayload(null), null);
+  assert.equal(parseOAuthPayload({ type: 'UNKNOWN_EVENT' }), null);
+
+  // 4. Authenticated user on /login or /register with redirectTo is redirected to destination
+  const postOAuthRedirect = evaluateMiddlewareRouteGuard({
+    pathname: '/login',
+    search: '?redirectTo=%2Fprofile',
+    isAuthenticated: true,
+    userRole: 'learner',
+  });
+  assert.equal(postOAuthRedirect.action, 'redirect');
+  assert.equal(postOAuthRedirect.destination, '/profile');
+  assert.equal(postOAuthRedirect.reason, 'already_authenticated');
+
+  // 5. Authenticated user on bare /login defaults to /overview
+  const postOAuthDefault = evaluateMiddlewareRouteGuard({
+    pathname: '/login',
+    search: '',
+    isAuthenticated: true,
+    userRole: 'learner',
+  });
+  assert.equal(postOAuthDefault.action, 'redirect');
+  assert.equal(postOAuthDefault.destination, '/overview');
+  assert.equal(postOAuthDefault.reason, 'already_authenticated');
+});
+
 

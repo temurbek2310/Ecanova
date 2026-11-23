@@ -1,5 +1,7 @@
 import type { LocaleCode, UserSummary } from '../shared/types';
 import {
+  cleanOAuthUrlParams,
+  isOAuthCallbackUrl,
   resolveDestinationFromPath,
   sanitizeRedirectTo,
   type IntendedDestination,
@@ -297,6 +299,35 @@ export type OAuthPopupMessage =
   | { type: 'success'; user: UserSummary; redirectTo: string | null }
   | { type: 'error'; reason: string };
 
+export const OAUTH_BROADCAST_CHANNEL = 'econova_oauth';
+export const OAUTH_RESULT_STORAGE_KEY = 'econova_oauth_result';
+
+export { cleanOAuthUrlParams, isOAuthCallbackUrl };
+
+/**
+ * Parses raw OAuth payload from postMessage, BroadcastChannel, or storage event.
+ */
+export function parseOAuthPayload(data: unknown): OAuthPopupMessage | null {
+  if (!data || typeof data !== 'object') return null;
+  const payload = data as {
+    type?: string;
+    user?: UserSummary;
+    redirectTo?: string;
+    reason?: string;
+  };
+  if (payload.type === 'OAUTH_AUTH_SUCCESS' && payload.user && typeof payload.user.id === 'string') {
+    return {
+      type: 'success',
+      user: payload.user,
+      redirectTo: payload.redirectTo ? sanitizeRedirectTo(payload.redirectTo, '/overview') : null,
+    };
+  }
+  if (payload.type === 'OAUTH_AUTH_ERROR') {
+    return { type: 'error', reason: typeof payload.reason === 'string' ? payload.reason : 'unknown' };
+  }
+  return null;
+}
+
 /**
  * Accepts OAuth results only from this app's own origin (the callback page is
  * served from the same origin and posts with an exact target origin).
@@ -305,21 +336,64 @@ export function readOAuthPopupMessage(event: MessageEvent): OAuthPopupMessage | 
   if (typeof window === 'undefined' || event.origin !== window.location.origin) {
     return null;
   }
-  const data = event.data as {
-    type?: string;
-    user?: UserSummary;
-    redirectTo?: string;
-    reason?: string;
-  } | null;
-  if (data?.type === 'OAUTH_AUTH_SUCCESS' && data.user && typeof data.user.id === 'string') {
-    return {
-      type: 'success',
-      user: data.user,
-      redirectTo: data.redirectTo ? sanitizeRedirectTo(data.redirectTo, '/overview') : null,
-    };
+  return parseOAuthPayload(event.data);
+}
+
+/**
+ * Unified cross-window and cross-tab OAuth event subscriber.
+ * Listens to:
+ * 1. window.addEventListener('message') (popup postMessage)
+ * 2. BroadcastChannel('econova_oauth') (works even when opener is severed by COOP)
+ * 3. window.addEventListener('storage') (for fallback multi-tab updates)
+ */
+export function subscribeToOAuthEvents(
+  onEvent: (message: OAuthPopupMessage) => void
+): () => void {
+  if (typeof window === 'undefined') {
+    return () => {};
   }
-  if (data?.type === 'OAUTH_AUTH_ERROR') {
-    return { type: 'error', reason: typeof data.reason === 'string' ? data.reason : 'unknown' };
+
+  const handleMessage = (event: MessageEvent) => {
+    const msg = readOAuthPopupMessage(event);
+    if (msg) onEvent(msg);
+  };
+
+  let broadcastChannel: BroadcastChannel | null = null;
+  try {
+    if (typeof window.BroadcastChannel === 'function') {
+      broadcastChannel = new BroadcastChannel(OAUTH_BROADCAST_CHANNEL);
+      broadcastChannel.onmessage = (event: MessageEvent) => {
+        const msg = parseOAuthPayload(event.data);
+        if (msg) onEvent(msg);
+      };
+    }
+  } catch {
+    // BroadcastChannel not supported or restricted
   }
-  return null;
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key !== OAUTH_RESULT_STORAGE_KEY || !event.newValue) return;
+    try {
+      const parsed = JSON.parse(event.newValue) as { payload?: unknown };
+      const msg = parseOAuthPayload(parsed.payload ?? parsed);
+      if (msg) {
+        onEvent(msg);
+      }
+    } catch {
+      // Ignore parse error
+    }
+  };
+
+  window.addEventListener('message', handleMessage);
+  window.addEventListener('storage', handleStorage);
+
+  return () => {
+    window.removeEventListener('message', handleMessage);
+    window.removeEventListener('storage', handleStorage);
+    try {
+      broadcastChannel?.close();
+    } catch {
+      // Ignore close error
+    }
+  };
 }
