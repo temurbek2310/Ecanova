@@ -86,13 +86,13 @@ test('Light mode contrast boosting preserves Dark mode parity and provides high 
   assert.equal(resolveWatermarkAccent('#6FE0A1', true), '#6FE0A1');
   assert.equal(resolveWatermarkAccent('#FFC96B', true), '#FFC96B');
 
-  // Light Mode: Refined, subtle Slate-600 resting dots + Softened Amber (#D97706) glow on hover/ripple
+  // Light Mode: Subtle Slate-600 resting dots + Rich Amber (#C2610C) glow on hover
   const lightGrid = resolveDotGridColors(false, '#F59E0B');
   assert.deepEqual(lightGrid.baseRgb, [71, 85, 105]); // Slate-600 (#475569)
   assert.equal(lightGrid.baseAlpha, 0.18); // ~0.16–0.20
   assert.equal(lightGrid.staticColor, 'rgba(71, 85, 105, 0.18)');
-  assert.deepEqual(lightGrid.accentRgb, [217, 119, 6]); // Amber #D97706
-  assert.equal(lightGrid.maxHoverAlpha, 0.60); // ~0.55–0.65
+  assert.deepEqual(lightGrid.accentRgb, [194, 97, 12]); // Rich Amber #C2610C
+  assert.equal(lightGrid.maxHoverAlpha, 0.76); // ~0.74–0.80
   assert.equal(lightGrid.rippleBlendFactor, 0.22);
 
   // Watermark Light mode deep contrast accents

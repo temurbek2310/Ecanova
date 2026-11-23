@@ -95,18 +95,18 @@ export function resolveDotGridColors(isDark: boolean, optionsAccentColor = '#F59
     };
   }
 
-  // Light Mode: Refined, subtle Slate-600 (#475569) resting dots + Softened Amber (#D97706) glow on hover/ripple
+  // Light Mode: Subtle Slate-600 (#475569) resting dots + Rich Amber (#C2610C) glow on hover
   const lightAccentHex =
     optionsAccentColor === '#F59E0B' || optionsAccentColor === '#FFC96B'
-      ? '#D97706'
+      ? '#C2610C'
       : optionsAccentColor;
 
   return {
     baseRgb: [71, 85, 105] as [number, number, number], // Slate-600 (#475569)
-    baseAlpha: 0.18, // ~0.16–0.20 (toned down to sit subtly behind card text)
+    baseAlpha: 0.18, // ~0.16–0.20 (resting dots unchanged)
     staticColor: 'rgba(71, 85, 105, 0.18)',
-    accentRgb: hexToRgb(lightAccentHex), // Rich Amber #D97706 [217, 119, 6]
-    maxHoverAlpha: 0.60, // ~0.55–0.65 (capped for a refined, non-distracting hover feel)
+    accentRgb: hexToRgb(lightAccentHex), // Rich Amber #C2610C [194, 97, 12]
+    maxHoverAlpha: 0.76, // ~0.74–0.80 (modestly boosted peak active dot opacity)
     rippleBlendFactor: 0.22, // Softened ripple blending in Light mode
   };
 }
@@ -559,7 +559,7 @@ class DotGridSingletonEngine {
           if (dist < cursorRadius) {
             const falloff = Math.pow(1 - dist / cursorRadius, 1.8);
             if (glowEnabled) {
-              const blendScale = isDark ? 1.0 : 0.75;
+              const blendScale = isDark ? 1.0 : 0.90;
               targetAlpha = Math.min(
                 maxHoverAlpha,
                 targetAlpha + (maxHoverAlpha - baseAlpha) * falloff * forceMultiplier
