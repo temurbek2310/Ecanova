@@ -117,7 +117,7 @@ export const LanguageToggle: React.FC<LanguageToggleProps> = ({
       aria-label="Language Edition Switcher"
       data-testid="header-language-toggle"
       data-active-locale={locale}
-      className={`${className} relative items-center rounded-lg border-2 border-slate-500 bg-white/25 p-1 text-xs shadow-[4px_4px_0px_#000000] backdrop-blur-xl dark:border-[#222B3D] dark:bg-[#101522]/30 shrink-0`}
+      className={`${className} relative items-center rounded-lg border-2 border-slate-500 bg-white/25 p-1 text-xs shadow-[4px_4px_0px_#000000] backdrop-blur-xl transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#101522]/30 dark:hover:border-[#222B3D] shrink-0`}
     >
       <Globe
         className="ml-1.5 mr-1.5 hidden h-3.5 w-3.5 text-gray-400 sm:block shrink-0"
@@ -137,8 +137,10 @@ export const LanguageToggle: React.FC<LanguageToggleProps> = ({
           data-testid="lang-toggle-en"
           aria-pressed={locale === 'en'}
           onClick={() => onChange('en')}
-          className={`relative z-10 inline-flex min-h-[30px] min-w-[42px] items-center justify-center rounded-md px-2.5 py-1 font-mono text-xs whitespace-nowrap transition-none ${
-            locale === 'en' ? 'font-bold text-black' : 'font-semibold text-gray-400'
+          className={`relative z-10 inline-flex min-h-[30px] min-w-[42px] items-center justify-center rounded-md px-2.5 py-1 font-mono text-xs whitespace-nowrap transition-colors ${
+            locale === 'en'
+              ? 'font-bold text-black'
+              : 'font-semibold text-gray-500 hover:text-slate-950 dark:text-gray-400 dark:hover:text-white'
           }`}
         >
           EN
@@ -149,8 +151,10 @@ export const LanguageToggle: React.FC<LanguageToggleProps> = ({
           data-testid="lang-toggle-uz"
           aria-pressed={locale === 'uz'}
           onClick={() => onChange('uz')}
-          className={`relative z-10 inline-flex min-h-[30px] min-w-[44px] items-center justify-center rounded-md px-2.5 py-1 font-mono text-xs whitespace-nowrap transition-none ${
-            locale === 'uz' ? 'font-bold text-black' : 'font-semibold text-gray-400'
+          className={`relative z-10 inline-flex min-h-[30px] min-w-[44px] items-center justify-center rounded-md px-2.5 py-1 font-mono text-xs whitespace-nowrap transition-colors ${
+            locale === 'uz'
+              ? 'font-bold text-black'
+              : 'font-semibold text-gray-500 hover:text-slate-950 dark:text-gray-400 dark:hover:text-white'
           }`}
         >
           O‘Z

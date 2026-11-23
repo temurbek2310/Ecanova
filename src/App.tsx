@@ -1793,7 +1793,7 @@ export default function App() {
               type="button"
               onClick={() => setMobileMenuOpen((v) => !v)}
               aria-label="Toggle navigation menu"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-ink shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60 md:hidden"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-ink shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:bg-[#080B14]/80 md:hidden"
             >
               {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
@@ -1802,7 +1802,7 @@ export default function App() {
               onClick={() => navigateToTab('overview')}
               aria-label="ECONOVA"
               data-testid="header-mobile-logo"
-              className="inline-flex items-center gap-1.5 shrink-0 md:hidden"
+              className="inline-flex items-center gap-1.5 shrink-0 rounded-lg p-1 -ml-1 transition-all hover:bg-slate-900/10 hover:text-slate-950 dark:hover:bg-white/5 dark:hover:text-ink md:hidden"
             >
               <span
                 className="inline-flex h-7 w-7 items-center justify-center rounded-md border-2 border-theme-border bg-[#5DE1D2] font-display text-xs font-black text-black shadow-[2px_2px_0px_#000]"
@@ -1862,7 +1862,7 @@ export default function App() {
               title={theme === 'dark' ? strings.theme.switchToLight : strings.theme.switchToDark}
               aria-pressed={theme === 'light'}
               data-testid="theme-mode-toggle"
-              className="inline-flex h-9 w-9 2xl:h-auto 2xl:w-auto 2xl:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 2xl:px-3 2xl:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md transition-colors hover:border-theme-accent whitespace-nowrap shrink-0 dark:border-[#222B3D] dark:bg-[#080B14]/60"
+              className="inline-flex h-9 w-9 2xl:h-auto 2xl:w-auto 2xl:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 2xl:px-3 2xl:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] whitespace-nowrap shrink-0 dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:border-theme-accent dark:hover:bg-[#080B14]/80"
             >
               {theme === 'dark' ? (
                 <Sun className="h-3.5 w-3.5 text-warning shrink-0" aria-hidden="true" />
@@ -1889,7 +1889,7 @@ export default function App() {
                   onClick={() => navigateToTab('profile')}
                   aria-label={user.displayName}
                   data-testid="header-user-profile-btn"
-                  className="inline-flex h-9 w-9 md:h-auto md:w-auto md:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 md:px-3 md:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md hover:border-theme-accent dark:border-[#222B3D] dark:bg-[#080B14]/60"
+                  className="inline-flex h-9 w-9 md:h-auto md:w-auto md:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 md:px-3 md:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:border-theme-accent dark:hover:bg-[#080B14]/80"
                 >
                   <User className="h-3.5 w-3.5 text-accent shrink-0" aria-hidden="true" />
                   <span className="hidden md:block max-w-[120px] truncate">{user.displayName}</span>
@@ -1899,7 +1899,7 @@ export default function App() {
                   onClick={handleLogout}
                   aria-label={strings.signOut}
                   data-testid="header-logout-btn"
-                  className="hidden sm:inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-muted shadow-brutal-sm backdrop-blur-md hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60"
+                  className="hidden sm:inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-muted shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:text-ink"
                 >
                   <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
@@ -1909,7 +1909,7 @@ export default function App() {
                 type="button"
                 onClick={() => navigateToLogin()}
                 data-testid="header-signin-btn"
-                className="h-9 sm:min-h-[38px] rounded-lg border-2 border-theme-border bg-theme-accent px-2.5 sm:px-4 py-1.5 text-[11px] sm:text-xs font-bold text-theme-accent-ink shadow-brutal-sm transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:bg-accent-hover whitespace-nowrap"
+                className="h-9 sm:min-h-[38px] rounded-lg border-2 border-theme-border bg-theme-accent px-2.5 sm:px-4 py-1.5 text-[11px] sm:text-xs font-bold text-theme-accent-ink shadow-brutal-sm transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:bg-accent-hover hover:border-slate-900 hover:shadow-[4px_4px_0px_#090D16] dark:hover:border-theme-border whitespace-nowrap"
               >
                 {strings.signIn}
               </button>
@@ -1929,10 +1929,10 @@ export default function App() {
                     navigateToTab(item.id);
                     setMobileMenuOpen(false);
                   }}
-                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md ${
+                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md transition-all ${
                     activeTab === item.id
-                      ? 'border-theme-accent bg-accent/20 text-theme-accent shadow-brutal-sm'
-                      : 'border-slate-500 bg-white/55 text-muted dark:border-[#222B3D] dark:bg-[#080B14]/60'
+                      ? 'border-theme-accent bg-accent/20 text-theme-accent shadow-brutal-sm hover:bg-accent/30'
+                      : 'border-slate-500 bg-white/55 text-muted hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:text-ink dark:hover:border-[#222B3D]'
                   }`}
                 >
                   {item.icon}
@@ -1948,10 +1948,10 @@ export default function App() {
                     navigateToAdminSection(item.section);
                     setMobileMenuOpen(false);
                   }}
-                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md ${
+                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md transition-all ${
                     activeTab === 'admin' && adminSection === item.section
-                      ? 'border-theme-accent bg-accent/20 text-theme-accent shadow-brutal-sm'
-                      : 'border-slate-500 bg-white/55 text-muted dark:border-[#222B3D] dark:bg-[#080B14]/60'
+                      ? 'border-theme-accent bg-accent/20 text-theme-accent shadow-brutal-sm hover:bg-accent/30'
+                      : 'border-slate-500 bg-white/55 text-muted hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:text-ink dark:hover:border-[#222B3D]'
                   }`}
                 >
                   {item.icon}
@@ -1964,7 +1964,7 @@ export default function App() {
                   setCompanionOpen(true);
                   setMobileMenuOpen(false);
                 }}
-                className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-ink backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
+                className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-ink backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:border-theme-accent"
               >
                 <MessageSquare className="h-4 w-4 text-teal" aria-hidden="true" />
                 <span>{locale === 'uz' ? 'Yordamchi' : 'Companion'}</span>
@@ -1974,10 +1974,10 @@ export default function App() {
                 onClick={() => void ambientAudio.togglePlay()}
                 aria-pressed={ambientAudio.isPlaying}
                 data-testid="mobile-drawer-audio-toggle"
-                className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md ${
+                className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md transition-all ${
                   ambientAudio.isPlaying
-                    ? 'border-[#5DE1D2] bg-[#5DE1D2]/15 text-ink shadow-brutal-sm'
-                    : 'border-slate-500 bg-white/55 text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
+                    ? 'border-[#5DE1D2] bg-[#5DE1D2]/15 text-ink shadow-brutal-sm hover:shadow-[3px_3px_0px_#090D16]'
+                    : 'border-slate-500 bg-white/55 text-ink hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60'
                 }`}
               >
                 {ambientAudio.isPlaying ? (
@@ -2000,10 +2000,10 @@ export default function App() {
                 onClick={() => focusTimer.toggleStartPause()}
                 aria-pressed={focusTimer.status === 'running'}
                 data-testid="mobile-drawer-timer-toggle"
-                className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md ${
+                className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md transition-all ${
                   focusTimer.status === 'running'
-                    ? 'border-[#5DE1D2] bg-[#5DE1D2]/15 text-ink shadow-brutal-sm'
-                    : 'border-slate-500 bg-white/55 text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
+                    ? 'border-[#5DE1D2] bg-[#5DE1D2]/15 text-ink shadow-brutal-sm hover:shadow-[3px_3px_0px_#090D16]'
+                    : 'border-slate-500 bg-white/55 text-ink hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60'
                 }`}
               >
                 <Timer
@@ -2027,7 +2027,7 @@ export default function App() {
                     handleLogout();
                     setMobileMenuOpen(false);
                   }}
-                  className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-muted backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
+                  className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-muted backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:text-ink"
                 >
                   <LogOut className="h-4 w-4" aria-hidden="true" />
                   <span>{strings.signOut}</span>
@@ -2043,8 +2043,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => handleLocaleSwitch('en')}
-                  className={`min-h-[30px] rounded-md px-2.5 py-1 font-mono font-bold ${
-                    locale === 'en' ? 'bg-[#5DE1D2] text-black' : 'text-muted'
+                  className={`min-h-[30px] rounded-md px-2.5 py-1 font-mono font-bold transition-all ${
+                    locale === 'en'
+                      ? 'bg-[#5DE1D2] text-black shadow-[2px_2px_0px_#000]'
+                      : 'text-muted hover:bg-slate-900/10 hover:text-slate-950 dark:hover:text-white dark:hover:bg-transparent'
                   }`}
                 >
                   EN
@@ -2052,8 +2054,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => handleLocaleSwitch('uz')}
-                  className={`min-h-[30px] rounded-md px-2.5 py-1 font-mono font-bold ${
-                    locale === 'uz' ? 'bg-[#5DE1D2] text-black' : 'text-muted'
+                  className={`min-h-[30px] rounded-md px-2.5 py-1 font-mono font-bold transition-all ${
+                    locale === 'uz'
+                      ? 'bg-[#5DE1D2] text-black shadow-[2px_2px_0px_#000]'
+                      : 'text-muted hover:bg-slate-900/10 hover:text-slate-950 dark:hover:text-white dark:hover:bg-transparent'
                   }`}
                 >
                   O‘Z
@@ -3532,7 +3536,7 @@ export default function App() {
                 onClick={() => setCheatSheetOpen(false)}
                 data-testid="close-shortcuts-modal-btn"
                 aria-label={locale === 'uz' ? 'Yopish' : 'Close'}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-muted shadow-brutal-sm backdrop-blur-md hover:border-theme-accent hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-muted shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:border-theme-accent dark:hover:text-ink"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>

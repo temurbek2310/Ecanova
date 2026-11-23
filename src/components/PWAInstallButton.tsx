@@ -19,7 +19,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ label = 'Ins
       <button
         type="button"
         onClick={install}
-        className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-line bg-elevated px-3 py-2 text-xs font-medium text-ink transition-colors hover:border-teal/50 hover:text-teal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent whitespace-nowrap shrink-0"
+        className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent whitespace-nowrap shrink-0 dark:border-line dark:bg-elevated dark:font-medium dark:hover:border-teal/50 dark:hover:text-teal"
       >
         <Download className="h-3.5 w-3.5 text-teal" aria-hidden="true" />
         <span>{label}</span>
@@ -33,7 +33,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ label = 'Ins
         <button
           type="button"
           onClick={() => setShowGuide(true)}
-          className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-line bg-elevated px-3 py-2 text-xs font-medium text-ink transition-colors hover:border-teal/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent whitespace-nowrap shrink-0"
+          className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent whitespace-nowrap shrink-0 dark:border-line dark:bg-elevated dark:font-medium dark:hover:border-teal/50 dark:hover:text-teal"
         >
           <Smartphone className="h-3.5 w-3.5 text-teal" aria-hidden="true" />
           <span>{label}</span>

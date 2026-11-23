@@ -703,7 +703,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({
         className={`no-print overflow-hidden border-2 border-gray-900 text-gray-900 shadow-[8px_8px_0px_#111827] backdrop-blur-2xl will-change-[width,height,border-radius] dark:border-[#222B3D] dark:text-white dark:shadow-[8px_8px_0px_#000000] ${
           isExpanded
             ? 'fixed top-4 left-4 right-4 w-auto z-[100] md:absolute md:top-0 md:left-1/2 md:right-auto md:z-[100] bg-white/95 dark:bg-[#101522]/95 shadow-[12px_12px_0px_#000000]'
-            : 'relative z-10 rounded-full bg-white/25 dark:bg-[#101522]/25'
+            : 'relative z-10 rounded-full bg-white/25 transition-all hover:bg-slate-900/10 hover:shadow-[4px_4px_0px_#090D16] dark:bg-[#101522]/25 dark:hover:bg-[#101522]/40'
         }`}
       >
         {!isExpanded ? (

@@ -98,21 +98,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return;
             }
 
+            const isDark =
+              typeof document === 'undefined' ||
+              !document.documentElement.classList.contains('light');
+
             gsap.to(item, {
               x: 6,
               duration: 0.2,
               ease: 'power2.out',
               overwrite: 'auto',
-              ...(!isActive
-                ? {
-                    borderColor: 'rgba(93, 225, 210, 0.6)',
-                    backgroundColor: 'rgba(16, 21, 34, 0.6)',
-                    color: '#F8FAFC',
-                    boxShadow: '4px 4px 0px #000000',
-                  }
-                : {
-                    boxShadow: '6px 6px 0px #000000',
-                  }),
+              ...(isDark
+                ? (!isActive
+                    ? {
+                        borderColor: 'rgba(93, 225, 210, 0.6)',
+                        backgroundColor: 'rgba(16, 21, 34, 0.6)',
+                        color: '#F8FAFC',
+                        boxShadow: '4px 4px 0px #000000',
+                      }
+                    : {
+                        boxShadow: '6px 6px 0px #000000',
+                      })
+                : {}),
             });
 
             if (bar) {
@@ -137,27 +143,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return;
             }
 
+            const isDark =
+              typeof document === 'undefined' ||
+              !document.documentElement.classList.contains('light');
+
             gsap.to(item, {
               x: 0,
               duration: 0.25,
               ease: 'power2.out',
               overwrite: 'auto',
-              ...(!isActive
-                ? {
-                    borderColor: 'rgba(0, 0, 0, 0)',
-                    backgroundColor: 'rgba(16, 21, 34, 0)',
-                    boxShadow: '0px 0px 0px #000000',
-                    onComplete: () => {
-                      gsap.set(item, {
-                        clearProps: 'borderColor,backgroundColor,boxShadow,color',
-                      });
-                    },
-                  }
-                : {
-                    onComplete: () => {
-                      gsap.set(item, { clearProps: 'boxShadow' });
-                    },
-                  }),
+              ...(isDark
+                ? (!isActive
+                    ? {
+                        borderColor: 'rgba(0, 0, 0, 0)',
+                        backgroundColor: 'rgba(16, 21, 34, 0)',
+                        boxShadow: '0px 0px 0px #000000',
+                        onComplete: () => {
+                          gsap.set(item, {
+                            clearProps: 'borderColor,backgroundColor,boxShadow,color',
+                          });
+                        },
+                      }
+                    : {
+                        onComplete: () => {
+                          gsap.set(item, { clearProps: 'boxShadow' });
+                        },
+                      })
+                : {}),
             });
 
             if (bar) {
@@ -210,7 +222,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={() => onNavigateTab('overview')}
-            className="inline-flex items-center gap-2 font-display text-xl font-extrabold tracking-tight text-ink whitespace-nowrap"
+            className="inline-flex items-center gap-2 font-display text-xl font-extrabold tracking-tight text-ink whitespace-nowrap rounded-lg px-2 py-1 -ml-2 transition-all hover:bg-slate-900/10 hover:text-slate-950 dark:hover:bg-white/5 dark:hover:text-ink"
           >
             <span
               className="inline-block h-3 w-3 rounded-xs border-2 border-theme-border bg-theme-accent"
@@ -235,16 +247,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onNavigateTab(item.id)}
                 aria-keyshortcuts={shortcut ? shortcut.toLowerCase() : undefined}
                 aria-current={isActive ? 'page' : undefined}
-                className={`relative z-10 flex w-full min-h-[42px] items-center justify-between gap-2 overflow-hidden rounded-lg border-2 px-3 py-2 text-sm font-semibold whitespace-nowrap backdrop-blur-md ${
+                className={`group relative z-10 flex w-full min-h-[42px] items-center justify-between gap-2 overflow-hidden rounded-lg border-2 px-3 py-2 text-sm font-semibold whitespace-nowrap backdrop-blur-md transition-all ${
                   isActive
-                    ? 'border-theme-border bg-white/60 text-theme-accent shadow-brutal-sm dark:bg-[#080B14]/70'
-                    : 'border-transparent text-muted'
+                    ? 'border-theme-border bg-white/60 text-theme-accent shadow-brutal-sm hover:bg-white/90 hover:border-slate-800 hover:shadow-[4px_4px_0px_#090D16] dark:bg-[#080B14]/70 dark:hover:bg-[#080B14]/80'
+                    : 'border-transparent text-muted hover:bg-slate-900/10 hover:border-slate-800 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:hover:bg-transparent dark:hover:border-transparent dark:hover:text-ink'
                 }`}
               >
                 <span
                   data-sidebar-accent-bar="true"
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-0 top-1.5 bottom-1.5 w-1 origin-center rounded-r bg-[#5DE1D2] will-change-transform"
+                  className="pointer-events-none absolute left-0 top-1.5 bottom-1.5 w-1 origin-center rounded-r bg-[#5B21B6] dark:bg-[#5DE1D2] will-change-transform"
                   style={{ transform: 'scaleY(0)', opacity: 0 }}
                 />
 
@@ -280,7 +292,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {shortcut && (
                   <kbd
                     aria-hidden="true"
-                    className="hidden lg:inline-flex min-w-[20px] items-center justify-center rounded border-2 border-slate-500 bg-white/55 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
+                    className="hidden lg:inline-flex min-w-[20px] items-center justify-center rounded border-2 border-slate-500 bg-white/55 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted backdrop-blur-md group-hover:border-slate-800 group-hover:text-slate-950 dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:group-hover:border-[#222B3D] dark:group-hover:text-muted"
                   >
                     {shortcut}
                   </kbd>
@@ -304,10 +316,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   data-admin-nav-section={item.section}
                   onClick={() => adminNav.onNavigate(item.section)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`flex w-full min-h-[38px] items-center gap-2.5 rounded-lg border-2 px-3 py-1.5 text-sm font-semibold whitespace-nowrap backdrop-blur-md ${
+                  className={`flex w-full min-h-[38px] items-center gap-2.5 rounded-lg border-2 px-3 py-1.5 text-sm font-semibold whitespace-nowrap backdrop-blur-md transition-all ${
                     isActive
-                      ? 'border-theme-border bg-white/60 text-theme-accent shadow-brutal-sm dark:bg-[#080B14]/70'
-                      : 'border-transparent text-muted hover:text-ink'
+                      ? 'border-theme-border bg-white/60 text-theme-accent shadow-brutal-sm hover:bg-white/90 hover:border-slate-800 hover:shadow-[4px_4px_0px_#090D16] dark:bg-[#080B14]/70'
+                      : 'border-transparent text-muted hover:bg-slate-900/10 hover:border-slate-800 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:hover:text-ink dark:hover:bg-transparent dark:hover:border-transparent'
                   }`}
                 >
                   {item.icon}
@@ -323,7 +335,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           type="button"
           onClick={onOpenCompanion}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md hover:border-theme-accent dark:border-[#222B3D] dark:bg-[#080B14]/60"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:border-theme-accent dark:hover:bg-[#080B14]/80 dark:hover:text-ink"
         >
           <MessageSquare className="h-4 w-4 text-teal" aria-hidden="true" />
           <span>{locale === 'uz' ? 'O‘quv yordamchisi' : 'Study Companion'}</span>

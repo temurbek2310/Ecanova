@@ -519,10 +519,10 @@ export const HeaderAudioControl: React.FC<HeaderAudioControlProps> = ({
       {/* Unified Glass-Brutalist Header Capsule: Focus Hub Trigger + Inline Global Volume Slider (xl+) */}
       <div
         data-testid="header-audio-capsule"
-        className={`inline-flex h-9 sm:min-h-[38px] items-center rounded-lg border-2 shadow-brutal-sm backdrop-blur-md transition-colors shrink-0 ${
+        className={`inline-flex h-9 sm:min-h-[38px] items-center rounded-lg border-2 shadow-brutal-sm backdrop-blur-md transition-all shrink-0 ${
           isHighlighted
-            ? 'border-black bg-[#5DE1D2]/15 text-ink dark:border-[#5DE1D2] dark:bg-[#101522]/90'
-            : 'border-slate-500 bg-white/55 text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
+            ? 'border-black bg-[#5DE1D2]/15 text-ink hover:shadow-[4px_4px_0px_#090D16] dark:border-[#5DE1D2] dark:bg-[#101522]/90'
+            : 'border-slate-500 bg-white/55 text-ink hover:bg-slate-900/10 hover:border-slate-900 hover:shadow-[3px_3px_0px_#090D16] dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:border-theme-accent dark:hover:bg-[#080B14]/80'
         }`}
       >
         <button
@@ -536,7 +536,7 @@ export const HeaderAudioControl: React.FC<HeaderAudioControlProps> = ({
           className={`inline-flex h-full min-w-[36px] items-center justify-center gap-1.5 rounded-l-[6px] xl:rounded-r-none rounded-r-[6px] px-2.5 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
             isHighlighted
               ? 'bg-[#5DE1D2] text-black dark:bg-[#5DE1D2]/20 dark:text-[#5DE1D2]'
-              : 'text-ink hover:text-theme-accent'
+              : 'text-ink hover:text-slate-950 dark:hover:text-theme-accent'
           }`}
         >
           {timerActive ? (
