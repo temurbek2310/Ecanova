@@ -30,6 +30,7 @@ import {
   type IntendedDestination,
 } from '../lib/auth-routing';
 import { FloatingWatermark } from './FloatingWatermark';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 
 export interface AuthPageViewProps {
   mode: 'login' | 'register';
@@ -542,7 +543,9 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
 
           {/* ---------------- RIGHT COLUMN: Tactile Neobrutalist Auth Card ---------------- */}
           <div className="flex justify-center lg:col-span-6 xl:col-span-6">
-            <div className="w-full max-w-md rounded-2xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/80 dark:bg-[#101522]/85 p-6 sm:p-8 shadow-[8px_8px_0px_#000000] dark:shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl transition-all">
+            <div className="relative overflow-hidden w-full max-w-md rounded-2xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/25 dark:bg-[#101522]/25 p-6 sm:p-8 shadow-[8px_8px_0px_#000000] dark:shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl transition-all">
+              <InteractiveDotGrid testId="auth-card-dot-grid" />
+              <div className="relative z-10">
               {/* Smooth Sliding Pill Toggle (/login vs /register) */}
               <div className="relative grid grid-cols-2 gap-1.5 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#080B14]/60 p-1.5 shadow-brutal-sm backdrop-blur-md">
                 <button
@@ -835,6 +838,7 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
                   </div>
                 </div>
               )}
+              </div>
             </div>
           </div>
         </div>

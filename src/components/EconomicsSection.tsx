@@ -11,6 +11,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { EconomicsLiquidBackground } from './EconomicsLiquidBackground';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 import { MagneticCourseCard } from './MagneticCourseCard';
 import { isCourseBookmarked } from '../lib/course-bookmarks';
 import { formatCourseMetaSummary, t } from '../lib/i18n';
@@ -71,8 +72,11 @@ export const EconomicsSection: React.FC<EconomicsSectionProps> = ({
       {/* Foreground Glass-Brutalist Economics Content Overlay */}
       <section
         aria-labelledby="economics-section-heading"
-        className="relative z-10 space-y-5 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+        className="relative z-10 overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
       >
+        <InteractiveDotGrid testId="economics-section-dot-grid" />
+
+        <div className="relative z-10 space-y-5">
         <div className="flex flex-col gap-3 border-b-2 border-slate-500 dark:border-[#222B3D] pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-md border-2 border-slate-500 dark:border-[#222B3D] bg-white/55 dark:bg-[#080B14]/60 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-theme-cyan shadow-brutal-sm backdrop-blur-md">
@@ -205,10 +209,10 @@ export const EconomicsSection: React.FC<EconomicsSectionProps> = ({
                       )}
 
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border px-2 py-0.5 text-[11px] font-semibold ${
+                        className={`inline-flex items-center gap-1.5 rounded-md border-2 px-2 py-0.5 text-[11px] font-semibold backdrop-blur-md ${
                           offlineStatus === 'cached_full'
-                            ? 'bg-theme-base text-theme-emerald'
-                            : 'bg-theme-base text-muted'
+                            ? 'border-theme-emerald/60 bg-white/55 text-theme-emerald dark:border-theme-emerald/50 dark:bg-[#080B14]/60'
+                            : 'border-slate-500 bg-white/55 text-muted dark:border-[#222B3D] dark:bg-[#080B14]/60'
                         }`}
                       >
                         {offlineStatus === 'cached_full' ? (
@@ -275,6 +279,7 @@ export const EconomicsSection: React.FC<EconomicsSectionProps> = ({
             })}
           </div>
         )}
+        </div>
       </section>
     </div>
   );

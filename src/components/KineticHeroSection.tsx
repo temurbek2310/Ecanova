@@ -6,6 +6,7 @@ import { buildKineticHeroConfig } from '../lib/kinetic-hero';
 import { t } from '../lib/i18n';
 import type { LocaleCode } from '../shared/types';
 import { FloatingWatermark } from './FloatingWatermark';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -129,6 +130,8 @@ export const KineticHeroSection: React.FC<KineticHeroSectionProps> = ({
       data-testid="kinetic-hero-section"
       className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-6 shadow-[8px_8px_0px_#9274FF] backdrop-blur-2xl sm:p-8 lg:p-10 dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
+      <InteractiveDotGrid testId="kinetic-hero-dot-grid" />
+
       {/* Subtle Architectural Grid Accent */}
       <div
         aria-hidden="true"

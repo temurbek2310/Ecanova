@@ -519,10 +519,10 @@ export const HeaderAudioControl: React.FC<HeaderAudioControlProps> = ({
       {/* Unified Glass-Brutalist Header Capsule: Focus Hub Trigger + Inline Global Volume Slider (xl+) */}
       <div
         data-testid="header-audio-capsule"
-        className={`inline-flex h-9 sm:min-h-[38px] items-center rounded-lg border-2 shadow-brutal-sm transition-colors shrink-0 ${
+        className={`inline-flex h-9 sm:min-h-[38px] items-center rounded-lg border-2 shadow-brutal-sm backdrop-blur-md transition-colors shrink-0 ${
           isHighlighted
             ? 'border-black bg-[#5DE1D2]/15 text-ink dark:border-[#5DE1D2] dark:bg-[#101522]/90'
-            : 'border-theme-border bg-theme-base text-ink'
+            : 'border-slate-500 bg-white/55 text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
         }`}
       >
         <button

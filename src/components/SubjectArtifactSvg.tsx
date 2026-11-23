@@ -11,17 +11,43 @@ export interface SubjectArtifactSvgProps {
   kind: ArtifactKind;
   accentColor: string;
   variant?: 'watermark' | 'floating';
+  isDark?: boolean;
   className?: string;
+}
+
+export function resolveSubjectArtifactLightAccent(accentColor: string): string {
+  const upper = accentColor.toUpperCase();
+  if (upper === '#5DE1D2') return '#0F766E'; // Deep Teal
+  if (upper === '#9274FF') return '#5B21B6'; // Deep Purple
+  if (upper === '#6FE0A1') return '#047857'; // Deep Emerald
+  if (upper === '#FFC96B' || upper === '#F59E0B' || upper === '#FBBF24') return '#B45309'; // Rich Amber
+  return '#334155'; // Slate-700
 }
 
 export const SubjectArtifactSvg = forwardRef<SVGSVGElement, SubjectArtifactSvgProps>(
   function SubjectArtifactSvg(
-    { kind, accentColor, variant = 'watermark', className = 'h-full w-full' },
+    {
+      kind,
+      accentColor: rawAccentColor,
+      variant = 'watermark',
+      isDark: propIsDark,
+      className = 'h-full w-full',
+    },
     ref
   ) {
     const isWatermark = variant === 'watermark';
+    const isDark =
+      propIsDark ??
+      (typeof document === 'undefined' ||
+        !document.documentElement.classList.contains('light'));
+
+    const accentColor =
+      isWatermark && !isDark
+        ? resolveSubjectArtifactLightAccent(rawAccentColor)
+        : rawAccentColor;
+
     const fill = isWatermark ? accentColor : ARTIFACT_SURFACE_FILL;
-    const fillOpacity = isWatermark ? 0.14 : 1;
+    const fillOpacity = isWatermark ? (isDark ? 0.14 : 0.24) : 1;
     const stroke = isWatermark ? accentColor : ARTIFACT_BORDER_STROKE;
     const watermarkSvgClass = isWatermark
       ? '[&>*]:[stroke-width:1.5px] [&>*]:[vector-effect:non-scaling-stroke]'

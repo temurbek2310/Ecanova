@@ -15,6 +15,7 @@ import type { LocaleCode, XpLedgerEntry } from '../shared/types';
 import { t } from '../lib/i18n';
 import { buildWeeklyXpChartData, type DailyXpPoint } from '../lib/xp-chart';
 import { FloatingWatermark } from './FloatingWatermark';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 
 interface StudyProgressChartProps {
   locale: LocaleCode;
@@ -81,6 +82,7 @@ export const StudyProgressChart: React.FC<StudyProgressChartProps> = ({
       aria-labelledby="study-progress-chart-title"
       className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl sm:p-6 dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
+      <InteractiveDotGrid testId="study-progress-dot-grid" />
       <FloatingWatermark
         theme="analytics"
         seedIndex={1}

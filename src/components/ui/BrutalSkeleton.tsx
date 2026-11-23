@@ -69,7 +69,7 @@ export const ContentReveal: React.FC<ContentRevealProps> = ({
   style,
 }) => {
   return (
-    <div className={`animate-content-reveal ${className}`} style={style}>
+    <div className={className} style={style}>
       {children}
     </div>
   );
@@ -396,7 +396,7 @@ export const BrutalBookmarkSkeleton: React.FC<BrutalBookmarkSkeletonProps> = ({
       {Array.from({ length: count }).map((_, idx) => (
         <div
           key={idx}
-          className="flex flex-col gap-3 rounded-lg border border-line bg-chrome p-4 sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col gap-3 rounded-lg border-2 border-slate-500 bg-white/40 p-4 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between dark:border-[#222B3D] dark:bg-[#080B14]/55"
         >
           <div className="min-w-0 flex-1 space-y-2">
             <SkeletonLine width="50%" height="16px" />

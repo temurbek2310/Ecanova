@@ -301,7 +301,7 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
               onClick={onClose}
               aria-label={locale === 'uz' ? 'Qaydnomalarni yopish' : 'Close Quick Notes panel'}
               data-testid="quick-notes-close-btn"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border-2 border-theme-border bg-theme-base text-muted hover:text-ink"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-muted backdrop-blur-md hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -310,7 +310,7 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
           {/* Write / Preview Tabs + Voice-to-Text Dictation Button */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-lg border-2 border-theme-border bg-theme-base p-0.5 text-xs">
+              <div className="inline-flex rounded-lg border-2 border-slate-500 bg-white/55 p-0.5 text-xs backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
                 <button
                   type="button"
                   onClick={() => setMode('write')}
@@ -345,10 +345,10 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
                     ? 'Ovoz orqali qayd yozish (Web Speech API)'
                     : 'Dictate notes hands-free using Web Speech API'
                 }
-                className={`inline-flex min-h-[30px] items-center gap-1.5 rounded-lg border-2 px-2.5 py-1 text-xs font-bold shadow-brutal-sm transition-colors ${
+                className={`inline-flex min-h-[30px] items-center gap-1.5 rounded-lg border-2 px-2.5 py-1 text-xs font-bold shadow-brutal-sm backdrop-blur-md transition-colors ${
                   isDictating
                     ? 'border-theme-accent bg-theme-accent text-theme-accent-ink animate-pulse'
-                    : 'border-theme-border bg-theme-base text-theme-cyan hover:border-theme-accent'
+                    : 'border-slate-500 bg-white/55 text-theme-cyan hover:border-theme-accent dark:border-[#222B3D] dark:bg-[#080B14]/60'
                 }`}
               >
                 {isDictating ? (
@@ -410,12 +410,12 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
                 }
                 aria-label="Lesson Markdown Notes"
                 data-testid="quick-notes-textarea"
-                className="h-full min-h-[260px] w-full flex-1 resize-none rounded-xl border-2 border-theme-border bg-theme-base p-3.5 font-mono text-xs leading-relaxed text-ink placeholder:text-muted/60 focus:border-theme-accent focus:outline-none"
+                className="h-full min-h-[260px] w-full flex-1 resize-none rounded-xl border-2 border-slate-500 bg-white/50 p-3.5 font-mono text-xs leading-relaxed text-ink placeholder:text-muted/60 backdrop-blur-md focus:border-theme-accent focus:outline-none dark:border-[#222B3D] dark:bg-[#080B14]/60"
               />
             ) : (
               <div
                 data-testid="quick-notes-preview-pane"
-                className="h-full min-h-[260px] flex-1 overflow-y-auto rounded-xl border-2 border-theme-border bg-theme-base p-4 space-y-2.5 text-xs"
+                className="h-full min-h-[260px] flex-1 overflow-y-auto rounded-xl border-2 border-slate-500 bg-white/50 p-4 space-y-2.5 text-xs backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
               >
                 {previewBlocks.length === 0 ? (
                   <p className="text-muted italic">
@@ -468,7 +468,7 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
                       return (
                         <pre
                           key={i}
-                          className="rounded border border-theme-border bg-theme-panel px-2.5 py-1.5 font-mono text-[11px] text-theme-cyan"
+                          className="rounded border-2 border-slate-500 bg-white/55 px-2.5 py-1.5 font-mono text-[11px] text-theme-cyan backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
                         >
                           {b.text}
                         </pre>
@@ -490,7 +490,7 @@ export const QuickNotesDrawer: React.FC<QuickNotesDrawerProps> = ({
           <button
             type="button"
             onClick={() => void handleClear()}
-            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-1.5 text-xs font-semibold text-muted hover:text-danger"
+            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-1.5 text-xs font-semibold text-muted backdrop-blur-md hover:text-danger dark:border-[#222B3D] dark:bg-[#080B14]/60"
           >
             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             <span>{locale === 'uz' ? 'Tozalash' : 'Clear'}</span>

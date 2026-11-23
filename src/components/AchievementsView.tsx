@@ -12,6 +12,7 @@ import {
 } from '../lib/badge-entrance';
 import { t } from '../lib/i18n';
 import { FloatingWatermark } from './FloatingWatermark';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 import { ContentReveal, SkeletonBlock, SkeletonLine } from './ui/BrutalSkeleton';
 
 interface AchievementsViewProps {
@@ -175,6 +176,7 @@ export const AchievementsView: React.FC<AchievementsViewProps> = ({
   if (!isAuthenticated) {
     return (
       <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+        <InteractiveDotGrid testId="achievements-guest-dot-grid" />
         <FloatingWatermark
           theme="gamification"
           seedIndex={0}
@@ -248,6 +250,7 @@ export const AchievementsView: React.FC<AchievementsViewProps> = ({
   return (
     <ContentReveal className="space-y-6">
       <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+        <InteractiveDotGrid testId="achievements-summary-dot-grid" />
         <FloatingWatermark
           theme="gamification"
           seedIndex={0}
@@ -312,6 +315,7 @@ export const AchievementsView: React.FC<AchievementsViewProps> = ({
 
       {/* Competency Milestone Credentials with Glass-Brutalism GSAP Slide-In */}
       <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+        <InteractiveDotGrid testId="achievements-badges-dot-grid" />
         <FloatingWatermark
           theme="gamification"
           seedIndex={1}

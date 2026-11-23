@@ -206,6 +206,34 @@
     box-shadow: 8px 8px 0px 0px #000000;
   }
 
+  .glass-brutal-card {
+    background-color: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 2px solid var(--econova-line);
+    box-shadow: 8px 8px 0px 0px var(--econova-shadow-color);
+  }
+
+  :root.dark .glass-brutal-card,
+  [data-theme="dark"] .glass-brutal-card {
+    background-color: rgba(16, 21, 34, 0.25);
+    border-color: #222B3D;
+    box-shadow: 8px 8px 0px 0px #000000;
+  }
+
+  .glass-brutal-subcard {
+    background-color: rgba(255, 255, 255, 0.40);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 2px solid var(--econova-line);
+  }
+
+  :root.dark .glass-brutal-subcard,
+  [data-theme="dark"] .glass-brutal-subcard {
+    background-color: rgba(8, 11, 20, 0.55);
+    border-color: #222B3D;
+  }
+
   .bg-arch-grid {
     background-image:
       linear-gradient(to right, var(--econova-grid-line) 1px, transparent 1px),
@@ -323,13 +351,9 @@
   }
 
   @keyframes econova-content-reveal {
-    0% {
-      opacity: 0;
-      transform: translate3d(0, 3px, 0);
-    }
-    100% {
+    0%, 100% {
       opacity: 1;
-      transform: translate3d(0, 0, 0);
+      transform: none;
     }
   }
 
@@ -356,8 +380,9 @@
   }
 
   .animate-content-reveal {
-    animation: econova-content-reveal 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
-    will-change: opacity, transform;
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 
   @media (prefers-reduced-motion: reduce) {

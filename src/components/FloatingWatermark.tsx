@@ -38,14 +38,29 @@ export interface FloatingWatermarkProps {
   className?: string;
 }
 
+export function resolveWatermarkAccent(accentColor: string, isDark: boolean): string {
+  if (isDark) return accentColor;
+  const upper = accentColor.toUpperCase();
+  if (upper === '#5DE1D2') return '#0F766E'; // Deep Teal for Light mode
+  if (upper === '#9274FF') return '#5B21B6'; // Deep Purple for Light mode
+  if (upper === '#6FE0A1') return '#047857'; // Deep Emerald for Light mode
+  if (upper === '#FFC96B' || upper === '#F59E0B' || upper === '#FBBF24') return '#B45309'; // Rich Amber for Light mode
+  return '#334155'; // Slate-700
+}
+
 const WatermarkGlyphSvg = forwardRef<
   SVGSVGElement,
   {
     glyph: WatermarkGlyphKind;
     accentColor: string;
+    isDark?: boolean;
     svgClassName?: string;
   }
->(function WatermarkGlyphSvg({ glyph, accentColor, svgClassName = '' }, ref) {
+>(function WatermarkGlyphSvg(
+  { glyph, accentColor: rawAccentColor, isDark = true, svgClassName = '' },
+  ref
+) {
+  const accentColor = resolveWatermarkAccent(rawAccentColor, isDark);
   const baseSvgClass = `h-full w-full overflow-visible will-change-transform ${svgClassName}`.trim();
 
   if (isCourseArtifactGlyph(glyph)) {
@@ -55,6 +70,7 @@ const WatermarkGlyphSvg = forwardRef<
         kind={glyph}
         accentColor={accentColor}
         variant="watermark"
+        isDark={isDark}
         className={`h-full w-full will-change-transform ${svgClassName}`.trim()}
       />
     );
@@ -530,6 +546,30 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
   const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(() =>
     detectPrefersReducedMotion()
   );
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof document === 'undefined') return true;
+    const root = document.documentElement;
+    const dataTheme = root.getAttribute('data-theme');
+    if (dataTheme === 'light' || root.classList.contains('light')) return false;
+    if (dataTheme === 'dark' || root.classList.contains('dark')) return true;
+    return true;
+  });
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+    const root = document.documentElement;
+    const checkTheme = () => {
+      const dataTheme = root.getAttribute('data-theme');
+      if (dataTheme === 'light' || root.classList.contains('light')) {
+        setIsDark(false);
+      } else {
+        setIsDark(true);
+      }
+    };
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+    return () => observer.disconnect();
+  }, []);
 
   const canonicalTheme = useMemo(
     () => resolveFloatingWatermarkTheme(theme),
@@ -648,7 +688,9 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
             y: 0,
             rotation: 0,
             scale: 1,
-            opacity: spec?.opacityClass === 'opacity-25' ? 0.24 : 0.2,
+            opacity: isDark
+              ? spec?.opacityClass === 'opacity-25' ? 0.24 : 0.2
+              : 0.30,
           });
         });
         return;
@@ -666,7 +708,9 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
         const startY = gsap.utils.random(-12, 12);
         const startRotation = gsap.utils.random(-9, 9);
         const startScale = gsap.utils.random(0.95, 1.04);
-        const startOpacity = gsap.utils.random(0.16, 0.24);
+        const startOpacity = isDark
+          ? gsap.utils.random(0.16, 0.24)
+          : gsap.utils.random(0.26, 0.32);
 
         gsap.set(el, {
           x: startX,
@@ -721,7 +765,9 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
         tweens.push(
           gsap.to(el, {
             scale: gsap.utils.random(0.92, 1.08),
-            opacity: gsap.utils.random(0.14, 0.28),
+            opacity: isDark
+              ? gsap.utils.random(0.14, 0.28)
+              : gsap.utils.random(0.24, 0.34),
             duration: gsap.utils.random(3, 5.5),
             delay: -gsap.utils.random(0, 5),
             repeat: -1,
@@ -744,6 +790,7 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
         particles.length,
         layout,
         prefersReducedMotion,
+        isDark,
       ],
       revertOnUpdate: true,
     }
@@ -788,6 +835,7 @@ export const FloatingWatermark: React.FC<FloatingWatermarkProps> = ({
             }}
             glyph={p.glyph}
             accentColor={p.accentColor}
+            isDark={isDark}
           />
         </div>
       ))}

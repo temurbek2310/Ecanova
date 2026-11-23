@@ -19,6 +19,7 @@ import { notificationCopy } from '../lib/notification-copy';
 import { describeError, notify } from '../lib/notifications';
 import type { WeekWindow } from '../lib/quiz-leaderboard';
 import { FloatingWatermark } from './FloatingWatermark';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 import { RankingMatrix } from './RankingMatrix';
 import { BrutalLeaderboardSkeleton, ContentReveal, SkeletonLine } from './ui/BrutalSkeleton';
 
@@ -100,6 +101,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   return (
     <ContentReveal className="space-y-6">
       <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+        <InteractiveDotGrid testId="community-leaderboard-dot-grid" />
         <FloatingWatermark
           theme="gamification"
           seedIndex={0}
@@ -174,7 +176,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
         </div>
 
         {user ? (
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-line bg-chrome p-4">
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-3 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/40 dark:bg-[#080B14]/55 p-4 shadow-brutal-sm backdrop-blur-md">
             <div className="min-w-[200px] flex-1">
               <label htmlFor="lb-pseudo" className="block text-xs font-medium text-muted">
                 {locale === 'uz'
@@ -187,7 +189,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                 maxLength={32}
                 value={pseudonym}
                 onChange={(e) => setPseudonym(e.target.value)}
-                className="mt-1 min-h-[40px] w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink"
+                className="mt-1 min-h-[40px] w-full rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/50 dark:bg-[#080B14]/60 px-3 py-1.5 text-sm text-ink"
               />
             </div>
             <button
@@ -216,7 +218,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
             </button>
           </div>
         ) : (
-          <div className="mt-4 rounded-lg border border-line bg-chrome p-4 text-xs text-muted">
+          <div className="mt-4 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/40 dark:bg-[#080B14]/55 p-4 text-xs text-muted shadow-brutal-sm backdrop-blur-md">
             {locale === 'uz'
               ? 'Taxallus tanlash va reytingda ishtirok etish uchun tizimga kiring.'
               : 'Sign in to choose a pseudonym and opt in or out of cohort and weekly quiz rankings.'}
@@ -291,6 +293,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
 
       {/* Referrals */}
       <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+        <InteractiveDotGrid testId="community-referrals-dot-grid" />
         <FloatingWatermark
           theme="gamification"
           seedIndex={1}
@@ -321,7 +324,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
           </button>
         ) : (
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border border-line bg-chrome p-4">
+            <div className="rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/40 dark:bg-[#080B14]/55 p-4 shadow-brutal-sm backdrop-blur-md">
               <div className="text-xs text-muted">
                 {locale === 'uz' ? 'Shaxsiy taklif kodingiz' : 'Your Personal Referral Code'}
               </div>
@@ -368,7 +371,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
               </div>
             </div>
 
-            <form onSubmit={handleClaim} className="rounded-lg border border-line bg-chrome p-4">
+            <form onSubmit={handleClaim} className="rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/40 dark:bg-[#080B14]/55 p-4 shadow-brutal-sm backdrop-blur-md">
               <label htmlFor="ref-claim" className="block text-xs text-muted">
                 {claimedReferralCode
                   ? locale === 'uz'
@@ -386,7 +389,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                   value={claimInput}
                   onChange={(e) => setClaimInput(e.target.value)}
                   placeholder="ECO-XXXXXX"
-                  className="min-h-[40px] flex-1 rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-sm text-ink disabled:opacity-50"
+                  className="min-h-[40px] flex-1 rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/50 dark:bg-[#080B14]/60 px-3 py-1.5 font-mono text-sm text-ink disabled:opacity-50"
                 />
                 <button
                   type="submit"

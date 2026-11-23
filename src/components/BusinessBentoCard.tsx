@@ -11,6 +11,7 @@ import {
 } from '../lib/subject-artifacts';
 import type { LocaleCode } from '../shared/types';
 import { ArtifactConstellation } from './ArtifactConstellation';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 
 export interface BusinessBentoCardProps {
   moduleItem: BusinessBentoModule;
@@ -135,18 +136,21 @@ export const BusinessBentoCard: React.FC<BusinessBentoCardProps> = ({
         onMouseEnter={handleMouseEnter}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        className={`relative flex h-full flex-col justify-between overflow-hidden rounded-xl border-2 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl will-change-transform transition-colors dark:bg-[#101522]/25 ${
+        className={`relative flex h-full flex-col justify-between overflow-hidden rounded-xl border-2 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl transition-colors dark:bg-[#101522]/25 ${
           isHovered
             ? 'border-theme-accent'
             : 'border-slate-500 dark:border-[#222B3D]'
         }`}
       >
+        <InteractiveDotGrid />
+
         {/* Multi-particle Business Constellation (5 independent particles at opacity-10..15) */}
         <ArtifactConstellation
           testId={`business-bento-watermark-${moduleItem.id}`}
           particles={particles}
           setDriftRef={setDriftRef}
           setSpinRef={setSpinRef}
+          isHovered={isHovered}
         />
 
         <div className="relative z-10">
@@ -159,7 +163,7 @@ export const BusinessBentoCard: React.FC<BusinessBentoCardProps> = ({
               <span>{moduleItem.code}</span>
             </span>
 
-            <div className="inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-xs font-bold text-ink shadow-brutal-sm">
+            <div className="inline-flex items-center gap-1.5 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-xs font-bold text-ink shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
               <span className="text-[10px] font-medium text-muted">
                 {moduleItem.metricBadge}:
               </span>
@@ -190,7 +194,7 @@ export const BusinessBentoCard: React.FC<BusinessBentoCardProps> = ({
             <button
               type="button"
               onClick={() => onOpenCourse(primaryBusinessCourseId, locale)}
-              className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-bold text-theme-accent shadow-brutal-sm transition-colors hover:border-theme-accent"
+              className="inline-flex min-h-[34px] items-center gap-1 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-[11px] font-bold text-theme-accent shadow-brutal-sm backdrop-blur-md transition-colors hover:border-theme-accent dark:border-[#222B3D] dark:bg-[#080B14]/60"
             >
               <span>{isUz ? 'Modulni ochish' : 'Launch Module'}</span>
               <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />

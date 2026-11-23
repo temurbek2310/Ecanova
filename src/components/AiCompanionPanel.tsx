@@ -142,7 +142,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
         embedded ? 'p-5' : 'h-full max-h-[82vh] p-5'
       }`}
     >
-      <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
+      <div className="flex items-start justify-between gap-3 border-b-2 border-theme-border pb-3">
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
             <MessageSquare className="h-4 w-4 text-teal" aria-hidden="true" />
@@ -165,7 +165,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
       {/* Role & Model Controls */}
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
         {isStaff && (
-          <div className="flex items-center rounded-lg border border-line bg-chrome p-0.5">
+          <div className="flex items-center rounded-lg border-2 border-slate-500 bg-white/45 p-0.5 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
             <button
               type="button"
               onClick={() => setMode('study_tutor')}
@@ -193,7 +193,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
             value={model}
             disabled={!aiConfigured}
             onChange={(e) => setModel(e.target.value)}
-            className="rounded-md border border-line bg-chrome px-2 py-1 text-xs text-ink disabled:opacity-50"
+            className="rounded-md border-2 border-slate-500 bg-white/50 px-2 py-1 text-xs text-ink backdrop-blur-md disabled:opacity-50 dark:border-[#222B3D] dark:bg-[#080B14]/60"
           >
             <option value="gemini-4-hydrogen">gemini-4-hydrogen</option>
             <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
@@ -206,7 +206,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
       {/* Scrollable Multi-Turn Conversation Thread */}
       <div
         aria-label={locale === 'uz' ? 'Suhbat tarixi' : 'Conversation history'}
-        className="mt-3 flex-1 min-h-[220px] max-h-[340px] space-y-3 overflow-y-auto rounded-lg border border-line bg-chrome p-3.5"
+        className="mt-3 flex-1 min-h-[220px] max-h-[340px] space-y-3 overflow-y-auto rounded-lg border-2 border-slate-500 bg-white/45 p-3.5 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55"
       >
         {history.length === 0 && (
           <p className="text-xs text-muted">
@@ -221,7 +221,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
             className={`rounded-lg p-3 text-xs leading-relaxed ${
               turn.role === 'user'
                 ? 'ml-6 bg-elevated text-ink'
-                : 'mr-4 border border-line bg-surface text-ink'
+                : 'mr-4 border-2 border-slate-500 bg-white/60 text-ink backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/65'
             }`}
           >
             <div className="mb-1 flex items-center justify-between text-[11px] text-muted">
@@ -247,7 +247,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
               ? compStrings.placeholderEditorial
               : compStrings.placeholderTutor
           }
-          className="min-h-[42px] flex-1 rounded-lg border border-line bg-chrome px-3 py-2 text-xs text-ink disabled:opacity-50"
+          className="min-h-[42px] flex-1 rounded-lg border-2 border-slate-500 bg-white/50 px-3 py-2 text-xs text-ink backdrop-blur-md disabled:opacity-50 dark:border-[#222B3D] dark:bg-[#080B14]/60"
         />
         <button
           type="submit"
@@ -262,7 +262,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
 
       {/* Staff-only 1K / 2K / 4K Lesson Visual Asset Draft Generator */}
       {isStaff && mode === 'editorial_draft' && (
-        <form onSubmit={handleGenerateDiagram} className="mt-4 border-t border-line pt-4 space-y-3">
+        <form onSubmit={handleGenerateDiagram} className="mt-4 border-t-2 border-theme-border pt-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-ink">
               <ImageIcon className="h-3.5 w-3.5 text-teal" aria-hidden="true" />
@@ -274,7 +274,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
                 value={imgSize}
                 disabled={!aiConfigured}
                 onChange={(e) => setImgSize(e.target.value as '1K' | '2K' | '4K')}
-                className="rounded-md border border-line bg-chrome px-2 py-1 text-xs text-ink disabled:opacity-50"
+                className="rounded-md border-2 border-slate-500 bg-white/50 px-2 py-1 text-xs text-ink backdrop-blur-md disabled:opacity-50 dark:border-[#222B3D] dark:bg-[#080B14]/60"
               >
                 <option value="1K">1K</option>
                 <option value="2K">2K</option>
@@ -289,7 +289,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
               disabled={!aiConfigured}
               onChange={(e) => setImgPrompt(e.target.value)}
               placeholder={compStrings.placeholderEditorial}
-              className="min-h-[40px] flex-1 rounded-lg border border-line bg-chrome px-3 py-1.5 text-xs text-ink disabled:opacity-50"
+              className="min-h-[40px] flex-1 rounded-lg border-2 border-slate-500 bg-white/50 px-3 py-1.5 text-xs text-ink backdrop-blur-md disabled:opacity-50 dark:border-[#222B3D] dark:bg-[#080B14]/60"
             />
             <button
               type="submit"
@@ -300,7 +300,7 @@ export const AiCompanionPanel: React.FC<AiCompanionPanelProps> = ({
             </button>
           </div>
           {imgResult && (
-            <div className="rounded-lg border border-line bg-chrome p-3">
+            <div className="rounded-lg border-2 border-slate-500 bg-white/55 p-3 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
               <img
                 src={imgResult.imageDataUrl}
                 alt={compStrings.generateVisualBtn}

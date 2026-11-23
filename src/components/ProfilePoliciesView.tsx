@@ -36,6 +36,7 @@ import { buildWeeklyStudyDigest } from '../lib/study-features';
 import type { ThemeMode } from '../lib/theme';
 import type { AmbientFocusAudioController } from '../hooks/useAmbientFocusAudio';
 import { AudioSettingsPanel } from './AudioSettingsPanel';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 import { BrutalBookmarkSkeleton, ContentReveal } from './ui/BrutalSkeleton';
 
 interface ProfilePoliciesViewProps {
@@ -288,9 +289,11 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
   const bookmarksSection = (
     <section
       aria-labelledby="bookmarked-courses-title"
-      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+      className="relative overflow-hidden space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
       data-testid="profile-bookmarks-section"
     >
+      <InteractiveDotGrid testId="profile-bookmarks-dot-grid" />
+      <div className="relative z-10 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line pb-3">
         <div>
           <h2
@@ -316,14 +319,14 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
       </div>
 
       {!user ? (
-        <div className="rounded-lg border border-line bg-chrome p-4 text-xs text-muted">
+        <div className="rounded-lg border-2 border-slate-500 bg-white/40 p-4 text-xs text-muted backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
           {strings.bookmarks.emptyGuest}
         </div>
       ) : catalogLoading && rawBookmarkCount > 0 && bookmarkedCourses.length === 0 ? (
         <BrutalBookmarkSkeleton count={Math.min(rawBookmarkCount, 3)} locale={locale} />
       ) : bookmarkedCourses.length === 0 ? (
         <div
-          className="rounded-lg border border-line bg-chrome p-4 text-xs text-muted"
+          className="rounded-lg border-2 border-slate-500 bg-white/40 p-4 text-xs text-muted backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55"
           data-testid="profile-bookmarks-empty"
         >
           {strings.bookmarks.emptyAuthenticated}
@@ -335,7 +338,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
               <li
                 key={item.courseId}
                 data-testid={`profile-bookmark-item-${item.courseId}`}
-                className="flex flex-col gap-3 rounded-lg border border-line bg-chrome p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 rounded-lg border-2 border-slate-500 bg-white/40 p-4 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between dark:border-[#222B3D] dark:bg-[#080B14]/55"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
@@ -380,6 +383,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           </ul>
         </ContentReveal>
       )}
+      </div>
     </section>
   );
 
@@ -387,8 +391,10 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
     <section
       aria-labelledby="weekly-study-digest-title"
       data-testid="weekly-study-digest-section"
-      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+      className="relative overflow-hidden space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
+      <InteractiveDotGrid testId="profile-weekly-digest-dot-grid" />
+      <div className="relative z-10 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b-2 border-theme-border pb-3">
         <div>
           <h2
@@ -412,7 +418,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border-2 border-theme-border bg-theme-base p-3.5">
+        <div className="rounded-lg border-2 border-slate-500 bg-white/55 p-3.5 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
           <div className="text-xs text-muted">
             {locale === 'uz' ? '7 kunlik jami XP' : 'Total XP (Last 7 Days)'}
           </div>
@@ -428,7 +434,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-lg border-2 border-theme-border bg-theme-base p-3.5">
+        <div className="rounded-lg border-2 border-slate-500 bg-white/55 p-3.5 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
           <div className="text-xs text-muted">
             {locale === 'uz' ? 'Yakunlangan kurslar (7 kun)' : 'Completed Courses (7 Days)'}
           </div>
@@ -447,7 +453,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-lg border-2 border-theme-border bg-theme-base p-3.5">
+        <div className="rounded-lg border-2 border-slate-500 bg-white/55 p-3.5 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
           <div className="text-xs text-muted">
             {locale === 'uz' ? 'Faol o‘quv kunlari' : 'Active Study Days'}
           </div>
@@ -461,7 +467,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-lg border-2 border-theme-border bg-theme-base p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-lg border-2 border-slate-500 bg-white/55 p-4 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div id="weekly-digest-email-label" className="flex items-center gap-2 text-sm font-semibold text-ink">
             <Mail className="h-4 w-4 text-theme-cyan" aria-hidden="true" />
@@ -512,6 +518,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           />
         </button>
       </div>
+      </div>
 
     </section>
   );
@@ -520,8 +527,10 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
     <section
       aria-labelledby="profile-theme-sync-title"
       data-testid="profile-theme-sync-section"
-      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+      className="relative overflow-hidden space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
+      <InteractiveDotGrid testId="profile-theme-sync-dot-grid" />
+      <div className="relative z-10 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b-2 border-theme-border pb-3">
         <div>
           <h2
@@ -544,7 +553,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
 
         <span
           data-testid="profile-theme-sync-status"
-          className="inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-xs font-bold text-theme-cyan"
+          className="inline-flex items-center gap-1.5 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-xs font-bold text-theme-cyan backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
         >
           {themeSyncWithOs
             ? locale === 'uz'
@@ -556,7 +565,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
         </span>
       </div>
 
-      <div className="flex flex-col gap-4 rounded-lg border-2 border-theme-border bg-theme-base p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-lg border-2 border-slate-500 bg-white/55 p-4 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div id="theme-sync-os-label" className="text-sm font-semibold text-ink">
             {locale === 'uz'
@@ -571,7 +580,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border-2 border-theme-border bg-theme-panel p-0.5 text-xs">
+          <div className="inline-flex rounded-lg border-2 border-slate-500 bg-white/55 p-0.5 text-xs backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
             <button
               type="button"
               onClick={() => onSelectManualTheme?.('dark')}
@@ -623,6 +632,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
             />
           </button>
         </div>
+      </div>
       </div>
     </section>
   );
@@ -698,8 +708,10 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
     <section
       aria-labelledby="account-security-title"
       data-testid="account-security-section"
-      className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+      className="relative overflow-hidden space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
+      <InteractiveDotGrid testId="profile-account-security-dot-grid" />
+      <div className="relative z-10 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
         <div>
           <h2 id="account-security-title" className="flex items-center gap-2 text-base font-semibold text-ink">
@@ -747,7 +759,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder={strings.profile.security.currentPasswordPlaceholder}
-                className="min-h-[42px] w-full rounded-lg border border-line bg-chrome pl-10 pr-10 text-sm text-ink focus:border-theme-accent focus:outline-none"
+                className="min-h-[42px] w-full rounded-lg border-2 border-slate-500 bg-white/50 pl-10 pr-10 text-sm text-ink backdrop-blur-md focus:border-theme-accent focus:outline-none dark:border-[#222B3D] dark:bg-[#080B14]/60"
               />
               <button
                 type="button"
@@ -780,7 +792,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder={strings.profile.security.newPasswordPlaceholder}
-              className="min-h-[42px] w-full rounded-lg border border-line bg-chrome pl-10 pr-10 text-sm text-ink focus:border-theme-accent focus:outline-none"
+              className="min-h-[42px] w-full rounded-lg border-2 border-slate-500 bg-white/50 pl-10 pr-10 text-sm text-ink backdrop-blur-md focus:border-theme-accent focus:outline-none dark:border-[#222B3D] dark:bg-[#080B14]/60"
             />
             <button
               type="button"
@@ -859,7 +871,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder={strings.profile.security.confirmPasswordPlaceholder}
-              className="min-h-[42px] w-full rounded-lg border border-line bg-chrome pl-10 pr-10 text-sm text-ink focus:border-theme-accent focus:outline-none"
+              className="min-h-[42px] w-full rounded-lg border-2 border-slate-500 bg-white/50 pl-10 pr-10 text-sm text-ink backdrop-blur-md focus:border-theme-accent focus:outline-none dark:border-[#222B3D] dark:bg-[#080B14]/60"
             />
             <button
               type="button"
@@ -891,6 +903,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           </button>
         </div>
       </form>
+      </div>
     </section>
   );
 
@@ -908,7 +921,9 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
       {user && bookmarksSection}
 
       {user ? (
-        <form onSubmit={handleSave} className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+        <form onSubmit={handleSave} className="relative overflow-hidden space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+          <InteractiveDotGrid testId="profile-settings-dot-grid" />
+          <div className="relative z-10 space-y-4">
           <div className="border-b border-line pb-3">
             <h1 className="text-xl font-semibold text-ink">{strings.profile.title}</h1>
             <p className="mt-1 text-xs text-muted">
@@ -923,7 +938,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
                 id="prof-name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="mt-1 min-h-[42px] w-full rounded-lg border border-line bg-chrome px-3 text-sm text-ink"
+                className="mt-1 min-h-[42px] w-full rounded-lg border-2 border-slate-500 bg-white/50 px-3 text-sm text-ink backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
               />
             </div>
             <div>
@@ -932,7 +947,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
                 id="prof-locale"
                 value={preferredLocale}
                 onChange={(e) => setPreferredLocale(e.target.value as LocaleCode)}
-                className="mt-1 min-h-[42px] w-full rounded-lg border border-line bg-chrome px-3 text-sm text-ink"
+                className="mt-1 min-h-[42px] w-full rounded-lg border-2 border-slate-500 bg-white/50 px-3 text-sm text-ink backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
               >
                 <option value="en">English (en)</option>
                 <option value="uz">O‘zbekcha (uz)</option>
@@ -944,7 +959,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
                 id="prof-tz"
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
-                className="mt-1 min-h-[42px] w-full rounded-lg border border-line bg-chrome px-3 text-sm text-ink"
+                className="mt-1 min-h-[42px] w-full rounded-lg border-2 border-slate-500 bg-white/50 px-3 text-sm text-ink backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
               >
                 <option value="Asia/Tashkent">Asia/Tashkent (UTC+5)</option>
                 <option value="Europe/London">Europe/London</option>
@@ -958,7 +973,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
                 id="prof-pseudo"
                 value={pseudonym}
                 onChange={(e) => setPseudonym(e.target.value)}
-                className="mt-1 min-h-[42px] w-full rounded-lg border border-line bg-chrome px-3 text-sm text-ink"
+                className="mt-1 min-h-[42px] w-full rounded-lg border-2 border-slate-500 bg-white/50 px-3 text-sm text-ink backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
               />
             </div>
           </div>
@@ -1011,9 +1026,12 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
               )}
             </div>
           </div>
+          </div>
         </form>
       ) : (
-        <section className="rounded-xl border-2 border-slate-500 bg-white/25 p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+        <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+          <InteractiveDotGrid testId="profile-guest-dot-grid" />
+          <div className="relative z-10">
           <h1 className="text-xl font-semibold text-ink">{strings.profile.guestTitle}</h1>
           <p className="mt-2 text-sm text-muted">
             {strings.profile.guestSubtitle}
@@ -1025,6 +1043,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           >
             {strings.signIn}
           </button>
+          </div>
         </section>
       )}
 
@@ -1035,9 +1054,11 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
       {/* Study Goal Push Notifications */}
       <section
         aria-labelledby="study-goal-notifications-title"
-        className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+        className="relative overflow-hidden space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
         data-testid="study-goal-notifications-section"
       >
+        <InteractiveDotGrid testId="profile-notifications-dot-grid" />
+        <div className="relative z-10 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line pb-3">
           <div>
             <h2
@@ -1076,7 +1097,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
           </span>
         </div>
 
-        <div className="flex flex-col gap-4 rounded-lg border border-line bg-chrome p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 rounded-lg border-2 border-slate-500 bg-white/40 p-4 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between dark:border-[#222B3D] dark:bg-[#080B14]/55">
           <div className="min-w-0">
             <div id="goal-notif-switch-label" className="text-sm font-medium text-ink">
               {strings.notifications.toggleLabel}
@@ -1129,14 +1150,16 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
         {notificationPermission === 'unsupported' && (
           <p className="text-xs text-muted">{strings.notifications.unsupportedHelp}</p>
         )}
-
+        </div>
       </section>
 
       {/* Offline Cache Manager */}
       <section
         aria-labelledby="offline-cache-manager-title"
-        className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+        className="relative overflow-hidden space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
       >
+        <InteractiveDotGrid testId="profile-cache-dot-grid" />
+        <div className="relative z-10 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line pb-3">
           <div>
             <h2
@@ -1157,11 +1180,11 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
 
 
         {swStatus === 'unsupported' || swStatus === 'error' ? (
-          <div className="rounded-lg border border-line bg-chrome p-4 text-xs text-muted">
+          <div className="rounded-lg border-2 border-slate-500 bg-white/40 p-4 text-xs text-muted backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
             {strings.offlineManager.unavailable}
           </div>
         ) : cachedCourses.length === 0 ? (
-          <div className="rounded-lg border border-line bg-chrome p-4 text-xs text-muted">
+          <div className="rounded-lg border-2 border-slate-500 bg-white/40 p-4 text-xs text-muted backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
             {strings.offlineManager.empty}
           </div>
         ) : (
@@ -1170,7 +1193,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
               <li
                 key={item.key}
                 data-cached-course-key={item.key}
-                className="flex flex-col gap-3 rounded-lg border border-line bg-chrome p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 rounded-lg border-2 border-slate-500 bg-white/40 p-4 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between dark:border-[#222B3D] dark:bg-[#080B14]/55"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -1210,32 +1233,36 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
             ))}
           </ul>
         )}
+        </div>
       </section>
 
       {/* Policies, Privacy, Age Safeguards & Disclosures */}
-      <section className="space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+      <section className="relative overflow-hidden space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+        <InteractiveDotGrid testId="profile-policies-dot-grid" />
+        <div className="relative z-10 space-y-4">
         <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
           <Shield className="h-4 w-4 text-teal" aria-hidden="true" />
           <span>{strings.profile.policiesTitle}</span>
         </h2>
 
         <div className="grid gap-4 md:grid-cols-2 text-xs leading-relaxed text-muted">
-          <div className="rounded-lg border border-line bg-chrome p-4">
+          <div className="rounded-lg border-2 border-slate-500 bg-white/40 p-4 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
             <h3 className="font-semibold text-ink">{strings.profile.policyPrivacyTitle}</h3>
             <p className="mt-1">{strings.profile.policyPrivacyBody}</p>
           </div>
-          <div className="rounded-lg border border-line bg-chrome p-4">
+          <div className="rounded-lg border-2 border-slate-500 bg-white/40 p-4 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
             <h3 className="font-semibold text-ink">{strings.profile.policyNonCashTitle}</h3>
             <p className="mt-1">{strings.nonCashNotice}</p>
           </div>
-          <div className="rounded-lg border border-line bg-chrome p-4">
+          <div className="rounded-lg border-2 border-slate-500 bg-white/40 p-4 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
             <h3 className="font-semibold text-ink">{strings.profile.policyCertificatesTitle}</h3>
             <p className="mt-1">{strings.nonAccreditationNotice}</p>
           </div>
-          <div className="rounded-lg border border-line bg-chrome p-4">
+          <div className="rounded-lg border-2 border-slate-500 bg-white/40 p-4 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
             <h3 className="font-semibold text-ink">{strings.profile.policyEditorialTitle}</h3>
             <p className="mt-1">{strings.profile.policyEditorialBody}</p>
           </div>
+        </div>
         </div>
       </section>
     </div>

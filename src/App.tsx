@@ -57,6 +57,7 @@ import { LanguageToggle } from './components/LanguageToggle';
 import { LessonPlayer } from './components/LessonPlayer';
 import { MagneticCourseCard } from './components/MagneticCourseCard';
 import { MathematicsSection } from './components/MathematicsSection';
+import { InteractiveDotGrid } from './components/ui/InteractiveDotGrid';
 import { NeobrutalistSectionDivider } from './components/NeobrutalistSectionDivider';
 import { NodeUnlockOverlay } from './components/NodeUnlockOverlay';
 import { NotificationViewport } from './components/NotificationViewport';
@@ -484,7 +485,8 @@ export default function App() {
               ? ov.dailyStudyGoalMinutes
               : dailyStudyGoalMinutes;
 
-          setEnrollments(ov.enrollments);
+          const safeEnrollments = Array.isArray(ov.enrollments) ? ov.enrollments : [];
+          setEnrollments(safeEnrollments);
           setTotalXp(ov.totalXp);
           setXpToday(ov.xpToday);
           setStudyMinutesToday(minutesToday);
@@ -496,11 +498,11 @@ export default function App() {
           if (Array.isArray(ov.badges)) setBadges(ov.badges);
 
           const nextSnapshot: MilestoneSnapshot = {
-            completedCourseIds: ov.enrollments
+            completedCourseIds: safeEnrollments
               .filter((e) => e.journeyStatus === 'completed')
               .map((e) => e.courseId),
             currentStreak: Number(ov.streak?.currentStreak ?? 0),
-            badgeKeys: ov.badges.map((b) => b.badgeKey),
+            badgeKeys: Array.isArray(ov.badges) ? ov.badges.map((b) => b.badgeKey) : [],
             dailyGoalMet: minutesToday >= targetMinutes,
           };
 
@@ -538,6 +540,8 @@ export default function App() {
     },
     [dailyStudyGoalMinutes, locale]
   );
+  const loadProtectedDataRef = useRef(loadProtectedData);
+  loadProtectedDataRef.current = loadProtectedData;
 
   useEffect(() => {
     if (!celebrationEvent) return;
@@ -770,7 +774,7 @@ export default function App() {
         if (verifiedUser) {
           setDailyStudyGoalMinutes(verifiedUser.dailyStudyGoalMinutes);
           setGoalNotificationsEnabled(Boolean(verifiedUser.studyGoalNotificationsEnabled));
-          await loadProtectedData();
+          await loadProtectedDataRef.current();
         } else {
           clearClientSessionState();
           setEnrollments([]);
@@ -789,7 +793,7 @@ export default function App() {
       setAuthHydrated(true);
       setSessionLoaded(true);
     }
-  }, [loadProtectedData]);
+  }, []);
 
   // Never leave a session-dependent route spinning if /api/auth/me hangs.
   useEffect(() => {
@@ -827,11 +831,12 @@ export default function App() {
       setVerifyTokenFromUrl(verifyParam);
       setActiveTab('certificates');
     }
-    loadHealth();
-    loadCatalog();
-    loadSession();
-    loadLeaderboard();
-  }, [loadHealth, loadCatalog, loadSession, loadLeaderboard]);
+    void loadHealth();
+    void loadCatalog();
+    void loadSession();
+    void loadLeaderboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openCourse = useCallback(
     async (
@@ -1703,66 +1708,63 @@ export default function App() {
     );
   }
 
-  if (activeTab === 'login' || activeTab === 'register') {
-    return (
-      <SmoothScroll>
-        <div className="relative isolate min-h-screen overflow-x-clip text-ink">
-          {/* Economics WebGL Liquid Background (-z-10, decoupled behind UI shell) */}
-          <EconomicsLiquidBackground
-            active={true}
-            theme={theme}
-          />
-
-          {routeGatePending ? (
-            <main className="relative z-10 mx-auto flex min-h-screen max-w-6xl items-center justify-center p-4">
-              <RouteAccessPending
-                title={strings.auth.checkingSession}
-                hint={strings.auth.checkingSessionHint}
-              />
-            </main>
-          ) : (
-            <AuthPageView
-              mode={activeTab}
-              locale={locale}
-              theme={theme}
-              onToggleTheme={() => handleSelectManualTheme(getNextTheme(theme))}
-              onToggleLocale={handleLocaleSwitch}
-              sandboxEnabled={health.sandboxEnabled}
-              intendedDestination={intendedDestination}
-              onSwitchMode={(nextMode) => {
-                setActiveTab(nextMode);
-                syncBrowserPath(nextMode, { redirectTo: intendedDestination?.path ?? '/overview' });
-              }}
-              onBackToOverview={() => {
-                if (user) {
-                  navigateToTab('overview');
-                } else {
-                  navigateToTab('landing');
-                }
-              }}
-              onBackToLanding={() => navigateToTab('landing')}
-              onAuthenticated={handleUserAuthenticated}
-            />
-          )}
-
-          <NotificationViewport locale={locale} />
-        </div>
-      </SmoothScroll>
-    );
-  }
+  const isAuthPage = activeTab === 'login' || activeTab === 'register';
 
   return (
     <SmoothScroll>
-    <div className="relative isolate min-h-screen overflow-x-clip text-ink flex flex-col md:flex-row">
-      {/* Economics WebGL Liquid Background (-z-10, decoupled behind UI shell) */}
-      <EconomicsLiquidBackground
-        active={true}
-        theme={theme}
-      />
+      <div
+        className={`relative isolate min-h-screen overflow-x-clip text-ink ${
+          isAuthPage ? '' : 'flex flex-col md:flex-row'
+        }`}
+      >
+        {/* Economics WebGL Liquid Background (-z-10, decoupled behind UI shell) - Single persistent instance */}
+        <EconomicsLiquidBackground
+          key="econova-liquid-bg-persistent"
+          active={true}
+          theme={theme}
+        />
 
-      {/* Desktop Sidebar */}
-      <Sidebar
-        activeTab={activeTab}
+        {isAuthPage ? (
+          <>
+            {routeGatePending ? (
+              <main className="relative z-10 mx-auto flex min-h-screen max-w-6xl items-center justify-center p-4">
+                <RouteAccessPending
+                  title={strings.auth.checkingSession}
+                  hint={strings.auth.checkingSessionHint}
+                />
+              </main>
+            ) : (
+              <AuthPageView
+                mode={activeTab}
+                locale={locale}
+                theme={theme}
+                onToggleTheme={() => handleSelectManualTheme(getNextTheme(theme))}
+                onToggleLocale={handleLocaleSwitch}
+                sandboxEnabled={health.sandboxEnabled}
+                intendedDestination={intendedDestination}
+                onSwitchMode={(nextMode) => {
+                  setActiveTab(nextMode);
+                  syncBrowserPath(nextMode, { redirectTo: intendedDestination?.path ?? '/overview' });
+                }}
+                onBackToOverview={() => {
+                  if (user) {
+                    navigateToTab('overview');
+                  } else {
+                    navigateToTab('landing');
+                  }
+                }}
+                onBackToLanding={() => navigateToTab('landing')}
+                onAuthenticated={handleUserAuthenticated}
+              />
+            )}
+
+            <NotificationViewport locale={locale} />
+          </>
+        ) : (
+          <>
+            {/* Desktop Sidebar */}
+            <Sidebar
+              activeTab={activeTab}
         locale={locale}
         navItems={navItems}
         adminNav={adminNav}
@@ -1791,7 +1793,7 @@ export default function App() {
               type="button"
               onClick={() => setMobileMenuOpen((v) => !v)}
               aria-label="Toggle navigation menu"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 border-theme-border bg-theme-base text-ink shadow-brutal-sm md:hidden"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-ink shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60 md:hidden"
             >
               {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
@@ -1860,7 +1862,7 @@ export default function App() {
               title={theme === 'dark' ? strings.theme.switchToLight : strings.theme.switchToDark}
               aria-pressed={theme === 'light'}
               data-testid="theme-mode-toggle"
-              className="inline-flex h-9 w-9 2xl:h-auto 2xl:w-auto 2xl:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base 2xl:px-3 2xl:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm transition-colors hover:border-theme-accent whitespace-nowrap shrink-0"
+              className="inline-flex h-9 w-9 2xl:h-auto 2xl:w-auto 2xl:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 2xl:px-3 2xl:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md transition-colors hover:border-theme-accent whitespace-nowrap shrink-0 dark:border-[#222B3D] dark:bg-[#080B14]/60"
             >
               {theme === 'dark' ? (
                 <Sun className="h-3.5 w-3.5 text-warning shrink-0" aria-hidden="true" />
@@ -1887,7 +1889,7 @@ export default function App() {
                   onClick={() => navigateToTab('profile')}
                   aria-label={user.displayName}
                   data-testid="header-user-profile-btn"
-                  className="inline-flex h-9 w-9 md:h-auto md:w-auto md:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-theme-border bg-theme-base md:px-3 md:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm hover:border-theme-accent"
+                  className="inline-flex h-9 w-9 md:h-auto md:w-auto md:min-h-[38px] items-center justify-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 md:px-3 md:py-1.5 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md hover:border-theme-accent dark:border-[#222B3D] dark:bg-[#080B14]/60"
                 >
                   <User className="h-3.5 w-3.5 text-accent shrink-0" aria-hidden="true" />
                   <span className="hidden md:block max-w-[120px] truncate">{user.displayName}</span>
@@ -1897,7 +1899,7 @@ export default function App() {
                   onClick={handleLogout}
                   aria-label={strings.signOut}
                   data-testid="header-logout-btn"
-                  className="hidden sm:inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg border-2 border-theme-border bg-theme-base text-muted shadow-brutal-sm hover:text-ink"
+                  className="hidden sm:inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-muted shadow-brutal-sm backdrop-blur-md hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60"
                 >
                   <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
@@ -1927,10 +1929,10 @@ export default function App() {
                     navigateToTab(item.id);
                     setMobileMenuOpen(false);
                   }}
-                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold ${
+                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md ${
                     activeTab === item.id
-                      ? 'border-theme-accent bg-theme-base text-theme-accent shadow-brutal-sm'
-                      : 'border-theme-border bg-theme-base text-muted'
+                      ? 'border-theme-accent bg-accent/20 text-theme-accent shadow-brutal-sm'
+                      : 'border-slate-500 bg-white/55 text-muted dark:border-[#222B3D] dark:bg-[#080B14]/60'
                   }`}
                 >
                   {item.icon}
@@ -1946,10 +1948,10 @@ export default function App() {
                     navigateToAdminSection(item.section);
                     setMobileMenuOpen(false);
                   }}
-                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold ${
+                  className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md ${
                     activeTab === 'admin' && adminSection === item.section
-                      ? 'border-theme-accent bg-theme-base text-theme-accent shadow-brutal-sm'
-                      : 'border-theme-border bg-theme-base text-muted'
+                      ? 'border-theme-accent bg-accent/20 text-theme-accent shadow-brutal-sm'
+                      : 'border-slate-500 bg-white/55 text-muted dark:border-[#222B3D] dark:bg-[#080B14]/60'
                   }`}
                 >
                   {item.icon}
@@ -1962,7 +1964,7 @@ export default function App() {
                   setCompanionOpen(true);
                   setMobileMenuOpen(false);
                 }}
-                className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2 text-xs font-semibold text-ink"
+                className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-ink backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
               >
                 <MessageSquare className="h-4 w-4 text-teal" aria-hidden="true" />
                 <span>{locale === 'uz' ? 'Yordamchi' : 'Companion'}</span>
@@ -1972,10 +1974,10 @@ export default function App() {
                 onClick={() => void ambientAudio.togglePlay()}
                 aria-pressed={ambientAudio.isPlaying}
                 data-testid="mobile-drawer-audio-toggle"
-                className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold ${
+                className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md ${
                   ambientAudio.isPlaying
                     ? 'border-[#5DE1D2] bg-[#5DE1D2]/15 text-ink shadow-brutal-sm'
-                    : 'border-theme-border bg-theme-base text-ink'
+                    : 'border-slate-500 bg-white/55 text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
                 }`}
               >
                 {ambientAudio.isPlaying ? (
@@ -1998,10 +2000,10 @@ export default function App() {
                 onClick={() => focusTimer.toggleStartPause()}
                 aria-pressed={focusTimer.status === 'running'}
                 data-testid="mobile-drawer-timer-toggle"
-                className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold ${
+                className={`flex min-h-[44px] items-center gap-2 rounded-lg border-2 px-3 py-2 text-xs font-semibold backdrop-blur-md ${
                   focusTimer.status === 'running'
                     ? 'border-[#5DE1D2] bg-[#5DE1D2]/15 text-ink shadow-brutal-sm'
-                    : 'border-theme-border bg-theme-base text-ink'
+                    : 'border-slate-500 bg-white/55 text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
                 }`}
               >
                 <Timer
@@ -2025,7 +2027,7 @@ export default function App() {
                     handleLogout();
                     setMobileMenuOpen(false);
                   }}
-                  className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2 text-xs font-semibold text-muted"
+                  className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-muted backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
                 >
                   <LogOut className="h-4 w-4" aria-hidden="true" />
                   <span>{strings.signOut}</span>
@@ -2036,7 +2038,7 @@ export default function App() {
               <div
                 role="group"
                 aria-label="Mobile Language Edition Switcher"
-                className="inline-flex items-center rounded-lg border-2 border-theme-border bg-theme-base p-0.5 text-xs shadow-brutal-sm"
+                className="inline-flex items-center rounded-lg border-2 border-slate-500 bg-white/55 p-0.5 text-xs shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
               >
                 <button
                   type="button"
@@ -2198,7 +2200,7 @@ export default function App() {
               />
 
               {/* Featured Courses Preview */}
-              <section className="relative z-10 isolate mt-8 space-y-4">
+              <section className="relative z-10 mt-8 space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <h2 className="text-lg font-semibold text-ink">
                     {locale === 'uz' ? 'Nashr etilgan kurslar' : 'Published Curriculum'}
@@ -2382,7 +2384,7 @@ export default function App() {
                           : 'Search by course title, topic label, or specific lesson title...'
                       }
                       aria-label={strings.catalog.searchLabel}
-                      className="min-h-[42px] w-full rounded-lg border-2 border-theme-border bg-theme-base pl-10 pr-10 py-2 text-sm text-ink placeholder:text-muted transition-colors focus:border-theme-accent focus:outline-none"
+                      className="min-h-[42px] w-full rounded-lg border-2 border-slate-500 bg-white/50 pl-10 pr-10 py-2 text-sm text-ink placeholder:text-muted backdrop-blur-md transition-colors focus:border-theme-accent focus:outline-none dark:border-[#222B3D] dark:bg-[#080B14]/60"
                     />
                     {searchQuery.length > 0 && (
                       <button
@@ -2436,7 +2438,7 @@ export default function App() {
                                 setSearchDropdownOpen(false);
                               }}
                               data-testid={`recent-search-item-${idx}`}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-theme-border bg-theme-base px-2.5 py-1 text-xs font-medium text-ink hover:border-theme-accent hover:text-theme-accent"
+                              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 px-2.5 py-1 text-xs font-medium text-ink backdrop-blur-md hover:border-theme-accent hover:text-theme-accent dark:border-[#222B3D] dark:bg-[#080B14]/60"
                             >
                               <Search className="h-3 w-3 text-muted" aria-hidden="true" />
                               <span>{q}</span>
@@ -2448,7 +2450,7 @@ export default function App() {
                   </div>
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap gap-1 rounded-lg border border-line bg-chrome p-1 text-xs">
+                    <div className="flex flex-wrap gap-1 rounded-lg border-2 border-slate-500 bg-white/45 p-1 text-xs backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
                       {(['ALL', 'Economics', 'Mathematics', 'Business'] as const).map((sub) => (
                         <button
                           key={sub}
@@ -2463,7 +2465,7 @@ export default function App() {
                       ))}
                     </div>
 
-                    <div className="flex flex-wrap gap-1 rounded-lg border border-line bg-chrome p-1 text-xs">
+                    <div className="flex flex-wrap gap-1 rounded-lg border-2 border-slate-500 bg-white/45 p-1 text-xs backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
                       {(['ALL', 'Beginner', 'Intermediate', 'Advanced'] as const).map((lvl) => (
                         <button
                           key={lvl}
@@ -2485,7 +2487,7 @@ export default function App() {
                 <div
                   aria-busy="true"
                   aria-label={locale === 'uz' ? 'Kurslar yuklanmoqda...' : 'Loading courses...'}
-                  className="relative z-10 isolate mt-8 grid gap-4 md:grid-cols-2"
+                  className="relative z-10 mt-8 grid gap-4 md:grid-cols-2"
                 >
                   <BrutalCardSkeleton locale={locale} />
                   <BrutalCardSkeleton locale={locale} />
@@ -2547,7 +2549,7 @@ export default function App() {
               )}
 
               {filteredCourses.length === 0 ? (
-                <div className="relative z-10 isolate mt-8 rounded-xl border-2 border-slate-500 bg-white/25 p-8 text-center text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+                <div className="relative z-10 mt-8 rounded-xl border-2 border-slate-500 bg-white/25 p-8 text-center text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                   <p>{strings.catalog.noMatches}</p>
                   {hasActiveCatalogFilters && (
                     <button
@@ -2564,7 +2566,7 @@ export default function App() {
                   )}
                 </div>
               ) : (
-                <div className="relative z-10 isolate mt-8 grid gap-4 md:grid-cols-2">
+                <div className="relative z-10 mt-8 grid gap-4 md:grid-cols-2">
                   {filteredCourses.map((course, idx) => {
                     const ed = course.editions[locale];
                     const hasEn = Boolean(course.editions.en);
@@ -2640,10 +2642,10 @@ export default function App() {
                               aria-pressed={bookmarked}
                               title={bookmarked ? strings.bookmarks.removeLabel : strings.bookmarks.addLabel}
                               data-testid={`catalog-bookmark-btn-${course.id}`}
-                              className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
+                              className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 shadow-brutal-sm backdrop-blur-md transition-colors disabled:opacity-50 ${
                                 bookmarked
-                                  ? 'border-accent/60 bg-accent/15 text-accent hover:bg-accent/25'
-                                  : 'border-line bg-chrome text-muted hover:border-line-strong hover:text-ink'
+                                  ? 'border-accent bg-accent/20 text-accent hover:bg-accent/30'
+                                  : 'border-slate-500 bg-white/55 text-muted hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
                               }`}
                             >
                               <Bookmark
@@ -2660,7 +2662,7 @@ export default function App() {
                           {matchedLessons.length > 0 && (
                             <div
                               data-testid="course-matched-lesson-badge"
-                              className="mt-2.5 rounded-lg border border-theme-cyan/40 bg-theme-base px-3 py-2 text-xs"
+                              className="mt-2.5 rounded-lg border-2 border-theme-cyan/50 bg-white/50 px-3 py-2 text-xs backdrop-blur-md dark:border-theme-cyan/40 dark:bg-[#080B14]/60"
                             >
                               <span className="font-semibold text-theme-cyan">
                                 {locale === 'uz' ? 'Mos kelgan dars: ' : 'Matching Lesson: '}
@@ -2690,10 +2692,10 @@ export default function App() {
                                   ? strings.catalog.offlineNotCachedHint
                                   : undefined
                               }
-                              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${
+                              className={`inline-flex items-center gap-1.5 rounded-md border-2 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap backdrop-blur-md ${
                                 offlineStatus === 'cached_full'
-                                  ? 'border-success/40 bg-success/10 text-success'
-                                  : 'border-line bg-chrome text-muted'
+                                  ? 'border-success/50 bg-success/15 text-success'
+                                  : 'border-slate-500 bg-white/55 text-muted dark:border-[#222B3D] dark:bg-[#080B14]/60'
                               }`}
                             >
                               {offlineStatus === 'cached_full' ? (
@@ -2720,7 +2722,7 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+                        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t-2 border-theme-border pt-3">
                           {enr ? (
                             <span className="text-xs font-medium text-teal">
                               {strings.journey[enr.journeyStatus]}
@@ -2767,7 +2769,7 @@ export default function App() {
                         activeEnrollment.journeyStatus !== 'paused'
                       )
                     }
-                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-muted hover:text-ink"
+                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-1.5 text-xs text-muted backdrop-blur-md hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60"
                   >
                     {activeEnrollment.journeyStatus === 'paused' ? (
                       <>
@@ -2793,7 +2795,9 @@ export default function App() {
               ) : (
                 <ContentReveal className="relative z-10 space-y-6">
                   {/* Course Metadata & Completion Criteria */}
-                  <section className="rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+                  <section className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+                    <InteractiveDotGrid testId="course-detail-header-dot-grid" />
+                    <div className="relative z-10">
                     {(() => {
                       const detailBookmarked = user
                         ? isCourseBookmarked(user.bookmarkedCourseIds ?? [], courseDetail.course.id)
@@ -2824,10 +2828,10 @@ export default function App() {
                             aria-label={`${detailBookmarked ? strings.bookmarks.removeLabel : strings.bookmarks.addLabel}: ${courseDetail.edition.title}`}
                             aria-pressed={detailBookmarked}
                             data-testid="course-detail-bookmark-btn"
-                            className={`no-print inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                            className={`no-print inline-flex min-h-[38px] shrink-0 items-center gap-1.5 rounded-lg border-2 shadow-brutal-sm backdrop-blur-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                               detailBookmarked
-                                ? 'border-accent/60 bg-accent/15 text-accent hover:bg-accent/25'
-                                : 'border-line bg-chrome text-muted hover:border-line-strong hover:text-ink'
+                                ? 'border-accent bg-accent/20 text-accent hover:bg-accent/30'
+                                : 'border-slate-500 bg-white/55 text-muted hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
                             }`}
                           >
                             <Bookmark
@@ -2845,7 +2849,7 @@ export default function App() {
                     })()}
                     <p className="mt-1.5 text-sm text-muted">{courseDetail.edition.description}</p>
 
-                    <div className="mt-4 grid gap-4 border-t border-line pt-4 text-xs md:grid-cols-3">
+                    <div className="mt-4 grid gap-4 border-t-2 border-theme-border pt-3 text-xs md:grid-cols-3">
                       <div>
                         <div className="font-semibold text-ink">{strings.courseDetail.learningOutcomes}</div>
                         <ul className="mt-1 space-y-1 text-muted">
@@ -2866,6 +2870,7 @@ export default function App() {
                         <div className="font-semibold text-ink">{strings.courseDetail.certificateCriteria}</div>
                         <p className="mt-1 text-muted">{courseDetail.edition.completionRules}</p>
                       </div>
+                    </div>
                     </div>
                   </section>
 
@@ -2985,7 +2990,9 @@ export default function App() {
                   {/* Syllabus + Active Lesson/Assessment Split */}
                   <div className="grid gap-6 lg:grid-cols-12">
                     <aside data-print-hide="course-syllabus" className="no-print min-w-0 space-y-5 lg:col-span-4">
-                      <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-4 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+                      <div className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-4 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+                        <InteractiveDotGrid testId="course-detail-syllabus-dot-grid" />
+                        <div className="relative z-10">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h2 className="text-xs font-semibold text-muted">
                             {locale === 'uz' ? 'Kurs dasturi' : 'Course Syllabus'}
@@ -3000,7 +3007,7 @@ export default function App() {
                                   ? 'Kurs dasturini PDF formatida yuklab olish yoki chop etish'
                                   : 'Download or print the Course Syllabus as a PDF'
                               }
-                              className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-bold text-ink shadow-brutal-sm transition-all hover:border-theme-accent hover:text-theme-accent active:translate-x-[1px] active:translate-y-[1px]"
+                              className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-[11px] font-bold text-ink shadow-brutal-sm backdrop-blur-md transition-all hover:border-theme-accent hover:text-theme-accent active:translate-x-[1px] active:translate-y-[1px] dark:border-[#222B3D] dark:bg-[#080B14]/60"
                             >
                               <Printer className="h-3 w-3 text-theme-cyan" aria-hidden="true" />
                               <span>{locale === 'uz' ? 'PDF yuklab olish' : 'Download PDF'}</span>
@@ -3015,7 +3022,7 @@ export default function App() {
                                   ? 'Mahalliy (localStorage) va serverdagi tugallangan darslarni qo‘lda sinxronlash'
                                   : 'Reconcile completed lesson IDs between localStorage and server'
                               }
-                              className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-bold text-ink shadow-brutal-sm transition-all hover:border-theme-accent hover:text-theme-accent active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-60"
+                              className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-[11px] font-bold text-ink shadow-brutal-sm backdrop-blur-md transition-all hover:border-theme-accent hover:text-theme-accent active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-60 dark:border-[#222B3D] dark:bg-[#080B14]/60"
                             >
                               <RefreshCw
                                 className={`h-3 w-3 text-theme-cyan ${syncingSyllabus ? 'animate-spin' : ''}`}
@@ -3068,10 +3075,10 @@ export default function App() {
                                 key={les.id}
                                 type="button"
                                 onClick={() => setActiveLessonIndex(idx)}
-                                className={`flex w-full min-h-[44px] items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                                className={`flex w-full min-h-[44px] items-center justify-between gap-2 rounded-lg border-2 px-3 py-2 text-left text-xs backdrop-blur-md transition-colors ${
                                   isSelected
-                                    ? 'border-accent bg-elevated text-ink'
-                                    : 'border-line bg-chrome text-muted hover:text-ink'
+                                    ? 'border-accent bg-accent/20 text-ink'
+                                    : 'border-slate-500 bg-white/55 text-muted hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
                                 }`}
                               >
                                 <span className="flex items-center gap-2 min-w-0">
@@ -3087,7 +3094,7 @@ export default function App() {
                                         ? 'Mahalliy saqlangan — Sync Now tugmasini bosing'
                                         : 'Saved locally — click Sync Now to upload'
                                     }
-                                    className="shrink-0 rounded border border-theme-amber/60 bg-theme-base px-1.5 py-0.5 font-mono text-[10px] font-semibold text-theme-amber"
+                                    className="shrink-0 rounded border-2 border-theme-amber/60 bg-white/55 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-theme-amber backdrop-blur-md dark:bg-[#080B14]/60"
                                   >
                                     {locale === 'uz' ? 'Mahalliy' : 'Local'}
                                   </span>
@@ -3100,10 +3107,10 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => setActiveLessonIndex('assessment')}
-                              className={`flex w-full min-h-[44px] items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                              className={`flex w-full min-h-[44px] items-center justify-between gap-2 rounded-lg border-2 px-3 py-2 text-left text-xs backdrop-blur-md transition-colors ${
                                 activeLessonIndex === 'assessment'
-                                  ? 'border-teal bg-elevated text-ink'
-                                  : 'border-line bg-chrome text-muted hover:text-ink'
+                                  ? 'border-teal bg-teal/20 text-ink'
+                                  : 'border-slate-500 bg-white/55 text-muted hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
                               }`}
                             >
                               <span className="flex items-center gap-2 min-w-0">
@@ -3117,6 +3124,7 @@ export default function App() {
                               )}
                             </button>
                           )}
+                        </div>
                         </div>
                       </div>
 
@@ -3506,7 +3514,7 @@ export default function App() {
           >
             <div className="flex items-start justify-between gap-4 border-b-2 border-theme-border pb-4">
               <div>
-                <div className="inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-theme-cyan">
+                <div className="inline-flex items-center gap-1.5 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-theme-cyan backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
                   <Keyboard className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>Shift + ?</span>
                 </div>
@@ -3524,7 +3532,7 @@ export default function App() {
                 onClick={() => setCheatSheetOpen(false)}
                 data-testid="close-shortcuts-modal-btn"
                 aria-label={locale === 'uz' ? 'Yopish' : 'Close'}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-theme-border bg-theme-base text-muted shadow-brutal-sm hover:border-theme-accent hover:text-ink"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-muted shadow-brutal-sm backdrop-blur-md hover:border-theme-accent hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -3544,13 +3552,13 @@ export default function App() {
                         <div
                           key={item.id}
                           data-testid={`shortcut-cheat-item-${item.keys.join('-')}`}
-                          className="flex items-center justify-between gap-3 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2.5"
+                          className="flex items-center justify-between gap-3 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2.5 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
                         >
                           <div className="min-w-0">
                             <div className="text-xs font-bold text-ink truncate">{item.title}</div>
                             <div className="text-[11px] text-muted truncate">{item.description}</div>
                           </div>
-                          <kbd className="inline-flex min-w-[28px] shrink-0 items-center justify-center rounded-md border-2 border-theme-border bg-theme-panel px-2 py-1 font-mono text-xs font-extrabold text-theme-accent shadow-brutal-sm">
+                          <kbd className="inline-flex min-w-[28px] shrink-0 items-center justify-center rounded-md border-2 border-slate-500 bg-white/60 px-2 py-1 font-mono text-xs font-extrabold text-theme-accent shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/70">
                             {keyLabel}
                           </kbd>
                         </div>
@@ -3572,13 +3580,13 @@ export default function App() {
                         <div
                           key={item.id}
                           data-testid={`shortcut-cheat-item-${item.keys.join('-')}`}
-                          className="flex items-center justify-between gap-3 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2.5"
+                          className="flex items-center justify-between gap-3 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2.5 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
                         >
                           <div className="min-w-0">
                             <div className="text-xs font-bold text-ink truncate">{item.title}</div>
                             <div className="text-[11px] text-muted truncate">{item.description}</div>
                           </div>
-                          <kbd className="inline-flex shrink-0 items-center justify-center rounded-md border-2 border-theme-border bg-theme-panel px-2 py-1 font-mono text-xs font-extrabold text-theme-cyan shadow-brutal-sm">
+                          <kbd className="inline-flex shrink-0 items-center justify-center rounded-md border-2 border-slate-500 bg-white/60 px-2 py-1 font-mono text-xs font-extrabold text-theme-cyan shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/70">
                             {keyLabel}
                           </kbd>
                         </div>
@@ -3590,6 +3598,8 @@ export default function App() {
           </div>
         </div>
       )}
+    </>
+    )}
     </div>
     </SmoothScroll>
   );

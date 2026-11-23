@@ -48,7 +48,7 @@ export const NeobrutalistSectionDivider: React.FC<NeobrutalistSectionDividerProp
       {/* Left architectural end-cap & thick dotted grid line */}
       <span
         aria-hidden="true"
-        className="h-2.5 w-2.5 shrink-0 border-2 border-theme-border bg-theme-panel shadow-brutal-sm"
+        className="h-2.5 w-2.5 shrink-0 border-2 border-slate-500 bg-white/55 backdrop-blur-md shadow-brutal-sm dark:border-[#222B3D] dark:bg-[#080B14]/60"
       />
       <div
         aria-hidden="true"
@@ -58,7 +58,7 @@ export const NeobrutalistSectionDivider: React.FC<NeobrutalistSectionDividerProp
 
       {/* Centered Neobrutalist subject label badge */}
       <div
-        className={`inline-flex shrink-0 items-center gap-2 rounded-md border-2 border-slate-600 bg-theme-panel px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-ink shadow-brutal-sm dark:border-[#33415C] ${meta.accentBorderHoverClass}`}
+        className={`inline-flex shrink-0 items-center gap-2 rounded-md border-2 border-slate-500 bg-white/55 px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-ink shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60 ${meta.accentBorderHoverClass}`}
       >
         <span
           aria-hidden="true"
@@ -78,7 +78,7 @@ export const NeobrutalistSectionDivider: React.FC<NeobrutalistSectionDividerProp
       />
       <span
         aria-hidden="true"
-        className="h-2.5 w-2.5 shrink-0 border-2 border-theme-border bg-theme-panel shadow-brutal-sm"
+        className="h-2.5 w-2.5 shrink-0 border-2 border-slate-500 bg-white/55 backdrop-blur-md shadow-brutal-sm dark:border-[#222B3D] dark:bg-[#080B14]/60"
       />
     </div>
   );

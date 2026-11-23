@@ -21,6 +21,7 @@ import {
   type ViewportDimensions,
 } from '../lib/business-bento';
 import { BusinessBentoCard } from './BusinessBentoCard';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 import { MagneticCourseCard } from './MagneticCourseCard';
 import { isCourseBookmarked } from '../lib/course-bookmarks';
 import { formatCourseMetaSummary, t } from '../lib/i18n';
@@ -273,13 +274,14 @@ export const BusinessSection: React.FC<BusinessSectionProps> = ({
       ref={sectionRef}
       aria-labelledby="business-section-heading"
       data-testid="business-section"
-      className="relative z-10 isolate overflow-hidden min-h-[760px] lg:min-h-[980px] rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+      className="relative z-10 overflow-hidden min-h-[760px] lg:min-h-[980px] rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
-      <div className="space-y-6">
+      <InteractiveDotGrid testId="business-section-dot-grid" />
+      <div className="relative z-10 space-y-6">
         {/* Section Header */}
         <div className="relative z-20 flex flex-col gap-3 border-b-2 border-theme-border pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-theme-accent shadow-brutal-sm">
+            <div className="inline-flex items-center gap-2 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-theme-accent shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
               <Layers className="h-3.5 w-3.5 text-theme-cyan" aria-hidden="true" />
               <span>
                 {isUz
@@ -308,11 +310,11 @@ export const BusinessSection: React.FC<BusinessSectionProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <span className="inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-semibold text-theme-accent shadow-brutal-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-[11px] font-semibold text-theme-accent shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
               <span className="h-2 w-2 rounded-full bg-theme-accent" aria-hidden="true" />
               <span>{strings.business.badgeBentoGrid}</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-semibold text-theme-emerald shadow-brutal-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-[11px] font-semibold text-theme-emerald shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
               <span className="h-2 w-2 rounded-full bg-theme-emerald" aria-hidden="true" />
               <span>{strings.business.badgePinStack}</span>
             </span>
@@ -323,7 +325,7 @@ export const BusinessSection: React.FC<BusinessSectionProps> = ({
         <div
           ref={bentoTrackRef}
           data-testid="business-bento-track"
-          className="relative z-10 isolate overflow-hidden -mx-2 px-2 pt-2.5 pb-8 lg:min-h-[840px]"
+          className="relative z-10 overflow-hidden -mx-2 px-2 pt-2.5 pb-8 lg:min-h-[840px]"
         >
           <div
             ref={bentoStageRef}
@@ -441,10 +443,10 @@ export const BusinessSection: React.FC<BusinessSectionProps> = ({
                       )}
 
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border px-2 py-0.5 text-[11px] font-semibold ${
+                        className={`inline-flex items-center gap-1.5 rounded-md border-2 px-2 py-0.5 text-[11px] font-semibold backdrop-blur-md ${
                           offlineStatus === 'cached_full'
-                            ? 'bg-theme-base text-theme-emerald'
-                            : 'bg-theme-base text-muted'
+                            ? 'border-theme-emerald/60 bg-white/55 text-theme-emerald dark:border-theme-emerald/50 dark:bg-[#080B14]/60'
+                            : 'border-slate-500 bg-white/55 text-muted dark:border-[#222B3D] dark:bg-[#080B14]/60'
                         }`}
                       >
                         {offlineStatus === 'cached_full' ? (

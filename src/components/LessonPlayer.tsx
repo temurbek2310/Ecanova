@@ -32,6 +32,7 @@ import { apiFetch } from '../lib/auth-client';
 import { notificationCopy } from '../lib/notification-copy';
 import { describeError, notify } from '../lib/notifications';
 import { FocusTimerPanel } from './FocusTimerPanel';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 import { InteractiveTerminologyText } from './InteractiveTerminologyText';
 import { QuickNotesDrawer } from './QuickNotesDrawer';
 import { InteractiveSimulation } from './simulations/InteractiveSimulation';
@@ -373,7 +374,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   };
 
   return (
-    <article className="space-y-6 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+    <article className="relative overflow-hidden space-y-6 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+      <InteractiveDotGrid testId="lesson-player-dot-grid" />
+      <div className="relative z-10 space-y-6">
       <header className="border-b border-line pb-4">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
           <span>
@@ -556,7 +559,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                 value={playbackRate}
                 onChange={(e) => handlePlaybackRateChange(Number(e.target.value))}
                 data-testid="lesson-read-aloud-rate"
-                className="min-h-[36px] rounded-md border border-line bg-chrome px-2 text-xs text-ink"
+                className="min-h-[36px] rounded-md border-2 border-slate-500 bg-white/50 px-2 text-xs text-ink backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
               >
                 <option value={0.75}>0.75x</option>
                 <option value={1}>1.0x</option>
@@ -571,10 +574,10 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
               type="button"
               aria-pressed={showCaptions}
               onClick={() => setShowCaptions((v) => !v)}
-              className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium ${
+              className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-colors ${
                 showCaptions
-                  ? 'border-teal/60 bg-chrome text-teal'
-                  : 'border-line bg-chrome text-muted'
+                  ? 'border-teal bg-teal/15 text-teal'
+                  : 'border-slate-500 bg-white/55 text-muted hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
               }`}
             >
               <Captions className="h-3.5 w-3.5" aria-hidden="true" />
@@ -584,10 +587,10 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
               type="button"
               aria-expanded={showTranscript}
               onClick={() => setShowTranscript((v) => !v)}
-              className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium ${
+              className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-colors ${
                 showTranscript
-                  ? 'border-accent/60 bg-chrome text-ink'
-                  : 'border-line bg-chrome text-muted'
+                  ? 'border-accent bg-accent/20 text-ink'
+                  : 'border-slate-500 bg-white/55 text-muted hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/60'
               }`}
             >
               <FileText className="h-3.5 w-3.5" aria-hidden="true" />
@@ -603,7 +606,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
             aria-live="polite"
             aria-label={locale === 'uz' ? 'Ovozli o‘qish boshqaruvi' : 'Read Aloud Active Controls'}
             data-testid="lesson-read-aloud-bar"
-            className="no-print mt-3 rounded-lg border-2 border-theme-accent bg-theme-base p-3.5 shadow-brutal-sm"
+            className="no-print mt-3 rounded-lg border-2 border-theme-accent bg-white/55 p-3.5 shadow-brutal-sm backdrop-blur-md dark:bg-[#080B14]/60"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -836,7 +839,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       {/* Action Bar */}
       <div
         data-print-hide="lesson-controls"
-        className="no-print flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"
+        className="no-print flex flex-wrap items-center justify-between gap-3 border-t-2 border-theme-border pt-3"
       >
         <button
           type="button"
@@ -844,7 +847,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
           onClick={handleComplete}
           className={`inline-flex min-h-[44px] items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors ${
             isCompleted
-              ? 'border border-success/40 bg-chrome text-success'
+              ? 'border-2 border-success/50 bg-white/55 text-success backdrop-blur-md dark:border-success/40 dark:bg-[#080B14]/60'
               : 'bg-accent text-accent-ink hover:bg-accent-hover'
           }`}
         >
@@ -891,6 +894,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
           )}
         </div>
       </div>
+      </div>
 
       {/* Quick Notes Slide-Out Drawer */}
       <QuickNotesDrawer
@@ -917,7 +921,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
             data-testid="request-review-modal"
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs"
           >
-            <div className="w-full max-w-md rounded-xl border-2 border-theme-border bg-theme-panel p-5 shadow-brutal">
+            <div className="w-full max-w-md rounded-xl border-2 border-slate-500 bg-white/30 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30">
               <h3 id="request-review-modal-title" className="text-base font-bold text-ink">
                 {locale === 'uz'
                   ? 'Dars qismi bo‘yicha muharrir ko‘rib chiqishini so‘rash'
@@ -1010,7 +1014,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
             aria-labelledby="report-modal-title"
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
           >
-            <div className="w-full max-w-md rounded-xl border border-line bg-surface p-5">
+            <div className="w-full max-w-md rounded-xl border-2 border-slate-500 bg-white/30 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30">
               <h3 id="report-modal-title" className="text-base font-semibold text-ink">
                 {locale === 'uz'
                   ? 'Dars bo‘yicha xabar yuborish'
@@ -1025,7 +1029,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                     id="rep-cat"
                     value={reportCategory}
                     onChange={(e) => setReportCategory(e.target.value as typeof reportCategory)}
-                    className="mt-1 w-full rounded-lg border border-line bg-chrome px-3 py-2 text-sm text-ink"
+                    className="mt-1 w-full rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/50 dark:bg-[#080B14]/60 px-3 py-2 text-sm text-ink"
                   >
                     <option value="accuracy">
                       {locale === 'uz'
@@ -1070,7 +1074,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                         ? 'Tahririyat taqrizchilarimiz tekshirishi uchun muammoni aniq tasvirlab bering...'
                         : 'Describe the issue clearly so our editorial reviewers can inspect it...'
                     }
-                    className="mt-1 w-full rounded-lg border border-line bg-chrome px-3 py-2 text-sm text-ink"
+                    className="mt-1 w-full rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/50 dark:bg-[#080B14]/60 px-3 py-2 text-sm text-ink"
                   />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">

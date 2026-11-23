@@ -13,6 +13,7 @@ import {
   parseDailyGoalMinutes,
 } from '../lib/study-goal';
 import { FloatingWatermark } from './FloatingWatermark';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 
 interface DailyStudyGoalCardProps {
   locale: LocaleCode;
@@ -83,6 +84,7 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
       className="relative flex flex-col justify-between overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl sm:p-6 dark:border-[#222B3D] dark:bg-[#101522]/25"
       data-testid="daily-study-goal-card"
     >
+      <InteractiveDotGrid testId="daily-goal-dot-grid" />
       <FloatingWatermark
         theme="analytics"
         seedIndex={0}
@@ -201,7 +203,7 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
       </div>
 
       {/* Goal Controls */}
-      <div className="relative z-10 mt-5 space-y-3 border-t border-line pt-4">
+      <div className="relative z-10 mt-5 space-y-3 border-t-2 border-theme-border pt-3">
         <div>
           <div className="mb-2 text-[11px] font-medium text-muted">
             {strings.dailyGoal.presetsLabel}
@@ -215,10 +217,10 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
                   type="button"
                   disabled={saving}
                   onClick={() => void commitGoal(preset)}
-                  className={`min-h-[34px] rounded-lg border px-2.5 py-1 font-mono text-xs font-medium tabular-nums transition-colors ${
+                  className={`min-h-[34px] rounded-lg border-2 px-2.5 py-1 font-mono text-xs font-medium tabular-nums backdrop-blur-md transition-colors ${
                     active
-                      ? 'border-accent bg-elevated text-accent'
-                      : 'border-line bg-chrome text-muted hover:border-line-strong hover:text-ink'
+                      ? 'border-accent bg-accent/20 text-accent'
+                      : 'border-slate-500 bg-white/45 text-muted hover:border-line-strong hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/55'
                   }`}
                 >
                   {preset} {strings.dailyGoal.minUnit}
@@ -246,7 +248,7 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
               onChange={(e) => {
                 setInputValue(e.target.value);
               }}
-              className="mt-1 h-[38px] w-full rounded-lg border border-line bg-chrome px-3 font-mono text-xs tabular-nums text-ink focus:border-accent focus:outline-none"
+              className="mt-1 h-[38px] w-full rounded-lg border-2 border-slate-500 bg-white/50 px-3 font-mono text-xs tabular-nums text-ink backdrop-blur-md focus:border-accent focus:outline-none dark:border-[#222B3D] dark:bg-[#080B14]/60"
             />
           </div>
           <button
@@ -260,7 +262,7 @@ export const DailyStudyGoalCard: React.FC<DailyStudyGoalCardProps> = ({
 
 
         {!isAuthenticated && (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-chrome px-3 py-2 text-[11px]">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border-2 border-slate-500 bg-white/45 px-3 py-2 text-[11px] backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55">
             <span className="text-muted">{strings.dailyGoal.guestHint}</span>
             <button
               type="button"

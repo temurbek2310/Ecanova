@@ -18,6 +18,7 @@ import { notificationCopy } from '../lib/notification-copy';
 import { describeError, notify } from '../lib/notifications';
 import { useToastSlot } from '../context/NotificationContext';
 import { recordQuizAttemptWeaknesses } from '../lib/study-features';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 
 export type SlideDirection = 'forward' | 'backward';
 
@@ -486,7 +487,9 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
   };
 
   return (
-    <section className="space-y-6 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+    <section className="relative overflow-hidden space-y-6 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+      <InteractiveDotGrid testId="assessment-view-dot-grid" />
+      <div className="relative z-10 space-y-6">
       <header className="space-y-4 border-b border-line pb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -517,8 +520,8 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
               timerUrgency === 'expired' || timerUrgency === 'critical'
                 ? 'border-danger bg-danger-surface/40 text-danger-text animate-pulse'
                 : timerUrgency === 'warning'
-                ? 'border-warning bg-chrome text-warning'
-                : 'border-theme-border bg-chrome text-theme-cyan'
+                ? 'border-warning bg-white/55 backdrop-blur-md text-warning dark:bg-[#080B14]/60'
+                : 'border-theme-border bg-white/55 backdrop-blur-md text-theme-cyan dark:bg-[#080B14]/60'
             }`}
           >
             <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -538,7 +541,7 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
           data-testid="assessment-progress-container"
           data-progress-status={progress.status}
           data-progress-percent={progress.displayPercent}
-          className="rounded-xl border-2 border-theme-border bg-chrome p-3.5 shadow-brutal-sm"
+          className="rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/35 dark:bg-[#101522]/35 p-3.5 shadow-brutal-sm backdrop-blur-md"
         >
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2 font-medium text-ink">
@@ -694,10 +697,10 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
                     initial={slideState.initial}
                     animate={slideState.animate}
                     exit={slideState.exit}
-                    className={`rounded-lg border-2 bg-chrome p-4 transition-colors ${
+                    className={`rounded-xl border-2 bg-white/35 dark:bg-[#101522]/35 p-4 backdrop-blur-md transition-colors ${
                       isFocusedQuestion
                         ? 'border-theme-accent shadow-brutal-sm'
-                        : 'border-line'
+                        : 'border-slate-500 dark:border-[#222B3D]'
                     }`}
                   >
                     <legend className="px-1 text-sm font-medium text-ink">
@@ -718,14 +721,14 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
                             key={optIdx}
                             layout
                             whileTap={{ scale: 0.992 }}
-                            className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border px-3.5 py-2.5 text-sm transition-colors ${
+                            className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border-2 px-3.5 py-2.5 text-sm backdrop-blur-md transition-colors ${
                               isCorrectOption
-                                ? 'border-success/70 bg-success/10 text-ink'
+                                ? 'border-success/70 bg-success/15 text-ink'
                                 : isWrongSelected
                                 ? 'border-danger/70 bg-danger-surface/50 text-danger-text'
                                 : selected
-                                ? 'border-accent bg-elevated text-ink'
-                                : 'border-line bg-surface text-muted hover:border-line-strong hover:text-ink'
+                                ? 'border-accent bg-accent/20 text-ink'
+                                : 'border-slate-500 bg-white/45 text-muted hover:border-line-strong hover:text-ink dark:border-[#222B3D] dark:bg-[#080B14]/55'
                             }`}
                           >
                             <input
@@ -748,7 +751,7 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-                        className="mt-3 flex items-start gap-2 rounded-md border border-line bg-surface p-3 text-xs"
+                        className="mt-3 flex items-start gap-2 rounded-md border-2 border-slate-500 bg-white/55 p-3 text-xs backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
                       >
                         {fb.isCorrect ? (
                           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
@@ -816,6 +819,7 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
           </div>
         </form>
       </LayoutGroup>
+      </div>
     </section>
   );
 };

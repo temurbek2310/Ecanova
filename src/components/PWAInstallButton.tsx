@@ -46,7 +46,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ label = 'Ins
             aria-labelledby="ios-install-title"
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
           >
-            <div className="w-full max-w-sm rounded-xl border border-line bg-surface p-6 text-ink">
+            <div className="w-full max-w-sm rounded-xl border-2 border-slate-500 bg-white/30 p-6 text-ink shadow-[8px_8px_0px_#000000] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30">
               <div className="flex items-start justify-between gap-4">
                 <h3 id="ios-install-title" className="text-base font-semibold">
                   Install ECONOVA on iOS

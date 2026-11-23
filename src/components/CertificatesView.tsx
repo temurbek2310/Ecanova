@@ -24,6 +24,7 @@ import { apiFetch } from '../lib/auth-client';
 import { notificationCopy } from '../lib/notification-copy';
 import { describeError, notify } from '../lib/notifications';
 import { GeometricNova } from './GeometricNova';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 import { BrutalCardSkeleton, ContentReveal, SkeletonBlock, SkeletonLine } from './ui/BrutalSkeleton';
 
 interface CertificatesViewProps {
@@ -228,7 +229,9 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
 
   return (
     <div className="space-y-8">
-      <section data-print-hide="verify-lookup" data-print-hide-when-modal="true" className="no-print rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+      <section data-print-hide="verify-lookup" data-print-hide-when-modal="true" className="no-print relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+        <InteractiveDotGrid testId="certificates-verify-dot-grid" />
+        <div className="relative z-10">
         <div className="border-b border-line pb-4">
           <h1 className="text-xl font-semibold text-ink sm:text-2xl">
             {locale === 'uz' ? 'Kurs sertifikatlari va tekshiruv' : 'Course Certificates & Public Verification'}
@@ -256,7 +259,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
               value={verifyInput}
               onChange={(e) => setVerifyInput(e.target.value)}
               placeholder="e.g. ECONOVA-A1B2C3D4E5F6"
-              className="min-h-[44px] flex-1 rounded-lg border border-line bg-chrome px-3.5 py-2 font-mono text-sm text-ink placeholder:text-muted/60"
+              className="min-h-[44px] flex-1 rounded-lg border-2 border-slate-500 bg-white/50 px-3.5 py-2 font-mono text-sm text-ink placeholder:text-muted/60 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
             />
             <button
               type="submit"
@@ -328,6 +331,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
             </div>
           )}
         </form>
+        </div>
       </section>
 
       {/* 50th Lesson Crystalline Shards Celebration Portal */}
@@ -407,7 +411,9 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
 
 
         {!isAuthenticated ? (
-          <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-5 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+          <div className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+            <InteractiveDotGrid testId="certificates-guest-dot-grid" />
+            <div className="relative z-10">
             <p>
               {locale === 'uz'
                 ? 'Yakunlagan kurslaringiz sertifikatlarini ko‘rish va ulashishni boshqarish uchun hisobingizga kiring.'
@@ -420,9 +426,12 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
             >
               {strings.signIn}
             </button>
+            </div>
           </div>
         ) : certificates.length === 0 ? (
-          <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-center text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+          <div className="relative overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-center text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
+            <InteractiveDotGrid testId="certificates-empty-dot-grid" />
+            <div className="relative z-10">
             <Award className="mx-auto h-8 w-8 text-muted/60" aria-hidden="true" />
             <p className="mt-2 font-medium text-ink">
               {locale === 'uz' ? 'Hali sertifikatlar berilmagan' : 'No certificates issued yet'}
@@ -432,6 +441,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                 ? 'Har bir kursning majburiy darslarini tugating va yakuniy testdan 70%+ oling.'
                 : 'Complete all required lessons and pass the course assessment (70%+) in any course to earn its dedicated certificate.'}
             </p>
+            </div>
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
@@ -439,8 +449,10 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
               <div
                 key={cert.id}
                 data-print-card="certificate"
-                className="flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+                className="relative overflow-hidden flex flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
               >
+                <InteractiveDotGrid />
+                <div className="relative z-10 flex flex-1 flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between gap-2 text-xs text-muted">
                     <span>{cert.subject} · {cert.level} · {cert.locale.toUpperCase()} v{cert.editionVersion}</span>
@@ -563,6 +575,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                   </div>
 
                 </div>
+                </div>
               </div>
             ))}
           </div>
@@ -573,7 +586,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
       {previewCert && (
         <div role="dialog" aria-modal="true" aria-label={strings.certificates.modalTitle} className="print-certificate-modal fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-2xl space-y-4">
-            <div className="print-certificate rounded-2xl border border-line bg-chrome p-8 text-ink">
+            <div className="print-certificate rounded-2xl border-2 border-slate-500 bg-white/30 p-8 text-ink shadow-[8px_8px_0px_#000000] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30">
               <div className="flex items-start justify-between gap-4 border-b border-line pb-4">
                 <div>
                   <div className="font-display text-lg font-bold tracking-tight text-teal">ECONOVA</div>
@@ -632,7 +645,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setPreviewCert(null)}
-                className="min-h-[40px] rounded-lg border border-line bg-surface px-4 py-2 text-xs font-medium text-ink"
+                className="min-h-[40px] rounded-lg border-2 border-slate-500 bg-white/40 px-4 py-2 text-xs font-medium text-ink hover:bg-white/60 dark:border-[#222B3D] dark:bg-[#080B14]/50 dark:hover:bg-[#080B14]/80"
               >
                 {strings.certificates.closeButton}
               </button>
@@ -644,14 +657,14 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
       {/* Share Consent Preview Modal (DOIT_v2.md §11.5) */}
       {sharePreviewCert && (
         <div role="dialog" aria-modal="true" aria-labelledby="share-preview-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-line bg-surface p-6">
+          <div className="w-full max-w-md rounded-xl border-2 border-slate-500 bg-white/30 p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30">
             <h3 id="share-preview-title" className="text-base font-semibold text-ink">
               {strings.certificates.consentModalTitle}
             </h3>
             <p className="mt-1.5 text-xs leading-relaxed text-muted">
               {strings.certificates.consentModalIntro}
             </p>
-            <ul className="mt-4 space-y-1.5 rounded-lg border border-line bg-chrome p-3.5 text-xs text-ink">
+            <ul className="mt-4 space-y-1.5 rounded-lg border-2 border-slate-500 bg-white/40 p-3.5 text-xs text-ink backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/50">
               <li><CheckCircle2 className="mr-1.5 inline h-3.5 w-3.5 text-success" /> {strings.certificates.consentFieldName}: {sharePreviewCert.recipientDisplayName}</li>
               <li><CheckCircle2 className="mr-1.5 inline h-3.5 w-3.5 text-success" /> {strings.certificates.consentFieldCourse}: {sharePreviewCert.courseTitle} ({sharePreviewCert.locale.toUpperCase()} v{sharePreviewCert.editionVersion})</li>
               <li><CheckCircle2 className="mr-1.5 inline h-3.5 w-3.5 text-success" /> {strings.certificates.consentFieldDate}: {sharePreviewCert.issuedAt.slice(0, 10)} · {strings.certificates.statusValid}</li>
@@ -661,7 +674,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSharePreviewCert(null)}
-                className="min-h-[40px] rounded-lg border border-line px-4 py-2 text-xs text-muted hover:text-ink"
+                className="min-h-[40px] rounded-lg border-2 border-slate-500 bg-white/40 px-4 py-2 text-xs font-semibold text-ink hover:bg-white/60 dark:border-[#222B3D] dark:bg-[#080B14]/50 dark:hover:bg-[#080B14]/80"
               >
                 {strings.certificates.cancelButton}
               </button>
@@ -686,7 +699,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
           data-testid="cert-verification-popup"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
         >
-          <div className="w-full max-w-md rounded-xl border border-line bg-surface p-6 text-ink">
+          <div className="w-full max-w-md rounded-xl border-2 border-slate-500 bg-white/30 p-6 text-ink shadow-[8px_8px_0px_#000000] backdrop-blur-3xl dark:border-[#222B3D] dark:bg-[#101522]/30">
             <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
               <div>
                 <h3 id="cert-server-verify-title" className="text-base font-semibold text-ink">
@@ -716,11 +729,11 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                 }
                 className="mt-4 space-y-4"
               >
-                <div className="flex items-center gap-2 rounded-lg border border-line bg-chrome px-3.5 py-3">
+                <div className="flex items-center gap-2 rounded-lg border-2 border-slate-500 bg-white/40 px-3.5 py-3 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/50">
                   <SkeletonBlock width="16px" height="16px" className="rounded-full shrink-0" />
                   <SkeletonLine width="160px" height="16px" />
                 </div>
-                <div className="space-y-3 rounded-lg border border-line bg-chrome p-3.5">
+                <div className="space-y-3 rounded-lg border-2 border-slate-500 bg-white/40 p-3.5 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/50">
                   <div className="flex items-center justify-between">
                     <SkeletonLine width="100px" height="12px" />
                     <SkeletonLine width="140px" height="12px" />
@@ -765,7 +778,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({
                     locale
                   );
                   return (
-                    <dl className="space-y-2.5 rounded-lg border border-line bg-chrome p-3.5 text-xs">
+                    <dl className="space-y-2.5 rounded-lg border-2 border-slate-500 bg-white/40 p-3.5 text-xs backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/50">
                       <div className="flex items-start justify-between gap-3">
                         <dt className="flex items-center gap-1.5 text-muted">
                           <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

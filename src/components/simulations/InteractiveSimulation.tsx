@@ -42,7 +42,7 @@ export const InteractiveSimulation: React.FC<InteractiveSimulationProps> = ({ ty
     return (
       <section
         aria-label={locale === 'uz' ? 'Interaktiv talab va taklif modeli' : 'Interactive Supply and Demand Model'}
-        className="rounded-xl border border-line bg-chrome p-5"
+        className="rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55"
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
           <div>
@@ -195,7 +195,7 @@ export const InteractiveSimulation: React.FC<InteractiveSimulationProps> = ({ ty
               </div>
             </div>
 
-            <div className="rounded-lg border border-line bg-surface p-3 text-xs">
+            <div className="rounded-lg border-2 border-slate-500 bg-white/50 p-3 text-xs backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <span className="text-muted">{locale === 'uz' ? 'Muvozanat P*' : 'Equilibrium P*'}</span>
@@ -249,7 +249,7 @@ export const InteractiveSimulation: React.FC<InteractiveSimulationProps> = ({ ty
     return (
       <section
         aria-label={locale === 'uz' ? 'Interaktiv urinma va hosila modeli' : 'Interactive Derivative Tangent Explorer'}
-        className="rounded-xl border border-line bg-chrome p-5"
+        className="rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55"
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
           <div>
@@ -308,7 +308,7 @@ export const InteractiveSimulation: React.FC<InteractiveSimulationProps> = ({ ty
               />
             </div>
 
-            <div className="rounded-lg border border-line bg-surface p-3 text-xs space-y-2">
+            <div className="rounded-lg border-2 border-slate-500 bg-white/50 p-3 text-xs backdrop-blur-md space-y-2 dark:border-[#222B3D] dark:bg-[#080B14]/60">
               <div className="flex justify-between">
                 <span className="text-muted">f(x)</span>
                 <span className="font-mono font-semibold tabular-nums text-ink">{yVal.toFixed(2)}</span>
@@ -346,7 +346,7 @@ export const InteractiveSimulation: React.FC<InteractiveSimulationProps> = ({ ty
   return (
     <section
       aria-label={locale === 'uz' ? 'Interaktiv unit-iqtisodiyot modeli' : 'Interactive Unit Economics Modeler'}
-      className="rounded-xl border border-line bg-chrome p-5"
+      className="rounded-xl border-2 border-slate-500 bg-white/40 p-5 shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/55"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
         <div>
@@ -404,7 +404,7 @@ export const InteractiveSimulation: React.FC<InteractiveSimulationProps> = ({ ty
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 rounded-lg border border-line bg-surface p-4">
+        <div className="grid grid-cols-2 gap-3 rounded-lg border-2 border-slate-500 bg-white/50 p-4 backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
           <div>
             <span className="text-xs text-muted">{simStrings.monthlyGrossProfit}</span>
             <div className="mt-1 font-mono text-lg font-semibold tabular-nums text-ink">${monthlyContribution.toFixed(2)}</div>

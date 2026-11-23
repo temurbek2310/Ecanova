@@ -241,10 +241,16 @@ export function useContainedArtifactPhysics({
           maxPullPx: profile.cursorPullMaxPx,
         });
 
+        const isDark =
+          typeof document === 'undefined' ||
+          !document.documentElement.classList.contains('light');
+        const hoverOpacity = isDark ? 0.35 : 0.68;
+
         gsap.to(driftEl, {
           x: pull.x,
           y: pull.y,
           scale: Number((p.baseScale * 1.12).toFixed(2)),
+          opacity: hoverOpacity,
           duration: profile.cursorPullDurationSec,
           ease: profile.cursorPullEase,
           overwrite: 'auto',
@@ -281,10 +287,22 @@ export function useContainedArtifactPhysics({
       const driftEl = driftRefs.current[idx];
       if (!driftEl) return;
 
+      const isDark =
+        typeof document === 'undefined' ||
+        !document.documentElement.classList.contains('light');
+      const restingOpacity = isDark
+        ? p.opacityClass === 'opacity-15'
+          ? 0.15
+          : 0.1
+        : p.opacityClass === 'opacity-15'
+        ? 0.3
+        : 0.25;
+
       gsap.to(driftEl, {
         x: 0,
         y: 0,
         scale: p.baseScale,
+        opacity: restingOpacity,
         duration: 0.42,
         ease: 'power3.out',
         overwrite: 'auto',

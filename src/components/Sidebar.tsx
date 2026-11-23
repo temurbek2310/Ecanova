@@ -235,9 +235,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onNavigateTab(item.id)}
                 aria-keyshortcuts={shortcut ? shortcut.toLowerCase() : undefined}
                 aria-current={isActive ? 'page' : undefined}
-                className={`relative z-10 flex w-full min-h-[42px] items-center justify-between gap-2 overflow-hidden rounded-lg border-2 px-3 py-2 text-sm font-semibold whitespace-nowrap ${
+                className={`relative z-10 flex w-full min-h-[42px] items-center justify-between gap-2 overflow-hidden rounded-lg border-2 px-3 py-2 text-sm font-semibold whitespace-nowrap backdrop-blur-md ${
                   isActive
-                    ? 'border-theme-border bg-theme-base text-theme-accent shadow-brutal-sm'
+                    ? 'border-theme-border bg-white/60 text-theme-accent shadow-brutal-sm dark:bg-[#080B14]/70'
                     : 'border-transparent text-muted'
                 }`}
               >
@@ -256,10 +256,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       data-testid="nav-streak-flame"
                       data-glowing={streakFlame.isMilestoneGlowing ? 'true' : 'false'}
                       title={streakFlame.tooltip}
-                      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-bold transition-colors ${
+                      className={`inline-flex items-center gap-1 rounded-md border-2 px-1.5 py-0.5 font-mono text-[10px] font-bold backdrop-blur-md transition-colors ${
                         streakFlame.isMilestoneGlowing
                           ? 'border-amber-400/70 bg-amber-400/15 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.45)]'
-                          : 'border-theme-border bg-theme-base text-muted'
+                          : 'border-slate-500 bg-white/55 text-muted dark:border-[#222B3D] dark:bg-[#080B14]/60'
                       }`}
                     >
                       <Flame
@@ -280,7 +280,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {shortcut && (
                   <kbd
                     aria-hidden="true"
-                    className="hidden lg:inline-flex min-w-[20px] items-center justify-center rounded border-2 border-theme-border bg-theme-base px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted"
+                    className="hidden lg:inline-flex min-w-[20px] items-center justify-center rounded border-2 border-slate-500 bg-white/55 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
                   >
                     {shortcut}
                   </kbd>
@@ -304,9 +304,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   data-admin-nav-section={item.section}
                   onClick={() => adminNav.onNavigate(item.section)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`flex w-full min-h-[38px] items-center gap-2.5 rounded-lg border-2 px-3 py-1.5 text-sm font-semibold whitespace-nowrap ${
+                  className={`flex w-full min-h-[38px] items-center gap-2.5 rounded-lg border-2 px-3 py-1.5 text-sm font-semibold whitespace-nowrap backdrop-blur-md ${
                     isActive
-                      ? 'border-theme-border bg-theme-base text-theme-accent shadow-brutal-sm'
+                      ? 'border-theme-border bg-white/60 text-theme-accent shadow-brutal-sm dark:bg-[#080B14]/70'
                       : 'border-transparent text-muted hover:text-ink'
                   }`}
                 >
@@ -323,7 +323,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           type="button"
           onClick={onOpenCompanion}
-          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg border-2 border-theme-border bg-theme-base px-3 py-2 text-xs font-semibold text-ink shadow-brutal-sm hover:border-theme-accent"
+          className="flex w-full min-h-[40px] items-center gap-2.5 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-2 text-xs font-semibold text-ink shadow-brutal-sm backdrop-blur-md hover:border-theme-accent dark:border-[#222B3D] dark:bg-[#080B14]/60"
         >
           <MessageSquare className="h-4 w-4 text-teal" aria-hidden="true" />
           <span>{locale === 'uz' ? 'O‘quv yordamchisi' : 'Study Companion'}</span>

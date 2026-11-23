@@ -16,6 +16,7 @@ import {
   type ArtifactSubject,
 } from '../lib/subject-artifacts';
 import { ArtifactConstellation } from './ArtifactConstellation';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 
 export interface MagneticCourseCardProps {
   testId?: string;
@@ -85,7 +86,7 @@ export const MagneticCourseCard: React.FC<MagneticCourseCardProps> = ({
   }, []);
 
   const animateCardTo = useCallback(
-    (next: MagneticTransformState, duration: number, ease: string) => {
+    (next: MagneticTransformState, duration: number, ease: string, onComplete?: () => void) => {
       setMagneticState(next);
       const el = cardRef.current;
       if (!el) return;
@@ -97,6 +98,7 @@ export const MagneticCourseCard: React.FC<MagneticCourseCardProps> = ({
         duration,
         ease,
         overwrite: 'auto',
+        onComplete,
       });
     },
     []
@@ -141,7 +143,12 @@ export const MagneticCourseCard: React.FC<MagneticCourseCardProps> = ({
   const handleMouseLeave = useCallback(() => {
     handleArtifactPointerLeave();
     const resting = getRestingMagneticCardState();
-    animateCardTo(resting, 0.42, 'elastic.out(1, 0.65)');
+    animateCardTo(resting, 0.42, 'elastic.out(1, 0.65)', () => {
+      const el = cardRef.current;
+      if (el) {
+        gsap.set(el, { clearProps: 'transform' });
+      }
+    });
   }, [animateCardTo, handleArtifactPointerLeave]);
 
   return (
@@ -161,17 +168,19 @@ export const MagneticCourseCard: React.FC<MagneticCourseCardProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className={`relative isolate overflow-hidden will-change-transform transition-colors ${
+      className={`relative overflow-hidden transition-colors ${
         magneticState.isHovered
           ? 'z-20 border-theme-accent'
           : 'border-theme-border'
       } ${className}`}
     >
+      <InteractiveDotGrid />
       <ArtifactConstellation
         testId={testId ? `${testId}-artifact-layer` : undefined}
         particles={particles}
         setDriftRef={setDriftRef}
         setSpinRef={setSpinRef}
+        isHovered={magneticState.isHovered}
       />
 
       {/* Strictly keep all foreground copy and controls above floating particle constellation */}

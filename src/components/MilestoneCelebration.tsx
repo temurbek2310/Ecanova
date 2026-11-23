@@ -47,7 +47,7 @@ export const MilestoneCelebration: React.FC<MilestoneCelebrationProps> = ({
         className="no-print fixed bottom-20 right-4 z-40 w-[calc(100vw-2rem)] max-w-sm md:bottom-6 md:right-6"
       >
         <div
-          className={`animate-milestone-pop flex items-start gap-3 rounded-xl border bg-surface/95 p-4 shadow-xl backdrop-blur-md ${borderTone}`}
+          className={`animate-milestone-pop flex items-start gap-3 rounded-xl border-2 border-slate-500 bg-white/40 p-4 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/40 ${borderTone}`}
         >
           <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line bg-elevated">
             {icon}

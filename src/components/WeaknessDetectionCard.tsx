@@ -41,6 +41,7 @@ import {
   type WeaknessTopicMetric,
 } from '../lib/weakness-radar';
 import { FloatingWatermark } from './FloatingWatermark';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 
 export type WeaknessViewMode = 'list' | 'radar';
 
@@ -257,6 +258,7 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
       aria-labelledby="weakness-detection-heading"
       className="relative z-10 overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 text-gray-900 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl sm:p-6 dark:border-[#222B3D] dark:bg-[#101522]/25 dark:text-white"
     >
+      <InteractiveDotGrid testId="weakness-detection-dot-grid" />
       <FloatingWatermark
         theme="analytics"
         seedIndex={2}

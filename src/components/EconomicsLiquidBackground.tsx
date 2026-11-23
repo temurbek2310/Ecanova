@@ -332,12 +332,20 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
 
-    const getBounds = () => ({
-      width: Math.max(container.clientWidth || window.innerWidth, 1),
-      height: Math.max(container.clientHeight || window.innerHeight, 1),
-    });
+    const getBounds = () => {
+      // Keep canvas strictly viewport-fixed based on window dimensions
+      // (+88px for the -inset-[44px] parallax overshoot) rather than resizing on document scrollHeight changes.
+      const vpW = typeof window !== 'undefined' && window.innerWidth > 0 ? window.innerWidth : 1440;
+      const vpH = typeof window !== 'undefined' && window.innerHeight > 0 ? window.innerHeight : 900;
+      return {
+        width: Math.max(vpW + 88, 1),
+        height: Math.max(vpH + 88, 1),
+      };
+    };
 
     const initialBounds = getBounds();
+    let currentWidth = initialBounds.width;
+    let currentHeight = initialBounds.height;
     renderer.setSize(initialBounds.width, initialBounds.height, false);
 
     const canvasEl = renderer.domElement;
@@ -416,10 +424,19 @@ export const EconomicsLiquidBackground: React.FC<EconomicsLiquidBackgroundProps>
 
     const handleResize = () => {
       const next = getBounds();
-      renderer.setSize(next.width, next.height, false);
-      uniforms.uResolution.value.set(next.width, next.height);
-      camera.aspect = next.width / Math.max(1, next.height);
-      camera.updateProjectionMatrix();
+      // Guard against minor jitter or scrollbar appearance/disappearance (~15-17px) causing redundant WebGL reallocations
+      if (
+        Math.abs(currentWidth - next.width) > 20 ||
+        Math.abs(currentHeight - next.height) > 20
+      ) {
+        currentWidth = next.width;
+        currentHeight = next.height;
+        renderer.setSize(next.width, next.height, false);
+        uniforms.uResolution.value.set(next.width, next.height);
+        camera.aspect = next.width / Math.max(1, next.height);
+        camera.updateProjectionMatrix();
+        renderOnceRef.current?.();
+      }
     };
     window.addEventListener('resize', handleResize);
 

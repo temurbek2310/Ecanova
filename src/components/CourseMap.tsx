@@ -281,7 +281,7 @@ export const CourseMap: React.FC<CourseMapProps> = ({
               <span>{strings.courseMap.legendNextUp}</span>
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full border border-line-strong bg-chrome" aria-hidden="true" />
+              <span className="h-2 w-2 rounded-full border-2 border-slate-500 bg-white/55 dark:border-[#222B3D] dark:bg-[#080B14]/60" aria-hidden="true" />
               <span>{strings.courseMap.legendUpcoming}</span>
             </span>
           </div>
@@ -318,7 +318,7 @@ export const CourseMap: React.FC<CourseMapProps> = ({
                 onMouseEnter={() => setHoveredNodeId(node.id)}
                 onMouseLeave={() => setHoveredNodeId(null)}
                 data-testid="course-map-node-prereq"
-                className="absolute flex flex-col justify-between gap-1 overflow-hidden rounded-lg border border-dashed border-line-strong bg-chrome/90 p-3 text-left"
+                className="absolute flex flex-col justify-between gap-1 overflow-hidden rounded-lg border-2 border-dashed border-slate-500 bg-white/55 p-3 text-left backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60"
               >
                 <div className="flex items-center justify-between gap-1.5 text-[11px] font-medium text-muted">
                   <span className="inline-flex items-center gap-1.5 truncate">
@@ -352,12 +352,12 @@ export const CourseMap: React.FC<CourseMapProps> = ({
           const isNextUp = node.status === 'next_up';
 
           const stateBorderClass = isActive
-            ? 'border-accent bg-elevated ring-2 ring-accent/35'
+            ? 'border-2 border-accent bg-white/70 ring-2 ring-accent/35 backdrop-blur-md dark:bg-[#080B14]/80'
             : isCompleted
-            ? 'border-success/60 bg-chrome hover:border-success'
+            ? 'border-2 border-success/60 bg-white/55 backdrop-blur-md hover:border-success dark:border-success/50 dark:bg-[#080B14]/60'
             : isNextUp
-            ? 'border-teal/70 bg-chrome hover:border-teal'
-            : 'border-line bg-chrome hover:border-line-strong';
+            ? 'border-2 border-teal/70 bg-white/55 backdrop-blur-md hover:border-teal dark:border-teal/60 dark:bg-[#080B14]/60'
+            : 'border-2 border-slate-500 bg-white/50 backdrop-blur-md hover:border-line-strong dark:border-[#222B3D] dark:bg-[#080B14]/55';
 
           const handleClick = () => {
             if (node.kind === 'lesson' && typeof node.lessonIndex === 'number') {

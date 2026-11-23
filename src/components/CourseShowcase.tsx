@@ -23,6 +23,7 @@ import type {
   LocaleCode,
 } from '../shared/types';
 import { ArtifactConstellation } from './ArtifactConstellation';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 import { BrutalCardSkeleton, ContentReveal, SkeletonLine } from './ui/BrutalSkeleton';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -74,6 +75,7 @@ const ShowcaseArtifactCard: React.FC<ShowcaseArtifactCardProps> = ({
     particles,
     setDriftRef,
     setSpinRef,
+    isPointerInside,
     isComplexPhysicsActive,
     handleArtifactPointerEnter,
     handleArtifactPointerMove,
@@ -134,13 +136,16 @@ const ShowcaseArtifactCard: React.FC<ShowcaseArtifactCardProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseMove={handleArtifactPointerMove}
       onMouseLeave={handleMouseLeave}
-      className="relative overflow-hidden will-change-transform flex w-[290px] sm:w-[370px] lg:w-[420px] shrink-0 flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+      className="relative overflow-hidden flex w-[290px] sm:w-[370px] lg:w-[420px] shrink-0 flex-col justify-between rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
+      <InteractiveDotGrid />
+
       {/* Multi-particle Constellation Layer (z-0, bounded drift behind text) */}
       <ArtifactConstellation
         particles={particles}
         setDriftRef={setDriftRef}
         setSpinRef={setSpinRef}
+        isHovered={isPointerInside}
       />
 
       <div className="relative z-10">

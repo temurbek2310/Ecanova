@@ -253,7 +253,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   minLength={2}
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-theme-border bg-theme-base px-3 text-sm text-ink shadow-brutal-sm focus:border-theme-accent focus:outline-none"
+                  className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-slate-500 bg-white/50 px-3 text-sm text-ink shadow-brutal-sm backdrop-blur-md focus:border-theme-accent focus:outline-none dark:border-[#222B3D] dark:bg-[#080B14]/60"
                 />
               </div>
 
@@ -265,7 +265,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   id="auth-age"
                   value={ageBand}
                   onChange={(e) => setAgeBand(e.target.value as AgeBand)}
-                  className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-theme-border bg-theme-base px-3 text-sm text-ink shadow-brutal-sm focus:border-theme-accent focus:outline-none"
+                  className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-slate-500 bg-white/50 px-3 text-sm text-ink shadow-brutal-sm backdrop-blur-md focus:border-theme-accent focus:outline-none dark:border-[#222B3D] dark:bg-[#080B14]/60"
                 >
                   <option value="school">{authStrings.ageBracketSchool}</option>
                   <option value="university">{authStrings.ageBracketUniversity}</option>
@@ -285,7 +285,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-theme-border bg-theme-base px-3 text-sm text-ink shadow-brutal-sm focus:border-theme-accent focus:outline-none"
+              className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-slate-500 bg-white/50 px-3 text-sm text-ink shadow-brutal-sm backdrop-blur-md focus:border-theme-accent focus:outline-none dark:border-[#222B3D] dark:bg-[#080B14]/60"
             />
           </div>
 
@@ -300,7 +300,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-theme-border bg-theme-base px-3 text-sm text-ink shadow-brutal-sm focus:border-theme-accent focus:outline-none"
+              className="mt-1 min-h-[42px] w-full rounded-xl border-2 border-slate-500 bg-white/50 px-3 text-sm text-ink shadow-brutal-sm backdrop-blur-md focus:border-theme-accent focus:outline-none dark:border-[#222B3D] dark:bg-[#080B14]/60"
             />
           </div>
 

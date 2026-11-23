@@ -13,6 +13,7 @@ import {
   Sigma,
 } from 'lucide-react';
 import { MagneticCourseCard } from './MagneticCourseCard';
+import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 import { isCourseBookmarked } from '../lib/course-bookmarks';
 import { formatCourseMetaSummary, t } from '../lib/i18n';
 import {
@@ -197,13 +198,7 @@ export const MathematicsSection: React.FC<MathematicsSectionProps> = ({
       data-active-theme={activeTheme}
       className="relative z-10 overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
     >
-      {/* Tactile CSS Grain / Chalk Dust Overlay (programmatically switches mix-blend-screen vs mix-blend-multiply) */}
-      <div
-        aria-hidden="true"
-        data-testid="mathematics-grain-overlay"
-        data-blend-mode={grainOverlay.blendMode}
-        className={`pointer-events-none absolute inset-0 z-0 bg-chalk-dust ${grainOverlay.opacityClass} ${grainOverlay.mixBlendClass}`}
-      />
+      <InteractiveDotGrid testId="mathematics-section-dot-grid" />
 
       {/* Chalkboard SVG Filter Definition for Organic Hand-Drawn Edge Texture */}
       <svg aria-hidden="true" className="pointer-events-none absolute h-0 w-0 overflow-hidden">
@@ -230,7 +225,7 @@ export const MathematicsSection: React.FC<MathematicsSectionProps> = ({
         {/* Section Header */}
         <div className="flex flex-col gap-3 border-b-2 border-theme-border pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-theme-amber shadow-brutal-sm">
+            <div className="inline-flex items-center gap-2 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-theme-amber shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
               <Compass className="h-3.5 w-3.5 text-theme-accent" aria-hidden="true" />
               <span>
                 {isUz
@@ -274,11 +269,11 @@ export const MathematicsSection: React.FC<MathematicsSectionProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <span className="inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-semibold text-theme-amber shadow-brutal-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-[11px] font-semibold text-theme-amber shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
               <span className="h-2 w-2 rounded-full bg-theme-amber" aria-hidden="true" />
               <span>{strings.mathematics.badgeChalkSvg}</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border bg-theme-base px-2.5 py-1 font-mono text-[11px] font-semibold text-theme-accent shadow-brutal-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-md border-2 border-slate-500 bg-white/55 px-2.5 py-1 font-mono text-[11px] font-semibold text-theme-accent shadow-brutal-sm backdrop-blur-md dark:border-[#222B3D] dark:bg-[#080B14]/60">
               <span className="h-2 w-2 rounded-full bg-theme-accent" aria-hidden="true" />
               <span>{strings.mathematics.badgeDrawSvg}</span>
             </span>
@@ -389,11 +384,6 @@ export const MathematicsSection: React.FC<MathematicsSectionProps> = ({
                   artifactIndex={idx}
                   className="relative flex flex-col justify-between overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
                 >
-                  <div
-                    aria-hidden="true"
-                    className={`pointer-events-none absolute -inset-5 -z-10 bg-chalk-dust ${grainOverlay.opacityClass} ${grainOverlay.mixBlendClass}`}
-                  />
-
                   <div className="relative z-10">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
@@ -449,10 +439,10 @@ export const MathematicsSection: React.FC<MathematicsSectionProps> = ({
                       )}
 
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-md border-2 border-theme-border px-2 py-0.5 text-[11px] font-semibold ${
+                        className={`inline-flex items-center gap-1.5 rounded-md border-2 px-2 py-0.5 text-[11px] font-semibold backdrop-blur-md ${
                           offlineStatus === 'cached_full'
-                            ? 'bg-theme-panel text-theme-emerald'
-                            : 'bg-theme-panel text-muted'
+                            ? 'border-theme-emerald/60 bg-white/55 text-theme-emerald dark:border-theme-emerald/50 dark:bg-[#080B14]/60'
+                            : 'border-slate-500 bg-white/55 text-muted dark:border-[#222B3D] dark:bg-[#080B14]/60'
                         }`}
                       >
                         {offlineStatus === 'cached_full' ? (
