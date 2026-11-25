@@ -64,6 +64,15 @@ import { NotificationViewport } from './components/NotificationViewport';
 import { ProfilePoliciesView } from './components/ProfilePoliciesView';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { ProductTour } from './components/tour/ProductTour';
+import { LevelCheckModal } from './components/calibration/LevelCheckModal';
+import {
+  getLevelCheckCopy,
+  getLevelCheckState,
+  getPlacedLevel,
+  hasSubjectEnrollment,
+  shouldPromptLevelCheck,
+  type LevelCheckState,
+} from './lib/level-check';
 import { shouldAutoStartTour, type TourTrack } from './lib/product-tour';
 import { Sidebar } from './components/Sidebar';
 import { SmoothScroll } from './components/SmoothScroll';
@@ -304,6 +313,13 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [companionOpen, setCompanionOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  // Soft-gate Level Check (Skill Calibration)
+  const [levelCheckRequest, setLevelCheckRequest] = useState<{
+    subject: Subject;
+    pendingCourseId: string | null;
+    nonce: number;
+  } | null>(null);
+  const [levelCheckState, setLevelCheckState] = useState<LevelCheckState>({});
 
   // Catalog & filters
   const [courses, setCourses] = useState<CourseCatalogItem[]>([]);
@@ -947,6 +963,64 @@ export default function App() {
 
   const openCourseRef = useRef(openCourse);
   openCourseRef.current = openCourse;
+
+  // Level Check: reload per-user calibration state whenever the signed-in user changes.
+  useEffect(() => {
+    setLevelCheckState(getLevelCheckState(user?.id));
+    if (!user) setLevelCheckRequest(null);
+  }, [user?.id]);
+
+  // Never stack the Level Check on top of the Product Tour or Auth modal.
+  useEffect(() => {
+    if (tourOpen || authOpen) setLevelCheckRequest(null);
+  }, [tourOpen, authOpen]);
+
+  const openLevelCheck = useCallback((subject: Subject, pendingCourseId: string | null) => {
+    setLevelCheckRequest({ subject, pendingCourseId, nonce: Date.now() });
+  }, []);
+
+  /**
+   * Central course-click handler for catalog/overview/showcase/subject sections.
+   * Intercepts a signed-in learner's first click in an uncalibrated subject with
+   * the soft-gate Level Check; deep links (lessonIndex) always open directly.
+   */
+  const requestCourseOpen = useCallback(
+    (
+      courseId: string,
+      editionLocale: LocaleCode = locale,
+      options?: { lessonIndex?: number | 'assessment' }
+    ) => {
+      const course = courses.find((c) => c.id === courseId);
+      if (
+        user &&
+        course &&
+        options?.lessonIndex === undefined &&
+        !tourOpen &&
+        !authOpen &&
+        shouldPromptLevelCheck(user.id, course.subject, hasSubjectEnrollment(courses, enrollments, course.subject))
+      ) {
+        openLevelCheck(course.subject, course.id);
+        return;
+      }
+      void openCourse(courseId, editionLocale, options);
+    },
+    [authOpen, courses, enrollments, locale, openCourse, openLevelCheck, tourOpen, user]
+  );
+
+  const levelCheckCopy = getLevelCheckCopy(locale);
+  const isRecommendedForUser = useCallback(
+    (course: CourseCatalogItem) => Boolean(user) && getPlacedLevel(levelCheckState, course.subject) === course.level,
+    [levelCheckState, user]
+  );
+  const renderRecommendedBadge = (course: CourseCatalogItem) =>
+    isRecommendedForUser(course) ? (
+      <span
+        data-testid={`recommended-badge-${course.id}`}
+        className="inline-flex items-center rounded-md border-2 border-slate-900 bg-[#9274FF] px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-white shadow-[2px_2px_0px_#090D16] dark:border-[#090D16] dark:shadow-[2px_2px_0px_#000000]"
+      >
+        {levelCheckCopy.recommendedBadge}
+      </span>
+    ) : null;
 
   // If browser booted directly onto /course/:courseId, load it automatically
   useEffect(() => {
@@ -2274,7 +2348,7 @@ export default function App() {
                   bookmarkedCourseIds={user?.bookmarkedCourseIds ?? []}
                   bookmarkBusyId={bookmarkBusyId}
                   onOpenCourse={(courseId, openLocale, lessonIndex) =>
-                    void openCourse(
+                    requestCourseOpen(
                       courseId,
                       openLocale,
                       typeof lessonIndex === 'number' ? { lessonIndex } : undefined
@@ -2297,7 +2371,7 @@ export default function App() {
                 swStatus={swStatus}
                 cachedEditionKeys={cachedEditionKeys}
                 showFixedShaderBackground={false}
-                onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                onOpenCourse={(courseId, openLocale) => requestCourseOpen(courseId, openLocale)}
                 onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
               />
 
@@ -2313,7 +2387,7 @@ export default function App() {
                 bookmarkBusyId={bookmarkBusyId}
                 swStatus={swStatus}
                 cachedEditionKeys={cachedEditionKeys}
-                onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                onOpenCourse={(courseId, openLocale) => requestCourseOpen(courseId, openLocale)}
                 onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
               />
 
@@ -2329,7 +2403,7 @@ export default function App() {
                 bookmarkBusyId={bookmarkBusyId}
                 swStatus={swStatus}
                 cachedEditionKeys={cachedEditionKeys}
-                onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                onOpenCourse={(courseId, openLocale) => requestCourseOpen(courseId, openLocale)}
                 onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
               />
 
@@ -2388,6 +2462,7 @@ export default function App() {
                             <div className="text-xs font-medium text-muted">
                               {strings.subjects[course.subject]} · {strings.levels[course.level]} · {course.estimatedMinutes} {strings.overview.minUnit}
                             </div>
+                            {isRecommendedForUser(course) && <div className="mt-2">{renderRecommendedBadge(course)}</div>}
                             <h3 className="mt-2 text-base font-bold text-ink">
                               {ed ? ed.title : course.editions.en?.title || course.slug}
                             </h3>
@@ -2412,7 +2487,7 @@ export default function App() {
                             <button
                               type="button"
                               disabled={!ed}
-                              onClick={() => openCourse(course.id, locale)}
+                              onClick={() => requestCourseOpen(course.id, locale)}
                               className="min-h-[40px] w-full rounded-lg bg-theme-base border-2 border-theme-border px-3 py-2 text-xs font-bold text-ink shadow-brutal-sm hover:border-theme-accent disabled:opacity-50"
                             >
                               {ed
@@ -2642,7 +2717,7 @@ export default function App() {
                     swStatus={swStatus}
                     cachedEditionKeys={cachedEditionKeys}
                     showFixedShaderBackground={false}
-                    onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                    onOpenCourse={(courseId, openLocale) => requestCourseOpen(courseId, openLocale)}
                     onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
                   />
                 </>
@@ -2659,7 +2734,7 @@ export default function App() {
                     bookmarkBusyId={bookmarkBusyId}
                     swStatus={swStatus}
                     cachedEditionKeys={cachedEditionKeys}
-                    onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                    onOpenCourse={(courseId, openLocale) => requestCourseOpen(courseId, openLocale)}
                     onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
                   />
                 </>
@@ -2676,7 +2751,7 @@ export default function App() {
                     bookmarkBusyId={bookmarkBusyId}
                     swStatus={swStatus}
                     cachedEditionKeys={cachedEditionKeys}
-                    onOpenCourse={(courseId, openLocale) => void openCourse(courseId, openLocale)}
+                    onOpenCourse={(courseId, openLocale) => requestCourseOpen(courseId, openLocale)}
                     onToggleBookmark={(courseId) => void handleToggleBookmark(courseId)}
                   />
                 </>
@@ -2739,6 +2814,7 @@ export default function App() {
                                 <span>
                                   {strings.catalog.editionsLabel} {hasEn ? 'EN' : ''}{hasEn && hasUz ? ' / ' : ''}{hasUz ? 'O‘Z' : ''}
                                 </span>
+                                {renderRecommendedBadge(course)}
                               </div>
 
                               {/* Small Color-Coded Topic Labels */}
@@ -2867,7 +2943,7 @@ export default function App() {
                           <button
                             type="button"
                             disabled={!ed}
-                            onClick={() => openCourse(course.id, locale)}
+                            onClick={() => requestCourseOpen(course.id, locale)}
                             className="min-h-[40px] rounded-lg border-2 border-theme-border bg-theme-accent px-4 py-2 text-xs font-bold text-theme-accent-ink shadow-brutal-sm hover:bg-accent-hover disabled:opacity-50"
                           >
                             {ed ? strings.catalog.openCourseEdition : strings.catalog.unavailableInLocale}
@@ -3469,6 +3545,8 @@ export default function App() {
               themeSyncWithOs={themeSyncWithOs}
               ambientAudio={ambientAudio}
               onReplayTour={handleLaunchTour}
+              levelCheckState={levelCheckState}
+              onOpenLevelCheck={(subject) => openLevelCheck(subject, null)}
               onToggleThemeSyncWithOs={handleToggleThemeSyncWithOs}
               onSelectManualTheme={handleSelectManualTheme}
               onToggleGoalNotifications={handleToggleGoalNotifications}
@@ -3794,6 +3872,28 @@ export default function App() {
         }
       }}
     />
+
+    {/* Soft-Gate Level Check (top-level fixed layer, portalled outside <main>) */}
+    {levelCheckRequest && user && !tourOpen && !authOpen && (
+      <LevelCheckModal
+        key={levelCheckRequest.nonce}
+        locale={locale}
+        subject={levelCheckRequest.subject}
+        userId={user.id}
+        courses={courses}
+        pendingCourse={
+          levelCheckRequest.pendingCourseId
+            ? courses.find((c) => c.id === levelCheckRequest.pendingCourseId) ?? null
+            : null
+        }
+        onClose={() => setLevelCheckRequest(null)}
+        onStateChange={setLevelCheckState}
+        onOpenCourse={(courseId) => {
+          setLevelCheckRequest(null);
+          void openCourse(courseId, locale);
+        }}
+      />
+    )}
     </SmoothScroll>
   );
 }

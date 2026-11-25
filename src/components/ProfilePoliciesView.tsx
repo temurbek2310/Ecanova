@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Compass,
   Download,
+  Gauge,
   Eye,
   EyeOff,
   HardDrive,
@@ -20,7 +21,8 @@ import {
   Sun,
   Trash2,
 } from 'lucide-react';
-import type { CourseCatalogItem, EnrollmentRecord, LocaleCode, UserSummary, XpLedgerEntry } from '../shared/types';
+import type { CourseCatalogItem, EnrollmentRecord, LocaleCode, Subject, UserSummary, XpLedgerEntry } from '../shared/types';
+import { getLevelCheckCopy, LEVEL_CHECK_SUBJECTS, type LevelCheckState } from '../lib/level-check';
 import { t } from '../lib/i18n';
 import { apiFetch, persistCachedUserSummary, readJsonSafely } from '../lib/auth-client';
 import { notificationCopy } from '../lib/notification-copy';
@@ -79,6 +81,8 @@ interface ProfilePoliciesViewProps {
   onAccountDeleted: () => Promise<void>;
   onRequireAuth: () => void;
   onReplayTour?: () => void;
+  levelCheckState?: LevelCheckState;
+  onOpenLevelCheck?: (subject: Subject) => void;
 }
 
 export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
@@ -109,6 +113,8 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
   onAccountDeleted,
   onRequireAuth,
   onReplayTour,
+  levelCheckState = {},
+  onOpenLevelCheck,
 }) => {
   const strings = t(locale);
   const toastCopy = notificationCopy(locale);
@@ -525,6 +531,65 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
 
     </section>
   );
+
+  const levelCheckCopy = getLevelCheckCopy(locale);
+  const skillCalibrationSection = user && onOpenLevelCheck ? (
+    <section
+      aria-labelledby="profile-skill-calibration-title"
+      data-testid="profile-skill-calibration-section"
+      className="relative overflow-hidden space-y-4 rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
+    >
+      <InteractiveDotGrid testId="profile-skill-calibration-dot-grid" />
+      <div className="relative z-10 space-y-4">
+        <div className="border-b-2 border-theme-border pb-3">
+          <h2 id="profile-skill-calibration-title" className="flex items-center gap-2 text-base font-bold text-ink">
+            <Gauge className="h-4 w-4 text-theme-accent" aria-hidden="true" />
+            <span>{levelCheckCopy.profileTitle}</span>
+          </h2>
+          <p className="mt-1 text-xs text-muted">{levelCheckCopy.profileSubtitle}</p>
+        </div>
+        <ul className="grid gap-3 sm:grid-cols-3">
+          {LEVEL_CHECK_SUBJECTS.map((subject) => {
+            const record = levelCheckState[subject];
+            const completed = record?.status === 'completed' && record.level;
+            return (
+              <li
+                key={subject}
+                data-testid={`profile-skill-calibration-${subject.toLowerCase()}`}
+                className="flex flex-col justify-between gap-3 rounded-lg border-2 border-slate-500 bg-white/55 p-3 dark:border-[#222B3D] dark:bg-[#080B14]/60"
+              >
+                <div>
+                  <div className="text-xs font-bold text-ink">{strings.subjects[subject]}</div>
+                  {completed && record?.level ? (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex rounded-md border-2 border-slate-900 bg-[#9274FF] px-2 py-0.5 text-[11px] font-extrabold text-white shadow-[2px_2px_0px_#090D16] dark:border-[#090D16] dark:shadow-[2px_2px_0px_#000000]">
+                        {strings.levels[record.level]}
+                      </span>
+                      <span className="font-mono text-[11px] font-bold tabular-nums text-muted">
+                        {record.score} / {record.total}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="mt-1.5 text-[11px] font-semibold text-muted">
+                      {record?.status === 'skipped' ? levelCheckCopy.skipped : levelCheckCopy.notChecked}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenLevelCheck(subject)}
+                  data-testid={`profile-level-check-btn-${subject.toLowerCase()}`}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-slate-500 bg-white/55 px-3 py-1.5 text-xs font-bold text-ink shadow-brutal-sm transition-colors hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:border-theme-accent dark:hover:text-ink"
+                >
+                  {completed ? levelCheckCopy.retakeCheck : levelCheckCopy.takeCheck}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  ) : null;
 
   const themeSyncSection = (
     <section
@@ -944,6 +1009,7 @@ export const ProfilePoliciesView: React.FC<ProfilePoliciesViewProps> = ({
         />
       )}
       {themeSyncSection}
+      {skillCalibrationSection}
       {weeklyDigestSection}
       {user && bookmarksSection}
 
