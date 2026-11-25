@@ -373,7 +373,7 @@ export const CourseShowcase: React.FC<CourseShowcaseProps> = ({
           <div
             className="overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
           >
-            <div className="flex flex-col gap-3 border-b-2 border-slate-500 dark:border-[#222B3D] pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div data-tour-id="tour-catalog" className="flex flex-col gap-3 border-b-2 border-slate-500 dark:border-[#222B3D] pb-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-wider text-theme-cyan">
                   <Layers className="h-3.5 w-3.5 text-theme-accent shrink-0" aria-hidden="true" />
@@ -424,7 +424,7 @@ export const CourseShowcase: React.FC<CourseShowcaseProps> = ({
         data-scroll-moving="false"
         className="overflow-hidden rounded-xl border-2 border-slate-500 bg-white/25 p-5 sm:p-6 shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25"
       >
-        <div className="flex flex-col gap-3 border-b-2 border-slate-500 dark:border-[#222B3D] pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div data-tour-id="tour-catalog" className="flex flex-col gap-3 border-b-2 border-slate-500 dark:border-[#222B3D] pb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-wider text-theme-cyan">
               <Layers className="h-3.5 w-3.5 text-theme-accent shrink-0" aria-hidden="true" />

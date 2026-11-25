@@ -20,6 +20,49 @@ export const TOUR_STEPS: readonly TourStepConfig[] = [
   { id: 'certificates', stepNumber: 5, targetSelector: '[data-tour-id="tour-certificates"]' },
 ] as const;
 
+/** Order of a step in the full tour (keeps navigation stable when steps are skipped). */
+export function getTourStepOrder(id: TourStepId): number {
+  return TOUR_STEPS.findIndex((s) => s.id === id);
+}
+
+/** A target is usable only when it is mounted and has a real box (hidden / display:none ⇒ 0×0). */
+export function isTourTargetMeasurable(
+  rect: { width: number; height: number } | null | undefined
+): boolean {
+  return Boolean(rect && rect.width > 0 && rect.height > 0);
+}
+
+/**
+ * Steps that can actually be shown right now. The welcome step (no selector)
+ * is always kept; a step with a selector is kept only when its target exists.
+ */
+export function resolveActiveSteps(
+  isTargetAvailable: (step: TourStepConfig) => boolean
+): TourStepConfig[] {
+  return TOUR_STEPS.filter((step) => step.targetSelector === null || isTargetAvailable(step));
+}
+
+export function areSameTourSteps(
+  a: readonly TourStepConfig[],
+  b: readonly TourStepConfig[]
+): boolean {
+  return a.length === b.length && a.every((step, i) => step.id === b[i].id);
+}
+
+/**
+ * When the step on screen loses its target, move to the next remaining step
+ * (in tour order), or the last remaining one if none follow.
+ */
+export function resolveStepAfterRemoval(
+  nextActive: readonly TourStepConfig[],
+  currentId: TourStepId
+): TourStepId {
+  if (nextActive.some((s) => s.id === currentId)) return currentId;
+  const currentOrder = getTourStepOrder(currentId);
+  const following = nextActive.find((s) => getTourStepOrder(s.id) > currentOrder);
+  return (following ?? nextActive[nextActive.length - 1] ?? TOUR_STEPS[0]).id;
+}
+
 export const TOUR_STORAGE_PREFIX = 'econova:product-tour:v1:';
 export const PREFERRED_TRACK_KEY = 'econova:preferred-track';
 
@@ -67,44 +110,59 @@ export function shouldAutoStartTour(options: {
   activeTab: string;
   userId?: string | null;
   authModalOpen?: boolean;
+  /** Any other modal/drawer that must not be stacked under the tour. */
+  otherOverlayOpen?: boolean;
 }): boolean {
   if (!options.isAuthenticated) return false;
   if (options.activeTab !== 'overview') return false;
   if (options.authModalOpen) return false;
+  if (options.otherOverlayOpen) return false;
   return !isTourCompleted(options.userId);
 }
 
-export function getPreferredTrack(): TourTrack | null {
+function isTourTrack(value: unknown): value is TourTrack {
+  return value === 'Economics' || value === 'Mathematics' || value === 'Business';
+}
+
+export function getPreferredTrackKey(userId?: string | null): string {
+  const cleanId = (userId || '').trim();
+  return cleanId ? `${PREFERRED_TRACK_KEY}:${cleanId}` : PREFERRED_TRACK_KEY;
+}
+
+/** Per-user preference; falls back to the legacy global key written by earlier builds. */
+export function getPreferredTrack(userId?: string | null): TourTrack | null {
   if (typeof window === 'undefined') return null;
   try {
-    const val = window.localStorage.getItem(PREFERRED_TRACK_KEY);
-    if (val === 'Economics' || val === 'Mathematics' || val === 'Business') {
-      return val;
-    }
+    const scoped = window.localStorage.getItem(getPreferredTrackKey(userId));
+    if (isTourTrack(scoped)) return scoped;
+    const legacy = window.localStorage.getItem(PREFERRED_TRACK_KEY);
+    if (isTourTrack(legacy)) return legacy;
   } catch {
     // Ignore storage error
   }
   return null;
 }
 
-export function setPreferredTrack(track: TourTrack): void {
+export function setPreferredTrack(track: TourTrack, userId?: string | null): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(PREFERRED_TRACK_KEY, track);
+    window.localStorage.setItem(getPreferredTrackKey(userId), track);
   } catch {
     // Ignore storage error
   }
 }
 
-export function clampTourStep(step: number): number {
+export function clampTourStep(step: number, total: number = TOTAL_TOUR_STEPS): number {
   if (typeof step !== 'number' || isNaN(step)) return 1;
-  return Math.min(TOTAL_TOUR_STEPS, Math.max(1, Math.floor(step)));
+  return Math.min(Math.max(1, total), Math.max(1, Math.floor(step)));
 }
 
 export interface TourStepCopy {
   telemetryTag: string;
   title: string;
   description: string;
+  /** Used instead of `description` on narrow (mobile) viewports when the desktop wording doesn't apply. */
+  mobileDescription?: string;
 }
 
 export interface TourCopy {
@@ -115,6 +173,17 @@ export interface TourCopy {
   next: string;
   finish: string;
   replay: string;
+  /** Header trigger label / tooltip. */
+  openLabel: string;
+  /** Shortcuts-modal action button. */
+  launch: string;
+  /** Accessible name of the tour dialog. */
+  dialogLabel: string;
+  closeLabel: string;
+  /** Desktop keyboard hint line. */
+  keyHints: string;
+  /** Profile → replay card. */
+  replayCard: { title: string; description: string; button: string };
   trackSelectionPrompt: string;
   tracks: Record<TourTrack, { label: string; desc: string }>;
   steps: Record<TourStepId, TourStepCopy>;
@@ -128,7 +197,18 @@ export const TOUR_COPY_EN: TourCopy = {
   next: 'Next',
   finish: 'Start Learning',
   replay: 'Replay Product Tour',
-  trackSelectionPrompt: 'Select your primary focus track to personalize your journey:',
+  openLabel: 'Product Tour',
+  launch: 'Launch Tour',
+  dialogLabel: 'Product tour',
+  closeLabel: 'Close tour',
+  keyHints: '← / → navigate · Esc skip',
+  replayCard: {
+    title: 'Architectural Product Tour',
+    description:
+      'Relaunch the guided walkthrough of the overview dashboard, courses, and study tools.',
+    button: 'Replay Tour',
+  },
+  trackSelectionPrompt: 'Pick the track you want to start with:',
   tracks: {
     Economics: {
       label: 'Economics',
@@ -145,47 +225,60 @@ export const TOUR_COPY_EN: TourCopy = {
   },
   steps: {
     welcome: {
-      telemetryTag: 'CALIBRATION // STEP 01',
+      telemetryTag: 'CALIBRATION',
       title: 'Welcome to ECONOVA',
       description:
-        'Master Economics, Mathematics, and Business through interactive simulations, rigorous curriculum, and verifiable certificates. Select your core focus track below:',
+        'Master Economics, Mathematics, and Business through interactive simulations, a rigorous curriculum, and verifiable certificates.',
     },
     'daily-goal': {
-      telemetryTag: 'TELEMETRY // STEP 02',
-      title: 'Daily Study Goal & Weakness Radar',
+      telemetryTag: 'TELEMETRY',
+      title: 'Daily Goal & XP Progress',
       description:
-        'Maintain your study streak by hitting your daily minute target. Below, the algorithmic Weakness Detection Radar analyzes assessment outcomes and pinpoints concepts to review.',
+        'Set a daily study-minute target and keep your streak alive. Your XP chart starts filling in after your first lesson — nothing here is pre-filled, it is all your real progress.',
     },
     catalog: {
-      telemetryTag: 'CURRICULUM // STEP 03',
-      title: 'Interactive Models & Course Catalog',
+      telemetryTag: 'CURRICULUM',
+      title: 'Interactive Courses & Level Check',
       description:
-        'Explore interactive lessons featuring real-time economic curves, chalkboard calculations, and business bento workspaces. Jump into any course to start hands-on learning.',
+        'Explore interactive lessons with live economic curves, chalkboard math, and business models. The first time you open a course in a subject, a quick 2-minute Level Check can point you to the right starting level — or skip it and jump straight in.',
     },
     toolkit: {
-      telemetryTag: 'STUDY TOOLKIT // STEP 04',
+      telemetryTag: 'STUDY TOOLKIT',
       title: 'Focus Timer & Ambient Soundscape',
       description:
-        'Level up your deep work: trigger Pomodoro focus sessions paired with generative ambient soundscapes right from the header. Notes and your AI Companion are always one click away.',
+        'Start a Pomodoro focus session with a generative ambient soundscape right from the header. Notes and your AI Companion are always one click away.',
+      mobileDescription:
+        'Find your focus timer and ambient soundscape in Profile and inside lessons. Notes and your AI Companion are always one click away.',
     },
     certificates: {
-      telemetryTag: 'ACCREDITATION // STEP 05',
-      title: 'XP Streaks & Verifiable Certificates',
+      telemetryTag: 'ACCREDITATION',
+      title: 'XP & Verifiable Certificates',
       description:
-        'Earn non-cash XP as you complete lessons, climb cohort leaderboards, and unlock cryptographically signed certificates with public QR verification upon mastering courses.',
+        'Earn non-cash XP for completed lessons, and unlock cryptographically signed certificates with public QR verification when you finish a course.',
     },
   },
 };
 
 export const TOUR_COPY_UZ: TourCopy = {
   badgeTemplate: 'KALIBROVKA // {current} / {total}',
-  targetActive: 'NISHO N // FAOL',
+  targetActive: 'NISHON // FAOL',
   skip: 'O‘tkazib yuborish',
   back: 'Orqaga',
   next: 'Keyingisi',
   finish: 'O‘qishni boshlash',
   replay: 'Mahsulot ekskursiyasini qayta ko‘rish',
-  trackSelectionPrompt: 'O‘quv jarayonini moslashtirish uchun asosiy yo‘nalishingizni tanlang:',
+  openLabel: 'Mahsulot ekskursiyasi',
+  launch: 'Boshlash',
+  dialogLabel: 'Mahsulot ekskursiyasi',
+  closeLabel: 'Ekskursiyani yopish',
+  keyHints: '← / → almashtirish · Esc o‘tkazish',
+  replayCard: {
+    title: 'Mahsulot bo‘ylab ekskursiya',
+    description:
+      'Bosh sahifa, kurslar va o‘quv vositalari bo‘ylab ko‘rsatmalarni qayta boshlang.',
+    button: 'Ekskursiyani qayta ko‘rish',
+  },
+  trackSelectionPrompt: 'Boshlash uchun yo‘nalishingizni tanlang:',
   tracks: {
     Economics: {
       label: 'Iqtisodiyot',
@@ -202,34 +295,36 @@ export const TOUR_COPY_UZ: TourCopy = {
   },
   steps: {
     welcome: {
-      telemetryTag: 'KALIBROVKA // 01-BOSQICH',
+      telemetryTag: 'KALIBRLASH',
       title: 'ECONOVA ga xush kelibsiz',
       description:
-        'Iqtisodiyot, matematika va biznesni interaktiv modellar, chuqur o‘quv dasturi va tasdiqlanuvchi sertifikatlar orqali o‘rganing. Asosiy yo‘nalishingizni tanlang:',
+        'Iqtisodiyot, matematika va biznesni interaktiv modellar, chuqur o‘quv dasturi va tasdiqlanuvchi sertifikatlar orqali o‘rganing.',
     },
     'daily-goal': {
-      telemetryTag: 'TELEMETRIYA // 02-BOSQICH',
-      title: 'Kunlik o‘quv maqsadi va zaif mavzular radari',
+      telemetryTag: 'TELEMETRIYA',
+      title: 'Kunlik maqsad va XP natijalari',
       description:
-        'Kunlik daqiqa maqsadiga erishib, o‘quv davomiyligingizni (streak) saqlang. Pastdagi Zaiflik Radari baholash natijalarini tahlil qilib, qayta o‘rganish lozim bo‘lgan mavzularni ko‘rsatadi.',
+        'Kunlik o‘qish daqiqasi maqsadini belgilang va davomiylikni (streak) saqlang. XP grafigi birinchi darsingizdan keyin to‘la boshlaydi — bu yerda hech narsa oldindan to‘ldirilmagan, faqat sizning haqiqiy natijalaringiz.',
     },
     catalog: {
-      telemetryTag: 'O‘QUV DASTURI // 03-BOSQICH',
-      title: 'Interaktiv darslar va kurslar katalogi',
+      telemetryTag: 'O‘QUV DASTURI',
+      title: 'Interaktiv kurslar va daraja testi',
       description:
-        'Haqiqiy vaqtdagi iqtisodiy grafiklar, matematik chizmalar va biznes boshqaruv modellariga ega interaktiv darslarni o‘rganing. Amaliy bilim olish uchun istalgan kursga kiring.',
+        'Jonli iqtisodiy grafiklar, matematik chizmalar va biznes modellariga ega interaktiv darslarni o‘rganing. Fan bo‘yicha birinchi kursni ochganingizda 2 daqiqalik daraja testi sizga mos boshlang‘ich nuqtani topadi — xohlasangiz o‘tkazib yuboring.',
     },
     toolkit: {
-      telemetryTag: 'O‘QUV USKUNALARI // 04-BOSQICH',
+      telemetryTag: 'O‘QUV USKUNALARI',
       title: 'Fokus taymeri va sokin ovozlar',
       description:
-        'Chuqur diqqat bilan o‘rganing: sarlavhadagi boshqaruvdan Pomodoro fokus taymeri va generativ sokin fon musiqasini ishga tushiring. Qaydlar va AI Study Companion doimo bir tugma masofasida.',
+        'Sarlavhadagi boshqaruvdan Pomodoro fokus seansini generativ sokin fon ovozi bilan ishga tushiring. Qaydlar va AI Companion doimo bir tugma masofasida.',
+      mobileDescription:
+        'Fokus taymeri va sokin fon ovozi Profil bo‘limida va dars ichida mavjud. Qaydlar va AI Companion doimo bir tugma masofasida.',
     },
     certificates: {
-      telemetryTag: 'AKKREDITATSIYA // 05-BOSQICH',
-      title: 'XP davomiyligi va tasdiqlanuvchi sertifikatlar',
+      telemetryTag: 'AKKREDITATSIYA',
+      title: 'XP va tasdiqlanuvchi sertifikatlar',
       description:
-        'Darslarni tugatganingiz sari XP to‘plang, peshqadamlar jadvalida ko‘tariling va kurslarni yakunlab ommaviy QR tekshiruviga ega raqamli sertifikatlarni qo‘lga kiriting.',
+        'Yakunlangan darslar uchun naqd pulsiz XP to‘plang va kursni tugatganingizda ommaviy QR tekshiruviga ega kriptografik imzolangan sertifikatni oling.',
     },
   },
 };
@@ -242,7 +337,17 @@ export const TOUR_COPY_RU: TourCopy = {
   next: 'Далее',
   finish: 'Начать обучение',
   replay: 'Пройти тур заново',
-  trackSelectionPrompt: 'Выберите основное направление для персонализации программы:',
+  openLabel: 'Обзорный тур',
+  launch: 'Запустить тур',
+  dialogLabel: 'Обзорный тур по платформе',
+  closeLabel: 'Закрыть тур',
+  keyHints: '← / → перейти · Esc пропустить',
+  replayCard: {
+    title: 'Обзорный тур по платформе',
+    description: 'Запустите заново пошаговый обзор панели, курсов и учебных инструментов.',
+    button: 'Пройти заново',
+  },
+  trackSelectionPrompt: 'Выберите направление, с которого хотите начать:',
   tracks: {
     Economics: {
       label: 'Экономика',
@@ -259,34 +364,36 @@ export const TOUR_COPY_RU: TourCopy = {
   },
   steps: {
     welcome: {
-      telemetryTag: 'КАЛИБРОВКА // ЭТАП 01',
+      telemetryTag: 'КАЛИБРОВКА',
       title: 'Добро пожаловать в ECONOVA',
       description:
-        'Осваивайте экономику, математику и бизнес с помощью интерактивных моделей, академической программы и проверяемых сертификатов. Выберите ключевой трек:',
+        'Осваивайте экономику, математику и бизнес с помощью интерактивных моделей, академической программы и проверяемых сертификатов.',
     },
     'daily-goal': {
-      telemetryTag: 'ТЕЛЕМЕТРИЯ // ЭТАП 02',
-      title: 'Ежедневная цель и радар слабых тем',
+      telemetryTag: 'ТЕЛЕМЕТРИЯ',
+      title: 'Ежедневная цель и прогресс XP',
       description:
-        'Поддерживайте непрерывную серию занятий, выполняя ежедневную норму минут. Алгоритмический радар выявляет пробелы в тестах и подсказывает темы для повторения.',
+        'Задайте дневную норму минут и поддерживайте серию занятий. График XP начнёт заполняться после первого урока — здесь ничего не нарисовано заранее, только ваш настоящий прогресс.',
     },
     catalog: {
-      telemetryTag: 'УЧЕБНАЯ ПРОГРАММА // ЭТАП 03',
-      title: 'Интерактивные курсы и каталог',
+      telemetryTag: 'УЧЕБНАЯ ПРОГРАММА',
+      title: 'Интерактивные курсы и проверка уровня',
       description:
-        'Изучайте интерактивные уроки с динамическими кривыми, математическими выкладками и бизнес-моделями. Откройте любой курс для практического обучения.',
+        'Изучайте интерактивные уроки с живыми графиками, математическими выкладками и бизнес-моделями. При первом открытии курса по предмету 2-минутная проверка уровня подскажет, с чего начать, — или пропустите её и переходите сразу к курсу.',
     },
     toolkit: {
-      telemetryTag: 'ИНСТРУМЕНТЫ // ЭТАП 04',
+      telemetryTag: 'ИНСТРУМЕНТЫ',
       title: 'Таймер фокуса и эмбиент-звуки',
       description:
-        'Погрузитесь в глубокую концентрацию: запускайте таймер Pomodoro в паре с генеративным эмбиент-звучанием прямо из шапки. Заметки и AI-ассистент всегда под рукой.',
+        'Запускайте фокус-сессию Pomodoro с генеративным эмбиент-звуком прямо из шапки. Заметки и AI-ассистент всегда под рукой.',
+      mobileDescription:
+        'Таймер фокуса и эмбиент-звуки доступны в профиле и внутри уроков. Заметки и AI-ассистент всегда под рукой.',
     },
     certificates: {
-      telemetryTag: 'СЕРТИФИКАЦИЯ // ЭТАП 05',
-      title: 'Серии XP и проверяемые сертификаты',
+      telemetryTag: 'СЕРТИФИКАЦИЯ',
+      title: 'XP и проверяемые сертификаты',
       description:
-        'Зарабатывайте академический XP за пройденные уроки, поднимайтесь в рейтинге и получайте криптографически подписанные сертификаты с QR-верификацией подлинности.',
+        'Зарабатывайте XP (без денежной стоимости) за пройденные уроки и получайте криптографически подписанные сертификаты с публичной QR-проверкой после завершения курса.',
     },
   },
 };

@@ -250,7 +250,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 aria-current={isActive ? 'page' : undefined}
                 className={`group relative z-10 flex w-full min-h-[42px] items-center justify-between gap-2 overflow-hidden rounded-lg border-2 px-3 py-2 text-sm font-semibold whitespace-nowrap backdrop-blur-md transition-all ${
                   isActive
-                    ? 'border-theme-border bg-white/60 text-theme-accent shadow-brutal-sm hover:bg-white/90 hover:border-slate-800 hover:shadow-[4px_4px_0px_#090D16] dark:bg-[#080B14]/70 dark:hover:bg-[#080B14]/80'
+                    ? 'border-theme-border bg-white/60 text-theme-accent shadow-brutal-sm hover:bg-white/90 hover:border-slate-800 hover:shadow-[4px_4px_0px_#090D16] dark:bg-[#080B14]/70 dark:hover:bg-[#080B14]/85 dark:hover:border-theme-accent dark:hover:shadow-[4px_4px_0px_#000000]'
                     : 'border-transparent text-muted hover:bg-slate-900/10 hover:border-slate-800 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:hover:bg-transparent dark:hover:border-transparent dark:hover:text-ink'
                 }`}
               >
@@ -319,7 +319,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   aria-current={isActive ? 'page' : undefined}
                   className={`flex w-full min-h-[38px] items-center gap-2.5 rounded-lg border-2 px-3 py-1.5 text-sm font-semibold whitespace-nowrap backdrop-blur-md transition-all ${
                     isActive
-                      ? 'border-theme-border bg-white/60 text-theme-accent shadow-brutal-sm hover:bg-white/90 hover:border-slate-800 hover:shadow-[4px_4px_0px_#090D16] dark:bg-[#080B14]/70'
+                      ? 'border-theme-border bg-white/60 text-theme-accent shadow-brutal-sm hover:bg-white/90 hover:border-slate-800 hover:shadow-[4px_4px_0px_#090D16] dark:bg-[#080B14]/70 dark:hover:bg-[#080B14]/85 dark:hover:border-theme-accent dark:hover:shadow-[4px_4px_0px_#000000]'
                       : 'border-transparent text-muted hover:bg-slate-900/10 hover:border-slate-800 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] dark:hover:text-ink dark:hover:bg-transparent dark:hover:border-transparent'
                   }`}
                 >

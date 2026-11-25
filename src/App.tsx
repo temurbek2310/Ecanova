@@ -75,7 +75,7 @@ import {
   shouldPromptLevelCheck,
   type LevelCheckState,
 } from './lib/level-check';
-import { shouldAutoStartTour, type TourTrack } from './lib/product-tour';
+import { getTourCopy, shouldAutoStartTour, type TourTrack } from './lib/product-tour';
 import { Sidebar } from './components/Sidebar';
 import { SmoothScroll } from './components/SmoothScroll';
 import { LandingPage } from './components/landing/LandingPage';
@@ -1031,6 +1031,7 @@ export default function App() {
 
   const levelCheckCopy = getLevelCheckCopy(locale);
   const dataStateCopy = getDataStateCopy(locale);
+  const tourCopy = getTourCopy(locale);
   const isRecommendedForUser = useCallback(
     (course: CourseCatalogItem) => Boolean(user) && getPlacedLevel(levelCheckState, course.subject) === course.level,
     [levelCheckState, user]
@@ -1664,6 +1665,8 @@ export default function App() {
       activeTab,
       userId: user?.id,
       authModalOpen: authOpen,
+      // Never stack the tour over another modal or drawer.
+      otherOverlayOpen: cheatSheetOpen || companionOpen || Boolean(levelCheckRequest),
     });
     if (!canLaunch) return;
 
@@ -1673,7 +1676,7 @@ export default function App() {
     }, 450);
 
     return () => window.clearTimeout(timer);
-  }, [authHydrated, user, activeTab, authOpen]);
+  }, [authHydrated, user, activeTab, authOpen, cheatSheetOpen, companionOpen, levelCheckRequest]);
 
   const handleLogout = async () => {
     await apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
@@ -2073,8 +2076,8 @@ export default function App() {
             <button
               type="button"
               onClick={handleLaunchTour}
-              aria-label={locale === 'uz' ? 'Mahsulot ekskursiyasi' : 'Product Tour'}
-              title={locale === 'uz' ? 'Mahsulot ekskursiyasi' : 'Product Tour'}
+              aria-label={tourCopy.openLabel}
+              title={tourCopy.openLabel}
               data-testid="header-tour-trigger-btn"
               className="inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-slate-500 bg-white/55 text-muted shadow-brutal-sm backdrop-blur-md transition-all hover:bg-slate-900/10 hover:border-slate-900 hover:text-slate-950 hover:shadow-[3px_3px_0px_#090D16] shrink-0 dark:border-[#222B3D] dark:bg-[#080B14]/60 dark:hover:border-theme-accent dark:hover:text-ink"
             >
@@ -2322,8 +2325,8 @@ export default function App() {
               />
 
               {/* Daily Study Goal Ring & 7-Day XP Progress Chart */}
-              <div className="relative z-10 grid gap-6 lg:grid-cols-12">
-                <div className="lg:col-span-5" data-tour-id="tour-daily-goal">
+              <div className="relative z-10 grid gap-6 lg:grid-cols-12" data-tour-id="tour-daily-goal">
+                <div className="lg:col-span-5">
                   <DailyStudyGoalCard
                     locale={locale}
                     isAuthenticated={Boolean(user)}
@@ -2364,7 +2367,7 @@ export default function App() {
               />
 
               {/* Horizontal Pinned GSAP ScrollTrigger Course Showcase */}
-              <div data-tour-id="tour-catalog">
+              <div>
                 <CourseShowcase
                   locale={locale}
                   courses={courses}
@@ -3859,7 +3862,7 @@ export default function App() {
                 <div className="flex items-center gap-2 min-w-0">
                   <Compass className="h-4 w-4 text-theme-accent shrink-0" aria-hidden="true" />
                   <span className="text-xs font-bold text-ink">
-                    {locale === 'uz' ? 'Mahsulot bo‘ylab ekskursiya' : 'Interactive Product Tour'}
+                    {tourCopy.openLabel}
                   </span>
                 </div>
                 <button
@@ -3871,7 +3874,7 @@ export default function App() {
                   data-testid="shortcuts-modal-launch-tour-btn"
                   className="rounded-md border-2 border-theme-border bg-theme-accent px-3 py-1 font-mono text-xs font-bold text-theme-accent-ink shadow-brutal-sm transition-all hover:bg-accent-hover hover:border-slate-900 active:translate-x-[1px] active:translate-y-[1px]"
                 >
-                  {locale === 'uz' ? 'Boshlash' : 'Launch Tour'}
+                  {tourCopy.launch}
                 </button>
               </div>
             </div>
@@ -3887,22 +3890,6 @@ export default function App() {
       locale={locale}
       userId={user?.id}
       onClose={() => setTourOpen(false)}
-      onComplete={(preferredTrack) => {
-        if (preferredTrack) {
-          const sectionMap: Record<TourTrack, string> = {
-            Economics: 'economics',
-            Mathematics: 'mathematics',
-            Business: 'business',
-          };
-          const sectionId = sectionMap[preferredTrack];
-          if (sectionId) {
-            window.setTimeout(() => {
-              const target = document.querySelector(`[data-testid="${sectionId}-section"]`);
-              target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 150);
-          }
-        }
-      }}
       onNavigateToCatalog={() => navigateToTab('catalog')}
       onScrollToTrack={(preferredTrack) => {
         const sectionMap: Record<TourTrack, string> = {
