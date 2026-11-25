@@ -771,55 +771,8 @@ export function analyzeWeaknessDetection(params: {
     }
   }
 
-  // 3. Fallback baseline high-difficulty topic suggestions from catalog so the card is always actionable
-  if (recommendations.length === 0 && params.courses.length > 0) {
-    for (const course of params.courses.slice(0, 2)) {
-      const ed = course.editions[params.locale] ?? course.editions.en;
-      if (!ed) continue;
-      const lessonTitle =
-        ed.lessonTitles?.[0] ||
-        (isUz ? '1-dars: Asosiy modellar va tenglamalar' : 'Lesson 1: Core Equilibrium & Proof Models');
-      const weakTopicLabel =
-        course.topicTags?.[0] ||
-        (course.subject === 'Economics'
-          ? isUz
-            ? 'Bozor muvozanati va elastiklik'
-            : 'Market Equilibrium & Elasticity'
-          : course.subject === 'Mathematics'
-          ? isUz
-            ? 'Chiziqli algebra va hosilalar'
-            : 'Linear Algebra & Optimization'
-          : isUz
-          ? 'Birlik iqtisodiyoti (Unit Economics)'
-          : 'Unit Economics & Margin Analysis');
-
-      const preview = buildWeaknessLessonPreview({
-        course,
-        lessonIndex: 0,
-        lessonTitle,
-        weakTopicLabel,
-        locale: params.locale,
-      });
-
-      recommendations.push({
-        id: `weak-baseline-${course.id}-0`,
-        courseId: course.id,
-        courseTitle: ed.title,
-        subject: course.subject,
-        lessonIndex: 0,
-        lessonTitle,
-        weakTopicLabel,
-        missedCount: 0,
-        severity: 'focus',
-        diagnosticReason: isUz
-          ? `Kohort bo‘yicha eng ko‘p xato qilinadigan test mavzusi: "${weakTopicLabel}".`
-          : `Most frequently missed assessment topic across learners: "${weakTopicLabel}".`,
-        lessonPreviewSummary: preview.lessonPreviewSummary,
-        keyConcepts: preview.keyConcepts,
-      });
-    }
-  }
-
+  // No invented fallback: with no quiz misses or unpassed enrollments the card
+  // renders an honest empty state instead of fabricated cohort-wide topics.
   return {
     totalMissedPatterns: history.reduce((acc, item) => acc + item.missedCount, 0),
     hasRecordedQuizFailures: history.length > 0,

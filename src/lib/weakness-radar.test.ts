@@ -68,7 +68,7 @@ function makeCourse(id: string, subject: 'Economics' | 'Mathematics' | 'Business
   };
 }
 
-test('buildWeaknessTopicMetrics produces 6 bounded radar axes with both weak and strong points', () => {
+test('buildWeaknessTopicMetrics plots only axes backed by real learner data', () => {
   const courses = [
     makeCourse('c-econ', 'Economics'),
     makeCourse('c-math', 'Mathematics'),
@@ -146,7 +146,9 @@ test('buildWeaknessTopicMetrics produces 6 bounded radar axes with both weak and
     locale: 'en',
   });
 
-  assert.equal(metrics.length, 6);
+  // weak-1 + weak-2 (quiz misses) + the passed Business enrollment (91%).
+  // No invented "pillar" axes for subjects without data.
+  assert.equal(metrics.length, 3);
   for (const m of metrics) {
     assert.ok(m.scorePercent >= 10 && m.scorePercent <= 100);
     assert.equal(m.isStrong, m.scorePercent >= STRONG_PERFORMANCE_THRESHOLD);
@@ -161,7 +163,19 @@ test('buildWeaknessTopicMetrics produces 6 bounded radar axes with both weak and
   assert.ok(weakOne.scorePercent < weakTwo.scorePercent);
 
   const strongPoints = metrics.filter((m) => m.isStrong);
-  assert.ok(strongPoints.length >= 3);
+  assert.equal(strongPoints.length, 1);
+  assert.equal(strongPoints[0].courseId, 'c-biz');
+  assert.equal(strongPoints[0].scorePercent, 91);
+});
+
+test('buildWeaknessTopicMetrics returns no axes for a learner with no data', () => {
+  const metrics = buildWeaknessTopicMetrics({
+    analysis: { totalMissedPatterns: 0, hasRecordedQuizFailures: false, recommendations: [] },
+    courses: [makeCourse('c-econ', 'Economics'), makeCourse('c-math', 'Mathematics')],
+    enrollments: [],
+    locale: 'en',
+  });
+  assert.deepEqual(metrics, []);
 });
 
 test('formatShortRadarLabel preserves concise readable labels without overflow or trailing connectors', () => {

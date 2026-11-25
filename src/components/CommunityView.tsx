@@ -21,6 +21,8 @@ import type { WeekWindow } from '../lib/quiz-leaderboard';
 import { FloatingWatermark } from './FloatingWatermark';
 import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
 import { RankingMatrix } from './RankingMatrix';
+import { DataStateCard } from './ui/DataStateCard';
+import { getDataStateCopy } from '../lib/data-state-copy';
 import { BrutalLeaderboardSkeleton, ContentReveal, SkeletonLine } from './ui/BrutalSkeleton';
 
 interface CommunityViewProps {
@@ -38,6 +40,9 @@ interface CommunityViewProps {
   onToggleLeaderboardOptIn: (optIn: boolean, pseudonym: string) => Promise<void>;
   onClaimReferral: (code: string) => Promise<void>;
   onRequireAuth: () => void;
+  /** True when /api/leaderboards failed (no stub peers are ever shown). */
+  loadError?: boolean;
+  onRetry?: () => void;
 }
 
 export const CommunityView: React.FC<CommunityViewProps> = ({
@@ -55,8 +60,22 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   onToggleLeaderboardOptIn,
   onClaimReferral,
   onRequireAuth,
+  loadError = false,
+  onRetry,
 }) => {
   const strings = t(locale);
+  const dataStateCopy = getDataStateCopy(locale);
+  const leaderboardErrorCard = (
+    <DataStateCard
+      variant="compact"
+      testId="leaderboard-error"
+      className="mt-4"
+      title={dataStateCopy.leaderboardErrorTitle}
+      body={dataStateCopy.leaderboardErrorBody}
+      retryLabel={dataStateCopy.retry}
+      onRetry={onRetry}
+    />
+  );
   const toastCopy = notificationCopy(locale);
   const [activeLeaderboardTab, setActiveLeaderboardTab] = useState<'cohort' | 'quiz'>('cohort');
   const [selectedQuizCourseId, setSelectedQuizCourseId] = useState<string>('all');
@@ -119,7 +138,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
               </span>
             </h1>
             <p className="mt-1 text-xs text-muted">
-              {cohortName} ·{' '}
+              {cohortName ? `${cohortName} · ` : ''}
               {locale === 'uz'
                 ? 'Faqat ixtiyoriy ravishda rozilik bildirgan o‘quvchilar tanlangan taxallus ostida ko‘rinadi.'
                 : 'Only learners who explicitly opt in appear here under a chosen pseudonym. No email, age, or school is ever shown.'}
@@ -227,7 +246,9 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
 
 
         {/* TAB 1: COHORT XP LEADERBOARD */}
-        {activeLeaderboardTab === 'cohort' && (
+        {activeLeaderboardTab === 'cohort' && loadError && !loading && leaderboardErrorCard}
+
+        {activeLeaderboardTab === 'cohort' && !(loadError && !loading) && (
           <div
             role="tabpanel"
             data-testid="cohort-leaderboard-panel"
@@ -252,6 +273,15 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
               </thead>
               {loading && entries.length === 0 ? (
                 <BrutalLeaderboardSkeleton rows={5} locale={locale} />
+              ) : entries.length === 0 ? (
+                <tbody>
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center" data-testid="cohort-leaderboard-empty">
+                      <p className="text-sm font-bold text-ink">{dataStateCopy.leaderboardEmptyTitle}</p>
+                      <p className="mt-1 text-xs text-muted">{dataStateCopy.leaderboardEmptyBody}</p>
+                    </td>
+                  </tr>
+                </tbody>
               ) : (
                 <tbody className="divide-y divide-line/60">
                   {entries.map((row) => (
@@ -260,7 +290,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                         #{row.rank}
                       </td>
                       <td className="py-2.5 pr-4 font-medium text-ink">
-                        {row.pseudonym}{' '}
+                        {row.pseudonym || dataStateCopy.anonymousLearner}{' '}
                         {row.isCurrentUser ? (locale === 'uz' ? '(Siz)' : '(You)') : ''}
                       </td>
                       <td className="py-2.5 pr-4 text-right font-mono tabular-nums text-muted">
@@ -278,7 +308,9 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
         )}
 
         {/* TAB 2: QUANTITATIVE RANKING MATRIX */}
-        {activeLeaderboardTab === 'quiz' && (
+        {activeLeaderboardTab === 'quiz' && loadError && !loading && leaderboardErrorCard}
+
+        {activeLeaderboardTab === 'quiz' && !(loadError && !loading) && (
           <RankingMatrix
             locale={locale}
             quizEntries={quizEntries}

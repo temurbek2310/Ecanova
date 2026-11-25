@@ -6,7 +6,6 @@ import {
   sanitizeRedirectTo,
   type IntendedDestination,
 } from './auth-routing';
-import { resolveMvpApiFallbackPayload } from './mvp-api-stubs';
 import { normalizeUserRole } from '../shared/econova-rules';
 
 /**
@@ -173,11 +172,9 @@ function isSameOriginApiUrl(input: RequestInfo | URL): boolean {
 }
 
 /**
- * Same-origin fetch wrapper: sends the HttpOnly session cookie and, for a small
- * set of public read-only endpoints, serves bundled offline data when the
- * server is unreachable or erroring. Auth and learner endpoints (/api/auth/*,
- * /api/me/*) never get substitute data, and 401/403 responses are always
- * passed through so the UI sees the real signed-out state.
+ * Same-origin fetch wrapper: sends the HttpOnly session cookie. It never
+ * substitutes bundled/sample data — real error statuses reach the caller so
+ * the UI can render honest error and empty states.
  */
 export async function apiFetch(
   input: RequestInfo | URL,
@@ -193,46 +190,7 @@ export async function apiFetch(
     credentials: init?.credentials ?? 'same-origin',
   };
 
-  const method = (
-    init?.method ||
-    (typeof Request !== 'undefined' && input instanceof Request ? input.method : 'GET')
-  ).toUpperCase();
-
-  const offlineFallback = (): Response | null => {
-    if (method !== 'GET') return null;
-    let parsedUrl: URL;
-    try {
-      const origin =
-        typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-      parsedUrl =
-        input instanceof URL
-          ? input
-          : new URL(
-              typeof Request !== 'undefined' && input instanceof Request ? input.url : String(input),
-              origin
-            );
-    } catch {
-      return null;
-    }
-    const fallback = resolveMvpApiFallbackPayload(parsedUrl.pathname, parsedUrl.searchParams);
-    if (fallback === null) return null;
-    return new Response(JSON.stringify(fallback), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', 'X-Econova-Offline-Fallback': '1' },
-    });
-  };
-
-  try {
-    const response = await baseFetch(input, nextInit);
-    if (response.status === 404 || response.status >= 500) {
-      return offlineFallback() ?? response;
-    }
-    return response;
-  } catch (err) {
-    const fallback = offlineFallback();
-    if (fallback) return fallback;
-    throw err;
-  }
+  return baseFetch(input, nextInit);
 }
 
 /** Called once at startup: clears tokens that earlier builds stored where scripts could read them. */

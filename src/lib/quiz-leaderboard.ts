@@ -115,7 +115,7 @@ export function rankWeeklyQuizAttempts(
     if (!existing) {
       grouped.set(key, {
         userId: row.userId,
-        pseudonym: row.pseudonym || 'ECONOVAScholar',
+        pseudonym: row.pseudonym || '', // UI renders a localized "Anonymous learner"
         courseId: row.courseId,
         courseTitle: row.courseTitle,
         subject: row.subject,

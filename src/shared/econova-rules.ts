@@ -1,4 +1,5 @@
 import type {
+  SimulationType,
   CertificateVerificationResult,
   EditorialSignoffs,
   EditorialSignoffType,
@@ -501,4 +502,23 @@ export function authorizeEditorialTransition(
     }
   }
   return { allowed: true, signoffs: [...new Set(requested)] };
+}
+
+/**
+ * Maps the DB `lessons.simulation_type` value (CHECK constraint uses
+ * 'derivative_tangent') onto the frontend SimulationType union
+ * ('calculus_derivative'). Unknown values degrade to 'none'.
+ */
+export function normalizeSimulationType(raw: unknown): SimulationType {
+  switch (raw) {
+    case 'supply_demand':
+    case 'unit_economics':
+    case 'none':
+      return raw;
+    case 'derivative_tangent':
+    case 'calculus_derivative':
+      return 'calculus_derivative';
+    default:
+      return 'none';
+  }
 }

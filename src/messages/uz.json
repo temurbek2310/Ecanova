@@ -313,9 +313,6 @@
     "consentError": "Iltimos, Maxfiylik qoidalari va naqd pulsiz XP shartlarini tasdiqlang.",
     "pleaseWait": "Iltimos, kuting...",
     "createAccountBtn": "Hisob yaratish",
-    "sandboxHeader": "Sinov muhiti uchun tezkor kirish",
-    "sandboxLearner": "Demo o‘quvchi",
-    "sandboxStaff": "Tahririyat xodimi (Admin)",
     "redirectingToLabel": "Kirishdan so‘ng yo‘naltiriladigan sahifa:",
     "protectedRouteBadge": "HIMOYALANGAN SAHIFA · TIZIMGA KIRISH TALAB ETILADI",
     "backToOverview": "Bosh sahifaga qaytish",
@@ -563,5 +560,24 @@
     "skipped": "O‘tkazib yuborilgan",
     "takeCheck": "Tekshiruvdan o‘tish",
     "retakeCheck": "Qayta topshirish"
+  },
+  "dataState": {
+    "catalogErrorTitle": "Kurslar katalogi mavjud emas",
+    "catalogErrorBody": "O‘quv ma’lumotlar bazasiga ulanib bo‘lmadi. Natijalaringiz saqlangan — birozdan so‘ng qayta urinib ko‘ring.",
+    "catalogEmptyTitle": "Hozircha nashr etilgan kurslar yo‘q",
+    "catalogEmptyBody": "Yangi kurslar nashr etilishi bilanoq shu yerda paydo bo‘ladi.",
+    "leaderboardErrorTitle": "Reyting jadvali mavjud emas",
+    "leaderboardErrorBody": "Reytinglarni hozir yuklab bo‘lmadi.",
+    "leaderboardEmptyTitle": "Bu hafta hali reytingda o‘quvchilar yo‘q",
+    "leaderboardEmptyBody": "Jadvalga chiqish uchun darsni yakunlang yoki testdan o‘ting.",
+    "progressErrorTitle": "Natijalaringizni yuklab bo‘lmadi",
+    "progressErrorBody": "XP, seriya va sertifikatlaringiz ulanish tiklangach ko‘rinadi.",
+    "weaknessEmptyTitle": "Hozircha zaif tomonlar aniqlanmadi",
+    "weaknessEmptyBody": "Kurs testini topshiring — nimani takrorlash kerakligini tavsiya qilamiz.",
+    "radarEmptyTitle": "O‘zlashtirish radari uchun ma’lumot yetarli emas",
+    "radarEmptyBody": "O‘zlashtirish profilingizni ko‘rish uchun kursga yoziling va baholashni yakunlang.",
+    "anonymousLearner": "Anonim o‘quvchi",
+    "retry": "Qayta urinish",
+    "loadingValue": "—"
   }
 }

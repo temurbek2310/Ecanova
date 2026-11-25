@@ -16,9 +16,10 @@ ECONOVA is a dark-mode-first, bilingual (English and Uzbek Latin) Progressive We
    - `SUPABASE_DB_URL` — PostgreSQL connection string (`postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres?sslmode=require`).
    - `SESSION_SECRET` — random 64-character hex string (32+ bytes) used to sign `HttpOnly` session cookies.
    - `GEMINI_API_KEY` *(optional)* — enables server-side Study Companion and Editorial Draft visual generation; kept disabled when unset.
-   - `ENABLE_DEMO_SANDBOX` *(optional, defaults to `"false"`)* — keep `"false"` for real learners; set `"true"` only in isolated testing sandboxes.
 2. `npm run db:migrate` — applies SQL migrations in `supabase/migrations/*.sql` idempotently.
-3. `npm run db:seed` — seeds bilingual Economics, Mathematics, and Business curriculum into PostgreSQL.
+3. `npm run db:seed` — seeds bilingual Economics, Mathematics, and Business curriculum into PostgreSQL (curriculum only; the server also runs this automatically on an empty database and never creates user accounts).
+   - `npm run db:import:learn-anything -- --file data/learn-anything-production.json` — imports the extended ETL curriculum as **draft** editions; publish them through the admin console.
+   - `npm run db:seed:demo` *(local/staging only)* — adds a demo learner cohort (XP, streaks, weekly quiz attempts) for UI testing. Refuses to run with `NODE_ENV=production`; add `-- --staff` for a demo admin.
 4. `npm run dev` — starts `server.ts` (Express API + Vite middleware on port 3000).
 5. `npm test` — runs deterministic unit tests (`src/shared/econova-rules.test.ts`).
 6. `npm run build` — builds production client bundle into `dist/`.

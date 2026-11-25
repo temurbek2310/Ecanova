@@ -16,7 +16,6 @@ import { GoogleLogoSvg } from './AuthPageView';
 
 interface AuthModalProps {
   locale: LocaleCode;
-  sandboxEnabled?: boolean;
   redirectTo?: string | null;
   onClose: () => void;
   onAuthenticated: (
@@ -27,7 +26,6 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   locale,
-  sandboxEnabled = false,
   redirectTo = null,
   onClose,
   onAuthenticated,
@@ -120,23 +118,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleSandbox = async (account: 'learner' | 'staff') => {
-    setErrorMsg(null);
-    setLoading(true);
-    try {
-      const res = await apiFetch('/api/auth/sandbox', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account }),
-      });
-      await completeSignIn(res);
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div
       role="dialog"
@@ -184,33 +165,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <ArrowRight className="h-3.5 w-3.5 text-theme-accent" aria-hidden="true" />
           </button>
         </div>
-
-        {/* Sandbox Evaluation Quick Access (only when ENABLE_DEMO_SANDBOX=true) */}
-        {sandboxEnabled && (
-          <div className="mt-4 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/55 dark:bg-[#080B14]/60 p-3 backdrop-blur-md">
-            <div className="text-[11px] font-bold text-muted">
-              {authStrings.sandboxHeader}
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={loading || googleLoading}
-                onClick={() => void handleSandbox('learner')}
-                className="min-h-[38px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/30 dark:bg-[#101522]/30 px-3 py-1.5 text-xs font-bold text-theme-cyan shadow-brutal-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-cyan"
-              >
-                {authStrings.sandboxLearner} (Dilnoza)
-              </button>
-              <button
-                type="button"
-                disabled={loading || googleLoading}
-                onClick={() => void handleSandbox('staff')}
-                className="min-h-[38px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/30 dark:bg-[#101522]/30 px-3 py-1.5 text-xs font-bold text-theme-accent shadow-brutal-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-accent"
-              >
-                {authStrings.sandboxStaff}
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="mt-4 flex gap-1.5 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/50 dark:bg-[#080B14]/60 p-1 text-xs shadow-brutal-sm backdrop-blur-md">
           <button

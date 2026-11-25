@@ -65,6 +65,8 @@ import { ProfilePoliciesView } from './components/ProfilePoliciesView';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { ProductTour } from './components/tour/ProductTour';
 import { LevelCheckModal } from './components/calibration/LevelCheckModal';
+import { DataStateCard } from './components/ui/DataStateCard';
+import { getDataStateCopy } from './lib/data-state-copy';
 import {
   getLevelCheckCopy,
   getLevelCheckState,
@@ -324,6 +326,7 @@ export default function App() {
   // Catalog & filters
   const [courses, setCourses] = useState<CourseCatalogItem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogUnavailable, setCatalogUnavailable] = useState(false);
   const [subjectFilter, setSubjectFilter] = useState<Subject | 'ALL'>('ALL');
   const [levelFilter, setLevelFilter] = useState<CourseLevel | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -370,7 +373,8 @@ export default function App() {
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
 
   // Community & referrals
-  const [cohortName, setCohortName] = useState('Active Weekly Study Cohort');
+  const [cohortName, setCohortName] = useState('');
+  const [leaderboardUnavailable, setLeaderboardUnavailable] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   const [quizLeaderboard, setQuizLeaderboard] = useState<QuizLeaderboardEntry[]>([]);
@@ -386,11 +390,9 @@ export default function App() {
   const [health, setHealth] = useState<{
     aiConfigured: boolean;
     databaseConfigured: boolean;
-    sandboxEnabled: boolean;
   }>({
     aiConfigured: false,
     databaseConfigured: true,
-    sandboxEnabled: false,
   });
 
   // Deep link verification token (?verify=...)
@@ -416,12 +418,10 @@ export default function App() {
         const data = (await res.json()) as {
           aiConfigured?: boolean;
           databaseConfigured?: boolean;
-          sandboxEnabled?: boolean;
         };
         setHealth({
           aiConfigured: Boolean(data.aiConfigured),
           databaseConfigured: data.databaseConfigured !== false,
-          sandboxEnabled: Boolean(data.sandboxEnabled),
         });
       }
     } catch {
@@ -431,6 +431,7 @@ export default function App() {
 
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);
+    setCatalogUnavailable(false);
     notify.dismiss('catalog-load-error');
     try {
       const res = await apiFetch('/api/catalog');
@@ -442,6 +443,7 @@ export default function App() {
       setCourses(data.courses);
       window.setTimeout(() => void refreshOfflineCache(), 250);
     } catch (err) {
+      setCatalogUnavailable(true);
       const catalogCopy = notificationCopy(localeRef.current);
       notify.error(catalogCopy.catalog.loadFailed, describeError(err, catalogCopy.common.genericError), {
         id: 'catalog-load-error',
@@ -457,15 +459,18 @@ export default function App() {
   const loadLeaderboard = useCallback(async () => {
     try {
       setLeaderboardLoading(true);
+      setLeaderboardUnavailable(false);
       const res = await apiFetch('/api/leaderboards');
-      if (res.ok) {
+      if (!res.ok) {
+        setLeaderboardUnavailable(true);
+      } else {
         const data = (await res.json()) as {
           cohortName: string;
           entries: LeaderboardEntry[];
           quizLeaderboard?: QuizLeaderboardEntry[];
           weekWindow?: { weekStartIso: string; weekEndIso: string };
         };
-        setCohortName(data.cohortName);
+        setCohortName(data.cohortName || '');
         setLeaderboard(data.entries);
         if (Array.isArray(data.quizLeaderboard)) {
           setQuizLeaderboard(data.quizLeaderboard);
@@ -475,10 +480,19 @@ export default function App() {
         }
       }
     } catch {
-      // Non-blocking
+      // Non-blocking: CommunityView renders an error card with Retry.
+      setLeaderboardUnavailable(true);
     } finally {
       setLeaderboardLoading(false);
     }
+  }, []);
+
+  const notifyProgressLoadFailed = useCallback(() => {
+    const copy = getDataStateCopy(localeRef.current);
+    notify.error(copy.progressErrorTitle, copy.progressErrorBody, {
+      id: 'progress-load-error',
+      action: { label: copy.retry, onAction: () => void loadProtectedDataRef.current() },
+    });
   }, []);
 
   const loadProtectedData = useCallback(
@@ -491,6 +505,11 @@ export default function App() {
         ]);
         if (options?.throwOnError && ovRes.status >= 500) {
           throw new Error(`Server responded with ${ovRes.status}.`);
+        }
+        if ([ovRes, certRes, refRes].some((r) => r.status >= 500)) {
+          notifyProgressLoadFailed();
+        } else {
+          notify.dismiss('progress-load-error');
         }
         if (ovRes.ok) {
           const ov = (await ovRes.json()) as {
@@ -558,11 +577,12 @@ export default function App() {
           setClaimedReferralCode(rData.claimedByMe?.code ?? null);
         }
       } catch (err) {
-        // Offline or unauthenticated; reconnect reconciliation opts in to surfacing the failure.
+        // Reconnect reconciliation opts in to throwing; otherwise surface a retry toast.
         if (options?.throwOnError) throw err;
+        notifyProgressLoadFailed();
       }
     },
-    [dailyStudyGoalMinutes, locale]
+    [dailyStudyGoalMinutes, locale, notifyProgressLoadFailed]
   );
   const loadProtectedDataRef = useRef(loadProtectedData);
   loadProtectedDataRef.current = loadProtectedData;
@@ -786,8 +806,10 @@ export default function App() {
   const loadSession = useCallback(async () => {
     try {
       const res = await apiFetch('/api/auth/me');
-      if (res.ok) {
-        const data = (await res.json()) as { user?: UserSummary | null };
+      // 401 = session definitively invalid: drop the cached profile. 5xx/network
+      // errors keep the cached profile (offline), never a fabricated one.
+      if (res.ok || res.status === 401) {
+        const data = (res.ok ? await res.json() : { user: null }) as { user?: UserSummary | null };
         const verifiedUser = data.user ?? null;
         setUser(verifiedUser);
         persistCachedUserSummary(verifiedUser);
@@ -1008,6 +1030,7 @@ export default function App() {
   );
 
   const levelCheckCopy = getLevelCheckCopy(locale);
+  const dataStateCopy = getDataStateCopy(locale);
   const isRecommendedForUser = useCallback(
     (course: CourseCatalogItem) => Boolean(user) && getPlacedLevel(levelCheckState, course.subject) === course.level,
     [levelCheckState, user]
@@ -1927,8 +1950,10 @@ export default function App() {
                 theme={theme}
                 onToggleTheme={() => handleSelectManualTheme(getNextTheme(theme))}
                 onToggleLocale={handleLocaleSwitch}
-                sandboxEnabled={health.sandboxEnabled}
                 intendedDestination={intendedDestination}
+                courses={courses}
+                catalogLoading={catalogLoading}
+                catalogUnavailable={catalogUnavailable}
                 onSwitchMode={(nextMode) => {
                   setActiveTab(nextMode);
                   syncBrowserPath(nextMode, { redirectTo: intendedDestination?.path ?? '/overview' });
@@ -2433,9 +2458,21 @@ export default function App() {
                     <BrutalCardSkeleton locale={locale} />
                   </div>
                 ) : courses.length === 0 ? (
-                  <div className="rounded-xl border-2 border-slate-500 bg-white/25 p-6 text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
-                    {locale === 'uz' ? 'Hozircha ko‘rsatiladigan kurslar yo‘q.' : 'No courses to show yet.'}
-                  </div>
+                  catalogUnavailable ? (
+                    <DataStateCard
+                      testId="overview-catalog-error"
+                      title={dataStateCopy.catalogErrorTitle}
+                      body={dataStateCopy.catalogErrorBody}
+                      retryLabel={dataStateCopy.retry}
+                      onRetry={() => void loadCatalog()}
+                    />
+                  ) : (
+                    <DataStateCard
+                      testId="overview-catalog-empty"
+                      title={dataStateCopy.catalogEmptyTitle}
+                      body={dataStateCopy.catalogEmptyBody}
+                    />
+                  )
                 ) : (
                   <ContentReveal className="grid gap-4 md:grid-cols-3">
                     {courses.map((course, idx) => {
@@ -2757,7 +2794,16 @@ export default function App() {
                 </>
               )}
 
-              {filteredCourses.length === 0 ? (
+              {courses.length === 0 ? (
+                <DataStateCard
+                  testId={catalogUnavailable ? 'catalog-error' : 'catalog-empty'}
+                  className="z-10 mt-8"
+                  title={catalogUnavailable ? dataStateCopy.catalogErrorTitle : dataStateCopy.catalogEmptyTitle}
+                  body={catalogUnavailable ? dataStateCopy.catalogErrorBody : dataStateCopy.catalogEmptyBody}
+                  retryLabel={catalogUnavailable ? dataStateCopy.retry : undefined}
+                  onRetry={catalogUnavailable ? () => void loadCatalog() : undefined}
+                />
+              ) : filteredCourses.length === 0 ? (
                 <div className="relative z-10 mt-8 rounded-xl border-2 border-slate-500 bg-white/25 p-8 text-center text-sm text-muted shadow-[8px_8px_0px_#000000] backdrop-blur-2xl dark:border-[#222B3D] dark:bg-[#101522]/25">
                   <p>{strings.catalog.noMatches}</p>
                   {hasActiveCatalogFilters && (
@@ -3459,6 +3505,8 @@ export default function App() {
             <CommunityView
               locale={locale}
               loading={leaderboardLoading}
+              loadError={leaderboardUnavailable}
+              onRetry={() => void loadLeaderboard()}
               user={user}
               cohortName={cohortName}
               entries={leaderboard}
@@ -3701,7 +3749,6 @@ export default function App() {
       {authOpen && (
         <AuthModal
           locale={locale}
-          sandboxEnabled={health.sandboxEnabled}
           redirectTo={intendedDestination?.path ?? null}
           onClose={() => {
             pendingBookmarkCourseIdRef.current = null;

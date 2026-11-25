@@ -6,6 +6,7 @@ import {
   authorizeRoleChange,
   calculateAssessmentScore,
   calculateEligibleXp,
+  normalizeSimulationType,
   canTransitionEditorialState,
   DAILY_XP_CAP,
   evaluateCertificateVerification,
@@ -415,4 +416,14 @@ test('authorizeRoleChange: admins toggle learner/admin, never demote themselves'
     assert.equal(v.allowed, false, String(actorRole));
     assert.equal(v.allowed ? 0 : v.status, 403);
   }
+});
+
+test('normalizeSimulationType maps DB derivative_tangent to the calculus simulator', () => {
+  assert.equal(normalizeSimulationType('derivative_tangent'), 'calculus_derivative');
+  assert.equal(normalizeSimulationType('calculus_derivative'), 'calculus_derivative');
+  assert.equal(normalizeSimulationType('supply_demand'), 'supply_demand');
+  assert.equal(normalizeSimulationType('unit_economics'), 'unit_economics');
+  assert.equal(normalizeSimulationType('none'), 'none');
+  assert.equal(normalizeSimulationType('bogus'), 'none');
+  assert.equal(normalizeSimulationType(null), 'none');
 });

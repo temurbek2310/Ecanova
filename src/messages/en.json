@@ -313,9 +313,6 @@
     "consentError": "Please confirm the Privacy Notice and non-cash / non-accreditation terms.",
     "pleaseWait": "Please wait...",
     "createAccountBtn": "Create Account",
-    "sandboxHeader": "Development Sandbox Quick Sign-In",
-    "sandboxLearner": "Demo Learner",
-    "sandboxStaff": "Editorial Staff (Admin)",
     "redirectingToLabel": "Destination after sign-in:",
     "protectedRouteBadge": "PROTECTED ROUTE · AUTHENTICATION REQUIRED",
     "backToOverview": "Back to Public Overview",
@@ -563,5 +560,24 @@
     "skipped": "Skipped",
     "takeCheck": "Take Check",
     "retakeCheck": "Retake Check"
+  },
+  "dataState": {
+    "catalogErrorTitle": "Course catalog unavailable",
+    "catalogErrorBody": "We couldn't reach the learning database. Your progress is safe — please try again in a moment.",
+    "catalogEmptyTitle": "No published courses yet",
+    "catalogEmptyBody": "New courses will appear here as soon as they are published.",
+    "leaderboardErrorTitle": "Leaderboard unavailable",
+    "leaderboardErrorBody": "Rankings couldn't be loaded right now.",
+    "leaderboardEmptyTitle": "No ranked learners this week yet",
+    "leaderboardEmptyBody": "Complete a lesson or pass a quiz to appear on the board.",
+    "progressErrorTitle": "Couldn't load your progress",
+    "progressErrorBody": "Your XP, streak and certificates will appear once the connection is restored.",
+    "weaknessEmptyTitle": "No weak spots detected yet",
+    "weaknessEmptyBody": "Take a course quiz and we'll recommend exactly what to review.",
+    "radarEmptyTitle": "Not enough data for a mastery radar",
+    "radarEmptyBody": "Enroll in a course and complete an assessment to see your mastery profile.",
+    "anonymousLearner": "Anonymous learner",
+    "retry": "Retry",
+    "loadingValue": "—"
   }
 }

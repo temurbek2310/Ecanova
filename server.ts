@@ -72,6 +72,7 @@ import {
   evaluateCourseCompletion,
   evaluateStreakUpdate,
   formatLocalDateKey,
+  normalizeSimulationType,
   normalizeUserRole,
   XP_RULE_VERSION,
 } from './src/shared/econova-rules.ts';
@@ -86,11 +87,6 @@ import {
   rankWeeklyQuizAttempts,
   type RawQuizAttemptRow,
 } from './src/lib/quiz-leaderboard.ts';
-import {
-  buildCatalogPayload,
-  buildCourseDetailPayload,
-  buildLeaderboardsPayload,
-} from './src/lib/mvp-api-stubs.ts';
 import type {
   AssessmentPublic,
   CourseCatalogItem,
@@ -553,6 +549,14 @@ async function reconcileCourseCompletionAndCertificate(
   };
 }
 
+const DATABASE_UNAVAILABLE_ERROR =
+  'The learning database is temporarily unavailable. Please try again shortly.';
+
+/** Real 503 instead of serving stub/sample data when the DB can't be reached. */
+function respondDatabaseUnavailable(res: Response): void {
+  res.status(503).json({ error: DATABASE_UNAVAILABLE_ERROR, code: 'database_unavailable' });
+}
+
 function requireDatabase(req: Request, res: Response, next: NextFunction): void {
   if (!isDatabaseConfigured()) {
     res.status(503).json({
@@ -562,7 +566,7 @@ function requireDatabase(req: Request, res: Response, next: NextFunction): void 
     return;
   }
   ensureDbReady()
-    .then(() => next())
+    .then((ready) => (ready ? next() : respondDatabaseUnavailable(res)))
     .catch((err) => {
       console.error('Database initialization error:', err);
       res.status(503).json({
@@ -609,7 +613,6 @@ export function buildApp(): express.Express {
       sessionConfigured: isSessionSecretConfigured(),
       googleOAuthConfigured: isGoogleOAuthConfigured(),
       aiConfigured: isAiConfigured(),
-      sandboxEnabled: process.env.ENABLE_DEMO_SANDBOX === 'true',
     });
   });
 
@@ -1044,29 +1047,6 @@ export function buildApp(): express.Express {
 
   app.get(['/auth/callback', '/auth/callback/', '/api/auth/callback/google'], googleCallbackHandler);
 
-  app.post(
-    '/api/auth/sandbox',
-    requireDatabase,
-    asyncHandler(async (req, res) => {
-      if (process.env.ENABLE_DEMO_SANDBOX !== 'true') {
-        res.status(403).json({
-          error:
-            'Demo sandbox sign-in is disabled for real learner data. Please sign in or create a learner account.',
-        });
-        return;
-      }
-      const { account } = req.body as { account?: 'learner' | 'staff' };
-      const targetId = account === 'staff' ? 'user-editor' : 'user-dilnoza';
-      const user = await loadUserSummaryById(targetId);
-      if (!user) {
-        res.status(404).json({ error: 'Sandbox profile not found.' });
-        return;
-      }
-      setSessionCookie(res, user.id, req, user.role);
-      res.json({ user });
-    })
-  );
-
   app.post('/api/auth/logout', (req, res) => {
     clearSessionCookie(res, req);
     res.json({ ok: true });
@@ -1076,9 +1056,8 @@ export function buildApp(): express.Express {
   app.get(
     '/api/catalog',
     asyncHandler(async (_req, res) => {
-      const ready = await ensureDbReady();
-      if (!ready) {
-        res.json(buildCatalogPayload());
+      if (!(await ensureDbReady())) {
+        respondDatabaseUnavailable(res);
         return;
       }
       try {
@@ -1117,8 +1096,9 @@ export function buildApp(): express.Express {
         }
 
         res.json({ courses: items });
-      } catch {
-        res.json(buildCatalogPayload());
+      } catch (err) {
+        console.error('Catalog query failed:', err);
+        res.status(500).json({ error: 'Unable to load the course catalog.' });
       }
     })
   );
@@ -1329,14 +1309,8 @@ export function buildApp(): express.Express {
         res.status(400).json({ error: 'Unsupported edition locale. Expected en or uz.' });
         return;
       }
-      const ready = await ensureDbReady();
-      if (!ready) {
-        const payload = buildCourseDetailPayload(courseId, locale as LocaleCode);
-        if (!payload) {
-          res.status(404).json({ error: 'Course not found.' });
-          return;
-        }
-        res.json(payload);
+      if (!(await ensureDbReady())) {
+        respondDatabaseUnavailable(res);
         return;
       }
       const courseRow = await db.queryOne<{
@@ -1379,7 +1353,7 @@ export function buildApp(): express.Express {
           objectives: parseJsonCol<string[]>(l.objectives_json, []),
           bodyBlocks: parseJsonCol<LessonBlock[]>(l.body_blocks_json, []),
           keyTerms: parseJsonCol<KeyTerm[]>(l.key_terms_json, []),
-          simulationType: l.simulation_type as LessonPublic['simulationType'],
+          simulationType: normalizeSimulationType(l.simulation_type),
           videoUrl: l.video_url ? String(l.video_url) : null,
           captionsVtt: l.captions_vtt ? String(l.captions_vtt) : null,
           transcript: String(l.transcript),
@@ -1446,7 +1420,10 @@ export function buildApp(): express.Express {
         res.status(401).json({ error: 'Authentication required.' });
         return;
       }
-      await ensureDbReady();
+      if (!(await ensureDbReady())) {
+        respondDatabaseUnavailable(res);
+        return;
+      }
       const userId = req.authUser.id;
       const enrollments = await db.query<{
         id: string;
@@ -1595,24 +1572,14 @@ export function buildApp(): express.Express {
         res.status(400).json({ error: 'Valid courseId and edition locale (en/uz) are required.' });
         return;
       }
-      const ready = await ensureDbReady();
-      if (!ready || !req.authUser) {
-        res.json({
-          id: `enr-${courseId}`,
-          courseId,
-          locale: locale || 'en',
-          journeyStatus: 'progressing',
-          completedLessonIds: [],
-          requiredLessonIds: [],
-          bestScorePercent: null,
-          passedAssessment: false,
-          enrolledAt: new Date().toISOString(),
-          completedAt: null,
-          pausedAt: null,
-        });
+      if (!req.authUser) {
+        res.status(401).json({ error: 'Authentication required.' });
         return;
       }
-      await ensureDbReady();
+      if (!(await ensureDbReady())) {
+        respondDatabaseUnavailable(res);
+        return;
+      }
       const existing = await db.queryOne<{ id: string }>(
         'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
         [req.authUser.id, courseId]
@@ -1960,7 +1927,10 @@ export function buildApp(): express.Express {
         res.status(401).json({ error: 'Authentication required.' });
         return;
       }
-      await ensureDbReady();
+      if (!(await ensureDbReady())) {
+        respondDatabaseUnavailable(res);
+        return;
+      }
       const rows = await db.query<Record<string, unknown>>(
         'SELECT * FROM certificates WHERE user_id = $1 ORDER BY issued_at DESC',
         [req.authUser.id]
@@ -2415,10 +2385,6 @@ export function buildApp(): express.Express {
     requireAuth,
     asyncHandler(async (req, res) => {
       const userId = req.authUser!.id;
-      if (userId === 'user-editor' && process.env.ENABLE_DEMO_SANDBOX === 'true') {
-        res.status(400).json({ error: 'Staff operational account cannot be self-deleted from sandbox.' });
-        return;
-      }
       await db.execute('DELETE FROM users WHERE id = $1', [userId]);
       clearSessionCookie(res);
       res.json({ ok: true });
@@ -2430,9 +2396,8 @@ export function buildApp(): express.Express {
     asyncHandler(async (req, res) => {
       const courseIdFilter =
         typeof req.query.courseId === 'string' ? req.query.courseId.trim() : 'all';
-      const ready = await ensureDbReady();
-      if (!ready) {
-        res.json(buildLeaderboardsPayload(courseIdFilter));
+      if (!(await ensureDbReady())) {
+        respondDatabaseUnavailable(res);
         return;
       }
       try {
@@ -2493,7 +2458,7 @@ export function buildApp(): express.Express {
 
       const rawQuizAttempts: RawQuizAttemptRow[] = attemptRows.map((r) => ({
         userId: String(r.user_id),
-        pseudonym: String(r.leaderboard_pseudonym || 'ECONOVAScholar'),
+        pseudonym: String(r.leaderboard_pseudonym || ''),
         leaderboardOptIn: Boolean(r.leaderboard_opt_in),
         courseId: String(r.course_id),
         courseTitle: String(r.course_title),
@@ -2525,8 +2490,9 @@ export function buildApp(): express.Express {
         weekWindow,
         quizLeaderboard,
       });
-    } catch {
-      res.json(buildLeaderboardsPayload(courseIdFilter));
+    } catch (err) {
+      console.error('Leaderboard query failed:', err);
+      res.status(500).json({ error: 'Unable to load leaderboards.' });
     }
   })
 );
@@ -2538,7 +2504,10 @@ export function buildApp(): express.Express {
         res.status(401).json({ error: 'Authentication required.' });
         return;
       }
-      await ensureDbReady();
+      if (!(await ensureDbReady())) {
+        respondDatabaseUnavailable(res);
+        return;
+      }
       const userId = req.authUser.id;
       let codeRow = await db.queryOne<{ code: string }>(
         'SELECT code FROM referral_codes WHERE owner_user_id = $1',

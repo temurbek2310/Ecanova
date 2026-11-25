@@ -13,7 +13,8 @@ import {
   TrendingUp,
   UserCheck,
 } from 'lucide-react';
-import type { AgeBand, LocaleCode, UserSummary } from '../shared/types';
+import type { AgeBand, CourseCatalogItem, LocaleCode, UserSummary } from '../shared/types';
+import { computeCatalogStats, formatCatalogStat } from '../lib/catalog-stats';
 import type { ThemeMode } from '../lib/theme';
 import { t } from '../lib/i18n';
 import { notificationCopy } from '../lib/notification-copy';
@@ -37,8 +38,11 @@ export interface AuthPageViewProps {
   mode: 'login' | 'register';
   locale: LocaleCode;
   theme?: ThemeMode;
-  sandboxEnabled?: boolean;
   intendedDestination?: IntendedDestination | null;
+  /** Live catalog for the platform highlight tiles (no hardcoded counts). */
+  courses?: CourseCatalogItem[];
+  catalogLoading?: boolean;
+  catalogUnavailable?: boolean;
   onSwitchMode: (nextMode: 'login' | 'register') => void;
   onBackToOverview?: () => void;
   onBackToLanding?: () => void;
@@ -215,8 +219,10 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
   mode,
   locale,
   theme = 'dark',
-  sandboxEnabled = false,
   intendedDestination,
+  courses = [],
+  catalogLoading = false,
+  catalogUnavailable = false,
   onSwitchMode,
   onBackToOverview,
   onBackToLanding,
@@ -226,6 +232,8 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
 }) => {
   const strings = t(locale);
   const authStrings = strings.auth;
+  const catalogStats = computeCatalogStats(courses, locale);
+  const statState = { loading: catalogLoading, unavailable: catalogUnavailable && courses.length === 0 };
   const notify = useNotify();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -356,23 +364,6 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
       } else {
         setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSandbox = async (account: 'learner' | 'staff') => {
-    setErrorMsg(null);
-    setLoading(true);
-    try {
-      const res = await apiFetch('/api/auth/sandbox', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account }),
-      });
-      await completeSignIn(res);
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : authStrings.networkError);
     } finally {
       setLoading(false);
     }
@@ -512,11 +503,11 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
             {/* Compact Platform Highlights */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
               <div className="rounded-xl border-2 border-slate-500/40 dark:border-[#222B3D]/70 bg-white/30 dark:bg-[#101522]/40 p-2.5 text-center shadow-brutal-sm backdrop-blur-md">
-                <div className="font-mono text-xs font-extrabold text-theme-accent">6</div>
+                <div className="font-mono text-xs font-extrabold text-theme-accent" data-testid="auth-stat-courses">{formatCatalogStat(catalogStats.courseCount, statState)}</div>
                 <div className="text-[10px] font-bold text-muted mt-0.5">{authStrings.highlightCourses}</div>
               </div>
               <div className="rounded-xl border-2 border-slate-500/40 dark:border-[#222B3D]/70 bg-white/30 dark:bg-[#101522]/40 p-2.5 text-center shadow-brutal-sm backdrop-blur-md">
-                <div className="font-mono text-xs font-extrabold text-theme-cyan">152</div>
+                <div className="font-mono text-xs font-extrabold text-theme-cyan" data-testid="auth-stat-lessons">{formatCatalogStat(catalogStats.lessonCount, statState)}</div>
                 <div className="text-[10px] font-bold text-muted mt-0.5">{authStrings.highlightLessons}</div>
               </div>
               <div className="rounded-xl border-2 border-slate-500/40 dark:border-[#222B3D]/70 bg-white/30 dark:bg-[#101522]/40 p-2.5 text-center shadow-brutal-sm backdrop-blur-md">
@@ -808,34 +799,6 @@ export const AuthPageView: React.FC<AuthPageViewProps> = ({
                 </button>
               </form>
 
-              {/* Sandbox Evaluation Quick Access (when sandboxEnabled is true) */}
-              {sandboxEnabled && (
-                <div className="mt-5 rounded-xl border-2 border-slate-500 dark:border-[#222B3D] bg-white/60 dark:bg-[#080B14]/60 p-3.5 backdrop-blur-md">
-                  <div className="font-mono text-[11px] font-bold text-muted">
-                    {authStrings.sandboxHeader}
-                  </div>
-                  <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-                    <button
-                      type="button"
-                      disabled={loading || googleLoading}
-                      onClick={() => void handleSandbox('learner')}
-                      data-testid="sandbox-learner-btn"
-                      className="min-h-[38px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/40 dark:bg-[#101522]/40 px-3 py-1.5 text-xs font-bold text-theme-cyan shadow-brutal-sm transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-cyan"
-                    >
-                      {authStrings.sandboxLearner} (Dilnoza)
-                    </button>
-                    <button
-                      type="button"
-                      disabled={loading || googleLoading}
-                      onClick={() => void handleSandbox('staff')}
-                      data-testid="sandbox-staff-btn"
-                      className="min-h-[38px] rounded-lg border-2 border-slate-500 dark:border-[#222B3D] bg-white/40 dark:bg-[#101522]/40 px-3 py-1.5 text-xs font-bold text-theme-accent shadow-brutal-sm transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none hover:border-theme-accent"
-                    >
-                      {authStrings.sandboxStaff}
-                    </button>
-                  </div>
-                </div>
-              )}
               </div>
             </div>
           </div>

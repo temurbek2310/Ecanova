@@ -13,6 +13,7 @@ import {
   type WeekWindow,
 } from '../lib/quiz-leaderboard';
 import { buildRankingMatrixRows } from '../lib/ranking-matrix';
+import { getDataStateCopy } from '../lib/data-state-copy';
 
 export interface RankingMatrixProps {
   locale: LocaleCode;
@@ -43,6 +44,7 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
   onSelectCourseId,
 }) => {
   const isUz = locale === 'uz';
+  const anonymousLabel = getDataStateCopy(locale).anonymousLearner;
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const effectiveWeekWindow = useMemo(
@@ -293,7 +295,7 @@ export const RankingMatrix: React.FC<RankingMatrixProps> = ({
 
                     <td className="px-3.5 py-2.5">
                       <div className="flex items-center gap-2 font-mono font-semibold text-ink">
-                        <span className="truncate">{row.pseudonym}</span>
+                        <span className="truncate">{row.pseudonym || anonymousLabel}</span>
                         {row.isCurrentUser && (
                           <span className="font-mono text-[10px] font-bold text-[#5B21B6] dark:text-[#5DE1D2]">
                             [{isUz ? 'SIZ' : 'YOU'}]

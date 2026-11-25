@@ -12,6 +12,7 @@
     "test": "tsx --test \"src/**/*.test.ts\" \"server/**/*.test.ts\"",
     "db:migrate": "tsx server/migrate.ts",
     "db:seed": "tsx server/seed-cli.ts",
+    "db:seed:demo": "tsx server/seed-demo-cli.ts",
     "db:import:learn-anything": "tsx server/etl/learn-anything/cli.ts",
     "clean": "rm -rf dist dist-server server.js",
     "lint": "tsc --noEmit"

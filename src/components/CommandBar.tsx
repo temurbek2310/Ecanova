@@ -32,12 +32,6 @@ import type { CourseCatalogItem, LocaleCode } from '../shared/types';
 
 export const RECENT_SEARCHES_STORAGE_KEY = 'econova_command_bar_recent_searches';
 
-export const DEFAULT_RECENT_SEARCHES: string[] = [
-  'Macroeconomics: Inflation',
-  'Linear Algebra',
-  'Unit Economics',
-];
-
 export interface SearchableCourseModule {
   id: string;
   title: string;
@@ -45,51 +39,6 @@ export interface SearchableCourseModule {
   courseId: string;
   description?: string;
 }
-
-export const MOCK_SEARCHABLE_MODULES: SearchableCourseModule[] = [
-  {
-    id: 'mod-macro-inflation',
-    title: 'Macroeconomics: Inflation',
-    subject: 'Economics',
-    courseId: 'course-macro-stabilization',
-    description: 'Analyze CPI pass-through, Taylor rules, and central bank reactions.',
-  },
-  {
-    id: 'mod-linear-algebra',
-    title: 'Linear Algebra',
-    subject: 'Mathematics',
-    courseId: 'course-quant-calculus',
-    description: 'Master vector spaces, transformations, and matrix rank decomposition.',
-  },
-  {
-    id: 'mod-unit-economics',
-    title: 'Unit Economics',
-    subject: 'Business',
-    courseId: 'course-venture-finance',
-    description: 'Calculate customer acquisition costs, lifetime value, and cohort churn.',
-  },
-  {
-    id: 'mod-multivariable-calc',
-    title: 'Multivariable Calculus: Constrained Optimization',
-    subject: 'Mathematics',
-    courseId: 'course-quant-calculus',
-    description: 'Lagrangian multipliers, Hessian matrices, and Kuhn-Tucker conditions.',
-  },
-  {
-    id: 'mod-sovereign-curves',
-    title: 'Macroeconomics: Sovereign Yield Curves',
-    subject: 'Economics',
-    courseId: 'course-macro-stabilization',
-    description: 'Explore bond spread dynamics, fiscal dominance, and monetary policy.',
-  },
-  {
-    id: 'mod-venture-capital',
-    title: 'Venture Capital: Cap Table Modeling',
-    subject: 'Business',
-    courseId: 'course-venture-finance',
-    description: 'Model pre/post-money valuation, dilution, and option pool allocation.',
-  },
-];
 
 /**
  * Utility function that highlights matched substrings in a high-contrast
@@ -183,7 +132,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({
 
   // Persistent Recent Searches (max 3 items)
   const [recentSearches, setRecentSearches] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return DEFAULT_RECENT_SEARCHES;
+    if (typeof window === 'undefined') return [];
     try {
       const stored = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
       if (stored) {
@@ -195,7 +144,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({
     } catch {
       // Ignore storage error
     }
-    return DEFAULT_RECENT_SEARCHES;
+    return [];
   });
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -253,23 +202,24 @@ export const CommandBar: React.FC<CommandBarProps> = ({
 
   const isUz = locale === 'uz';
 
-  // Merge mock modules with active course catalog items
+  // Searchable modules come only from the live published catalog.
   const allSearchableModules = useMemo<SearchableCourseModule[]>(() => {
-    const list: SearchableCourseModule[] = [...MOCK_SEARCHABLE_MODULES];
+    const list: SearchableCourseModule[] = [];
     courses.forEach((c) => {
-      const enTitle = c.editions.en?.title;
-      if (enTitle && !list.some((m) => m.title.toLowerCase() === enTitle.toLowerCase())) {
+      const edition = c.editions[locale] ?? c.editions.en ?? c.editions.uz;
+      const title = edition?.title;
+      if (title && !list.some((m) => m.title.toLowerCase() === title.toLowerCase())) {
         list.push({
           id: `catalog-${c.id}`,
-          title: enTitle,
+          title,
           subject: c.subject,
           courseId: c.id,
-          description: c.editions.en?.subtitle,
+          description: edition?.subtitle,
         });
       }
     });
     return list;
-  }, [courses]);
+  }, [courses, locale]);
 
   // Top 3 filtered modules matching current search query
   const topResults = useMemo<SearchableCourseModule[]>(() => {

@@ -25,73 +25,6 @@ export interface WeaknessTopicMetric {
   statusLabel: string;
 }
 
-interface PillarTemplate {
-  key: string;
-  subject: Subject;
-  enTopic: string;
-  uzTopic: string;
-  enShort: string;
-  uzShort: string;
-  baseStrongScore: number;
-}
-
-const CORE_PILLARS: PillarTemplate[] = [
-  {
-    key: 'microeconomics',
-    subject: 'Economics',
-    enTopic: 'Microeconomics & Equilibrium',
-    uzTopic: 'Mikroiqtisodiyot va muvozanat',
-    enShort: 'Microeconomics',
-    uzShort: 'Mikroiqtisodiyot',
-    baseStrongScore: 84,
-  },
-  {
-    key: 'algebra',
-    subject: 'Mathematics',
-    enTopic: 'Linear Algebra & Matrices',
-    uzTopic: 'Chiziqli algebra va matritsalar',
-    enShort: 'Algebra',
-    uzShort: 'Algebra',
-    baseStrongScore: 81,
-  },
-  {
-    key: 'market-analysis',
-    subject: 'Economics',
-    enTopic: 'Market Elasticity & Welfare',
-    uzTopic: 'Bozor elastikligi va farovonlik',
-    enShort: 'Market Analysis',
-    uzShort: 'Bozor tahlili',
-    baseStrongScore: 78,
-  },
-  {
-    key: 'unit-economics',
-    subject: 'Business',
-    enTopic: 'Unit Economics & LTV/CAC',
-    uzTopic: 'Birlik iqtisodiyoti (LTV/CAC)',
-    enShort: 'Unit Economics',
-    uzShort: 'Birlik iqtisod.',
-    baseStrongScore: 88,
-  },
-  {
-    key: 'calculus',
-    subject: 'Mathematics',
-    enTopic: 'Multivariable Calculus & Optima',
-    uzTopic: 'Ko‘p o‘zgaruvchili tahlil',
-    enShort: 'Calculus',
-    uzShort: 'Mat. tahlil',
-    baseStrongScore: 76,
-  },
-  {
-    key: 'capital-strategy',
-    subject: 'Business',
-    enTopic: 'Capital Allocation & Risk',
-    uzTopic: 'Kapital taqsimoti va risk',
-    enShort: 'Capital Strategy',
-    uzShort: 'Kapital riski',
-    baseStrongScore: 85,
-  },
-];
-
 function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(10, Math.min(100, Math.round(value)));
@@ -133,22 +66,21 @@ function isNearDuplicateLabel(candidate: string, existingSet: Set<string>): bool
   return false;
 }
 
+/** Proficiency backed by real learner data only; null when there is none. */
 function deriveWeaknessScore(
   rec: WeaknessLessonRecommendation,
   index: number,
   enrollmentByCourse: Map<string, EnrollmentRecord>
-): number {
+): number | null {
   if (rec.missedCount > 0) {
     // Higher miss count drops proficiency lower into the Purple weakness band (< 70%)
     return clampPercent(Math.max(24, 62 - rec.missedCount * 10 - index * 3));
   }
   const enr = enrollmentByCourse.get(rec.courseId);
-  if (enr && typeof enr.bestScorePercent === 'number' && !enr.passedAssessment) {
-    return clampPercent(Math.min(64, Math.max(28, enr.bestScorePercent)));
+  if (enr && typeof enr.bestScorePercent === 'number') {
+    return clampPercent(enr.passedAssessment ? enr.bestScorePercent : Math.min(64, enr.bestScorePercent));
   }
-  // Proactive diagnostic focus baseline inside the weakness band (< 70%)
-  const baselineWeakScores = [46, 54, 61];
-  return baselineWeakScores[index % baselineWeakScores.length];
+  return null;
 }
 
 export function buildWeaknessTopicMetrics(params: {
@@ -172,6 +104,7 @@ export function buildWeaknessTopicMetrics(params: {
   // 1. Add active weakness recommendations first so Radar and List view stay 1:1 with action items
   params.analysis.recommendations.forEach((rec, index) => {
     const scorePercent = deriveWeaknessScore(rec, index, enrollmentByCourse);
+    if (scorePercent === null) return;
     const isStrong = scorePercent >= STRONG_PERFORMANCE_THRESHOLD;
     let shortLabel = formatShortRadarLabel(rec.weakTopicLabel, 18);
     if (usedShortLabels.has(shortLabel.toLowerCase())) {
@@ -201,53 +134,33 @@ export function buildWeaknessTopicMetrics(params: {
     });
   });
 
-  // 2. Complement with strong mastery pillars from enrollments/catalog up to 6 axes
-  for (const pillar of CORE_PILLARS) {
+  // 2. Complement with real assessment results from other enrolled courses (up to 6 axes).
+  for (const enr of params.enrollments) {
     if (metrics.length >= 6) break;
-    const shortLabel = isUz ? pillar.uzShort : pillar.enShort;
-    if (isNearDuplicateLabel(shortLabel, usedShortLabels)) continue;
-
-    // Look for a matching enrollment in the same subject to ground score in real learner progress
-    const matchingCourse = params.courses.find(
-      (c) =>
-        c.subject === pillar.subject &&
-        !metrics.some((m) => m.courseId === c.id)
-    );
-    const matchingEnrollment = matchingCourse
-      ? enrollmentByCourse.get(matchingCourse.id)
-      : params.enrollments.find((e) => {
-          const c = courseById.get(e.courseId);
-          return c?.subject === pillar.subject && !metrics.some((m) => m.courseId === e.courseId);
-        });
-
-    let scorePercent = pillar.baseStrongScore;
-    if (matchingEnrollment) {
-      if (matchingEnrollment.passedAssessment) {
-        scorePercent = clampPercent(Math.max(78, matchingEnrollment.bestScorePercent ?? 88));
-      } else if (matchingEnrollment.requiredLessonIds.length > 0) {
-        const ratio =
-          matchingEnrollment.completedLessonIds.length /
-          matchingEnrollment.requiredLessonIds.length;
-        scorePercent = clampPercent(Math.max(72, Math.round(72 + ratio * 20)));
-      }
+    if (typeof enr.bestScorePercent !== 'number') continue;
+    if (metrics.some((m) => m.courseId === enr.courseId)) continue;
+    const course = courseById.get(enr.courseId);
+    if (!course) continue;
+    const edition = course.editions[params.locale] ?? course.editions.en;
+    const title = edition?.title || course.slug;
+    let shortLabel = formatShortRadarLabel(title, 18);
+    if (isNearDuplicateLabel(shortLabel, usedShortLabels)) {
+      shortLabel = formatShortRadarLabel(`${course.subject.slice(0, 4)} · ${title}`, 18);
     }
-
     usedShortLabels.add(shortLabel.toLowerCase());
-    const courseEdition = matchingCourse
-      ? matchingCourse.editions[params.locale] ?? matchingCourse.editions.en
-      : undefined;
-
+    const scorePercent = clampPercent(enr.bestScorePercent);
+    const isStrong = scorePercent >= STRONG_PERFORMANCE_THRESHOLD;
     metrics.push({
-      id: `pillar-${pillar.key}`,
-      topic: isUz ? pillar.uzTopic : pillar.enTopic,
+      id: `enrollment-${enr.courseId}`,
+      topic: title,
       shortLabel,
-      subject: pillar.subject,
+      subject: course.subject,
       scorePercent,
-      isStrong: scorePercent >= STRONG_PERFORMANCE_THRESHOLD,
+      isStrong,
       missedCount: 0,
-      courseId: matchingCourse?.id,
-      courseTitle: courseEdition?.title,
-      statusLabel: isUz ? 'Kuchli' : 'Strong',
+      courseId: course.id,
+      courseTitle: edition?.title,
+      statusLabel: isStrong ? (isUz ? 'Kuchli' : 'Strong') : isUz ? 'Zaif nuqta' : 'Weakness',
     });
   }
 

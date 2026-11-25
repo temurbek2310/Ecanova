@@ -42,6 +42,8 @@ import {
 } from '../lib/weakness-radar';
 import { FloatingWatermark } from './FloatingWatermark';
 import { InteractiveDotGrid } from './ui/InteractiveDotGrid';
+import { DataStateCard } from './ui/DataStateCard';
+import { getDataStateCopy } from '../lib/data-state-copy';
 
 export type WeaknessViewMode = 'list' | 'radar';
 
@@ -242,6 +244,9 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
     [weaknessAnalysis, courses, enrollments, locale]
   );
 
+  const dataStateCopy = getDataStateCopy(locale);
+  const hasNoWeaknessData =
+    topicMetrics.length === 0 && weaknessAnalysis.recommendations.length === 0;
   const weakCount = topicMetrics.filter((m) => !m.isStrong).length;
   const strongCount = topicMetrics.filter((m) => m.isStrong).length;
   const recommendationGridCols =
@@ -346,7 +351,15 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
       </div>
 
       {/* View Content */}
-      {viewMode === 'radar' ? (
+      {hasNoWeaknessData ? (
+        <DataStateCard
+          variant="compact"
+          testId="weakness-empty-state"
+          className="z-10 mt-5"
+          title={dataStateCopy.weaknessEmptyTitle}
+          body={dataStateCopy.weaknessEmptyBody}
+        />
+      ) : viewMode === 'radar' ? (
         <div
           data-testid="weakness-radar-view"
           className="relative z-10 mt-5 grid gap-5 lg:grid-cols-12"
@@ -396,6 +409,16 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
                   : 'Topic mastery and weakness detection radar chart'
               }
             >
+              {topicMetrics.length < 3 ? (
+                <div className="flex h-full items-center justify-center">
+                  <DataStateCard
+                    variant="compact"
+                    testId="weakness-radar-empty"
+                    title={dataStateCopy.radarEmptyTitle}
+                    body={dataStateCopy.radarEmptyBody}
+                  />
+                </div>
+              ) : (
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <RadarChart
                   data={topicMetrics}
@@ -456,6 +479,7 @@ export const WeaknessDetectionCard: React.FC<WeaknessDetectionCardProps> = ({
                   />
                 </RadarChart>
               </ResponsiveContainer>
+              )}
             </div>
           </div>
 
